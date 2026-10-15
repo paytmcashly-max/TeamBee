@@ -230,9 +230,74 @@ h1, h2, h3, h4, h5, h6 {
   background: rgba(239, 68, 68, 0.25);
 }
 
-/* Mobile Back Button (Hidden on Desktop) */
+/* Mobile Back Button (Visible on Mobile) */
 .btn-mobile-back {
   display: none;
+}
+
+@media (max-width: 768px) {
+  .btn-mobile-back {
+    display: inline-flex !important;
+  }
+  .desktop-only-header-control {
+    display: none !important;
+  }
+}
+
+/* Safe Area Layout Rules for iOS Safari Notch & Bottom Bar */
+.chat-canvas-header {
+  padding-top: max(14px, env(safe-area-inset-top, 14px)) !important;
+}
+
+.conversations-header {
+  padding-top: max(14px, env(safe-area-inset-top, 14px)) !important;
+}
+
+.chat-composer-box {
+  padding-bottom: max(28px, calc(12px + env(safe-area-inset-bottom, 0px))) !important;
+  background: rgba(14, 21, 36, 0.98);
+  border-top: 1px solid var(--border-subtle);
+  position: relative;
+  z-index: 20;
+}
+
+.chat-textarea {
+  width: 100%;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-medium);
+  border-radius: 20px;
+  color: #fff;
+  padding: 10px 14px;
+  min-height: 42px;
+  max-height: 120px;
+  resize: none;
+  outline: none;
+  font-family: inherit;
+  line-height: 1.4;
+  transition: border-color 0.15s, background-color 0.15s;
+}
+
+.chat-textarea:focus {
+  border-color: var(--wa-primary);
+  background: #10192b;
+}
+
+.btn-tool {
+  background: transparent;
+  border: none;
+  color: var(--text-secondary);
+  padding: 8px;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.btn-tool:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: #fff;
 }
 
 /* Badges */

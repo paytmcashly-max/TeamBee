@@ -211,69 +211,84 @@ export default function ChatCanvas({ onOpenTemplatePicker, onToggleSidebar, isSi
 
   return (
     <main className="col-chat-canvas">
-      {/* 1. Chat Header */}
+      {/* 1. Chat Header (Safe from iPhone notch and dynamic island) */}
       <div
+        className="chat-canvas-header"
         style={{
-          padding: '12px 16px',
-          background: 'rgba(14, 21, 36, 0.96)',
-          backdropFilter: 'blur(10px)',
+          padding: '10px 14px',
+          background: 'rgba(14, 21, 36, 0.98)',
+          backdropFilter: 'blur(12px)',
           borderBottom: '1px solid var(--border-subtle)',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'space-between',
-          zIndex: 5,
+          zIndex: 25,
           gap: '8px',
         }}
       >
-        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', minWidth: 0 }}>
-          {/* Mobile Back Button */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', minWidth: 0, flex: 1 }}>
+          {/* Mobile Back Button: High contrast, easy tap */}
           {onBack && (
             <button
               type="button"
               onClick={onBack}
-              className="btn btn-ghost btn-mobile-back"
-              style={{ padding: '6px', color: '#fff', borderRadius: '6px' }}
+              className="btn-mobile-back"
+              style={{
+                width: '36px',
+                height: '36px',
+                minWidth: '36px',
+                borderRadius: '50%',
+                background: 'rgba(255, 255, 255, 0.1)',
+                color: '#fff',
+                border: 'none',
+                alignItems: 'center',
+                justifyContent: 'center',
+                cursor: 'pointer',
+                flexShrink: 0,
+              }}
               title="Back to conversation queue"
             >
-              <ArrowLeft size={20} />
+              <ArrowLeft size={19} />
             </button>
           )}
 
           {/* Customer Avatar */}
           <div
             style={{
-              width: '40px',
-              height: '40px',
-              minWidth: '40px',
+              width: '38px',
+              height: '38px',
+              minWidth: '38px',
               borderRadius: '50%',
               background: 'linear-gradient(135deg, #10b981 0%, #047857 100%)',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
-              fontSize: '16px',
+              fontSize: '15px',
               fontWeight: '700',
               color: '#fff',
+              flexShrink: 0,
             }}
           >
             {activeChat.contact?.name ? activeChat.contact.name.charAt(0).toUpperCase() : 'C'}
           </div>
 
-          <div style={{ minWidth: 0 }}>
+          <div style={{ minWidth: 0, flex: 1 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
               <span
                 style={{
                   fontWeight: '700',
-                  fontSize: '15px',
+                  fontSize: '14.5px',
                   color: '#fff',
                   whiteSpace: 'nowrap',
                   overflow: 'hidden',
                   textOverflow: 'ellipsis',
-                  maxWidth: '180px',
+                  maxWidth: '160px',
                 }}
               >
                 {activeChat.contact?.name || 'Customer'}
               </span>
               <span
+                className="desktop-only-header-control"
                 style={{
                   display: 'inline-flex',
                   alignItems: 'center',
@@ -290,13 +305,13 @@ export default function ChatCanvas({ onOpenTemplatePicker, onToggleSidebar, isSi
                 <CheckCheck size={11} /> Meta Official
               </span>
             </div>
-            <div style={{ fontSize: '11.5px', color: 'var(--text-secondary)', whiteSpace: 'nowrap' }}>
+            <div style={{ fontSize: '11px', color: 'var(--text-secondary)', whiteSpace: 'nowrap' }}>
               +{activeChat.contact?.waId}
             </div>
           </div>
         </div>
 
-        {/* Action Controls: Assignment, Resolution, Sidebar Toggle */}
+        {/* Action Controls: Status, Assignment (Desktop), Resolution & CRM Sidebar Toggle */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexShrink: 0 }}>
           {/* Status Badge */}
           <span
@@ -307,88 +322,99 @@ export default function ChatCanvas({ onOpenTemplatePicker, onToggleSidebar, isSi
                 ? 'badge badge-unassigned'
                 : 'badge badge-open'
             }
+            style={{ fontSize: '10px', padding: '3px 8px' }}
           >
             {activeChat.status}
           </span>
 
-          {/* Re-routing / Assignment Dropdown or Claim Button */}
-          {isAdmin ? (
-            <div style={{ position: 'relative' }}>
-              <select
-                value={activeChat.assignedAgentId || ''}
-                onChange={(e) => assignChat(activeChat.id, e.target.value || null)}
-                style={{
-                  background: 'var(--bg-surface)',
-                  color: '#fff',
-                  border: '1px solid var(--border-medium)',
-                  borderRadius: 'var(--radius-md)',
-                  padding: '6px 24px 6px 8px',
-                  fontSize: '12px',
-                  cursor: 'pointer',
-                  appearance: 'none',
-                  outline: 'none',
-                  fontFamily: 'inherit',
-                  maxWidth: '120px',
-                }}
+          {/* Desktop Only: Re-routing / Assignment Dropdown or Claim Button */}
+          <div className="desktop-only-header-control">
+            {isAdmin ? (
+              <div style={{ position: 'relative' }}>
+                <select
+                  value={activeChat.assignedAgentId || ''}
+                  onChange={(e) => assignChat(activeChat.id, e.target.value || null)}
+                  style={{
+                    background: 'var(--bg-surface)',
+                    color: '#fff',
+                    border: '1px solid var(--border-medium)',
+                    borderRadius: 'var(--radius-md)',
+                    padding: '6px 24px 6px 8px',
+                    fontSize: '12px',
+                    cursor: 'pointer',
+                    appearance: 'none',
+                    outline: 'none',
+                    fontFamily: 'inherit',
+                    maxWidth: '120px',
+                  }}
+                >
+                  <option value="">Unassigned</option>
+                  {agentsList.map((a) => (
+                    <option key={a.id} value={a.id}>
+                      {a.name}
+                    </option>
+                  ))}
+                </select>
+                <ChevronDown
+                  size={12}
+                  style={{ position: 'absolute', right: '6px', top: '9px', pointerEvents: 'none', color: '#94a3b8' }}
+                />
+              </div>
+            ) : isUnassigned ? (
+              <button
+                onClick={() => assignChat(activeChat.id, agent.id)}
+                className="btn btn-primary"
+                style={{ padding: '5px 10px', fontSize: '11.5px' }}
               >
-                <option value="">Unassigned</option>
-                {agentsList.map((a) => (
-                  <option key={a.id} value={a.id}>
-                    {a.name}
-                  </option>
-                ))}
-              </select>
-              <ChevronDown
-                size={12}
-                style={{ position: 'absolute', right: '6px', top: '9px', pointerEvents: 'none', color: '#94a3b8' }}
-              />
-            </div>
-          ) : isUnassigned ? (
-            <button
-              onClick={() => assignChat(activeChat.id, agent.id)}
-              className="btn btn-primary"
-              style={{ padding: '5px 10px', fontSize: '11.5px' }}
-            >
-              <UserCheck size={13} /> Claim
-            </button>
-          ) : (
-            <span style={{ fontSize: '11px', color: 'var(--text-secondary)' }}>
-              {activeChat.assignedAgent?.name || 'You'}
-            </span>
-          )}
+                <UserCheck size={13} /> Claim
+              </button>
+            ) : (
+              <span style={{ fontSize: '11px', color: 'var(--text-secondary)' }}>
+                {activeChat.assignedAgent?.name || 'You'}
+              </span>
+            )}
+          </div>
 
           {/* Resolve / Reopen Button */}
           {isResolved ? (
             <button
               onClick={() => updateChatStatus(activeChat.id, 'OPEN')}
               className="btn btn-secondary"
-              style={{ padding: '5px 8px', fontSize: '11.5px' }}
+              style={{ width: '34px', height: '34px', padding: 0 }}
               title="Reopen Conversation"
             >
-              <RotateCcw size={13} />
+              <RotateCcw size={14} />
             </button>
           ) : (
             <button
               onClick={() => updateChatStatus(activeChat.id, 'RESOLVED')}
               className="btn btn-secondary"
-              style={{ padding: '5px 8px', fontSize: '11.5px' }}
+              style={{ width: '34px', height: '34px', padding: 0 }}
               title="Mark Resolved"
             >
-              <CheckCircle2 size={13} style={{ color: '#10b981' }} />
+              <CheckCircle2 size={15} style={{ color: '#10b981' }} />
             </button>
           )}
 
-          {/* CRM Sidebar Toggle */}
+          {/* CRM Info Button to toggle Customer sidebar */}
           <button
+            type="button"
             onClick={onToggleSidebar}
-            className="btn btn-ghost"
             style={{
-              padding: '6px 8px',
+              width: '34px',
+              height: '34px',
+              borderRadius: '8px',
+              background: isSidebarOpen ? 'rgba(37, 211, 102, 0.2)' : 'var(--bg-surface)',
               color: isSidebarOpen ? 'var(--wa-primary)' : 'var(--text-secondary)',
+              border: '1px solid var(--border-medium)',
+              display: 'inline-flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              cursor: 'pointer',
             }}
-            title="Toggle CRM Sidebar"
+            title="Customer CRM Details"
           >
-            <Info size={17} />
+            <Info size={16} />
           </button>
         </div>
       </div>
@@ -444,7 +470,7 @@ export default function ChatCanvas({ onOpenTemplatePicker, onToggleSidebar, isSi
           gap: '10px',
         }}
       >
-        {loadingMessages ? (
+        {loadingMessages && messages.length === 0 ? (
           <div style={{ textAlign: 'center', color: 'var(--text-muted)', padding: '20px' }}>
             Fetching WhatsApp message logs...
           </div>
@@ -991,13 +1017,13 @@ export default function ChatCanvas({ onOpenTemplatePicker, onToggleSidebar, isSi
 
         {/* 6.3 Input Box & Action Buttons */}
         <form onSubmit={handleSend} style={{ display: 'flex', alignItems: 'flex-end', gap: '8px' }}>
-          {/* Quick Action Buttons */}
-          <div style={{ display: 'flex', gap: '2px', paddingBottom: '3px' }}>
+          {/* Quick Action Tools */}
+          <div style={{ display: 'flex', gap: '2px', paddingBottom: '3px', flexShrink: 0 }}>
             <button
               type="button"
               onClick={() => setShowQuickReplies(!showQuickReplies)}
-              className="btn btn-ghost"
-              style={{ padding: '8px', color: showQuickReplies ? 'var(--wa-primary)' : 'var(--text-secondary)' }}
+              className="btn-tool"
+              style={{ color: showQuickReplies ? 'var(--wa-primary)' : 'var(--text-secondary)' }}
               title="Canned Quick Responses"
             >
               ⚡
@@ -1006,86 +1032,99 @@ export default function ChatCanvas({ onOpenTemplatePicker, onToggleSidebar, isSi
             <button
               type="button"
               onClick={() => setShowAttachmentMenu(!showAttachmentMenu)}
-              className="btn btn-ghost"
-              style={{ padding: '8px', color: showAttachmentMenu ? '#38bdf8' : 'var(--text-secondary)' }}
+              className="btn-tool"
+              style={{ color: showAttachmentMenu ? '#38bdf8' : 'var(--text-secondary)' }}
               title="Attach Document or Brochure"
             >
-              <Paperclip size={16} />
+              <Paperclip size={17} />
             </button>
 
             <button
               type="button"
               onClick={onOpenTemplatePicker}
-              className="btn btn-ghost"
-              style={{ padding: '8px', color: 'var(--text-secondary)' }}
+              className="btn-tool"
+              style={{ color: 'var(--text-secondary)' }}
               title="Send Approved WhatsApp Template"
             >
-              <Sparkles size={16} />
+              <Sparkles size={17} />
             </button>
           </div>
 
-          {/* Text Area */}
-          <div style={{ flex: 1, position: 'relative' }}>
+          {/* Text Area (Fills all remaining width) */}
+          <div style={{ flex: 1, minWidth: 0, position: 'relative' }}>
             <textarea
               ref={textareaRef}
-              rows={2}
+              rows={1}
               value={inputContent}
               onChange={(e) => setInputContent(e.target.value)}
               onKeyDown={handleKeyDown}
               placeholder={
                 composeMode === 'NOTE'
-                  ? '🔒 Add a private note for staff...'
+                  ? '🔒 Private staff note...'
                   : composeMode === 'INTERACTIVE'
-                  ? 'Type question with your action buttons...'
+                  ? 'Question with buttons...'
                   : messagingWindow.isOpen
-                  ? 'Type WhatsApp reply... (Enter to send)'
+                  ? 'WhatsApp reply...'
                   : '⚠️ 24-hr window expired. Use Template...'
               }
+              className="chat-textarea"
               style={{
                 width: '100%',
                 background:
                   composeMode === 'NOTE'
-                    ? 'rgba(245, 158, 11, 0.05)'
+                    ? 'rgba(245, 158, 11, 0.08)'
                     : composeMode === 'INTERACTIVE'
-                    ? 'rgba(56, 189, 248, 0.05)'
+                    ? 'rgba(56, 189, 248, 0.08)'
                     : 'var(--bg-surface)',
                 border:
                   composeMode === 'NOTE'
-                    ? '1px solid rgba(245, 158, 11, 0.4)'
+                    ? '1px solid rgba(245, 158, 11, 0.5)'
                     : composeMode === 'INTERACTIVE'
-                    ? '1px solid rgba(56, 189, 248, 0.4)'
+                    ? '1px solid rgba(56, 189, 248, 0.5)'
                     : '1px solid var(--border-medium)',
-                borderRadius: 'var(--radius-md)',
+                borderRadius: '22px',
                 color: '#fff',
-                padding: '9px 12px',
+                padding: '9px 14px',
                 resize: 'none',
                 outline: 'none',
                 fontFamily: 'inherit',
-                lineHeight: 1.45,
+                lineHeight: 1.4,
               }}
             />
           </div>
 
-          {/* Send Button */}
+          {/* Modern Circular WhatsApp Send Button */}
           <button
             type="submit"
             disabled={!inputContent.trim() || sending}
-            className="btn btn-primary"
+            className="chat-send-btn"
             style={{
-              padding: '8px 14px',
-              height: '38px',
-              borderRadius: 'var(--radius-md)',
+              width: '40px',
+              height: '40px',
+              minWidth: '40px',
+              borderRadius: '50%',
               background:
                 composeMode === 'NOTE'
                   ? 'linear-gradient(135deg, #f59e0b 0%, #d97706 100%)'
                   : composeMode === 'INTERACTIVE'
                   ? 'linear-gradient(135deg, #0284c7 0%, #0369a1 100%)'
-                  : undefined,
+                  : 'linear-gradient(135deg, #25D366 0%, #128C7E 100%)',
+              border: 'none',
+              color: '#fff',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              flexShrink: 0,
+              cursor: 'pointer',
               opacity: !inputContent.trim() || sending ? 0.6 : 1,
+              boxShadow:
+                composeMode === 'NOTE'
+                  ? '0 4px 14px rgba(245, 158, 11, 0.35)'
+                  : '0 4px 14px rgba(37, 211, 102, 0.35)',
             }}
+            title={composeMode === 'NOTE' ? 'Send Team Note' : 'Send WhatsApp Message'}
           >
-            {composeMode === 'NOTE' ? <Lock size={14} /> : <Send size={14} />}
-            <span style={{ fontSize: '12px' }}>{composeMode === 'NOTE' ? 'Note' : 'Send'}</span>
+            {composeMode === 'NOTE' ? <Lock size={16} /> : <Send size={16} />}
           </button>
         </form>
       </div>

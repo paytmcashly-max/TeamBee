@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
 import { useAuth } from './AuthContext';
 import { useSocket } from './SocketContext';
 
@@ -15,6 +15,11 @@ export function ChatProvider({ children }) {
   const [messagingWindow, setMessagingWindow] = useState({ isOpen: true, hoursRemaining: 24 });
   const [loadingChats, setLoadingChats] = useState(false);
   const [loadingMessages, setLoadingMessages] = useState(false);
+
+  // ⚡ Memory cache for 0ms instant chat switching across conversations
+  const messagesCacheRef = useRef({});
+  const activeChatIdRef = useRef(null);
+  activeChatIdRef.current = activeChatId;
 
   // Filters
   const [tabFilter, setTabFilter] = useState('mine'); // 'mine' | 'unassigned' | 'all'
@@ -63,15 +68,14 @@ export function ChatProvider({ children }) {
   }, [fetchChats]);
 
   /**
-   * Fetch messages when activeChatId changes
+   * Fetch messages and chat details in background without freezing UI
    */
   const loadChat = useCallback(
     async (chatId) => {
       if (!chatId || !token) return;
-      setLoadingMessages(true);
 
-      // Join Socket.io room with RBAC guard
-      await joinChat(chatId);
+      // Join Socket.io room asynchronously in background (don't block network fetches)
+      joinChat(chatId).catch((err) => console.warn('Socket join warning:', err));
 
       try {
         const [chatRes, msgRes] = await Promise.all([
@@ -82,33 +86,84 @@ export function ChatProvider({ children }) {
         const chatData = await chatRes.json();
         const msgData = await msgRes.json();
 
-        if (chatData.success) {
-          setActiveChat(chatData.chat);
-        }
-        if (msgData.success) {
-          setMessages(msgData.messages);
-          setMessagingWindow(msgData.messagingWindow || { isOpen: true, hoursRemaining: 24 });
+        const fetchedMessages = msgData.success ? msgData.messages : [];
+        const fetchedWindow = msgData.messagingWindow || { isOpen: true, hoursRemaining: 24 };
+        const fetchedChat = chatData.success ? chatData.chat : null;
+
+        // Cache so future re-opens are instant 0ms
+        messagesCacheRef.current[chatId] = {
+          messages: fetchedMessages,
+          messagingWindow: fetchedWindow,
+          chat: fetchedChat,
+        };
+
+        // Only commit to active state if user is STILL viewing this exact chat
+        if (activeChatIdRef.current === chatId) {
+          if (fetchedChat) {
+            setActiveChat(fetchedChat);
+          }
+          if (msgData.success) {
+            setMessages(fetchedMessages);
+            setMessagingWindow(fetchedWindow);
+          }
         }
       } catch (err) {
         console.error('Load chat error:', err);
       } finally {
-        setLoadingMessages(false);
+        if (activeChatIdRef.current === chatId) {
+          setLoadingMessages(false);
+        }
       }
     },
     [token, joinChat]
   );
 
+  /**
+   * ⚡ Instant 0ms Chat Selection:
+   * Sets activeChat and cached messages synchronously so UI flips immediately.
+   */
   const selectChat = (chatId) => {
     if (activeChatId && activeChatId !== chatId) {
       leaveChat(activeChatId);
     }
-    setActiveChatId(chatId || null);
-    if (chatId) {
-      loadChat(chatId);
-    } else {
+
+    if (!chatId) {
+      setActiveChatId(null);
+      activeChatIdRef.current = null;
       setActiveChat(null);
       setMessages([]);
+      return;
     }
+
+    // 1. Immediately update activeChatId & activeChat from in-memory chats list (0ms UI latency)
+    setActiveChatId(chatId);
+    activeChatIdRef.current = chatId;
+
+    const existingChat = chats.find((c) => c.id === chatId);
+    const cachedEntry = messagesCacheRef.current[chatId];
+
+    if (existingChat) {
+      setActiveChat(existingChat);
+    } else if (cachedEntry?.chat) {
+      setActiveChat(cachedEntry.chat);
+    } else {
+      setActiveChat({ id: chatId, status: 'OPEN', contact: { name: 'Customer' } });
+    }
+
+    // 2. If messages are cached from previous view, render immediately (0ms)
+    if (cachedEntry && Array.isArray(cachedEntry.messages)) {
+      setMessages(cachedEntry.messages);
+      if (cachedEntry.messagingWindow) {
+        setMessagingWindow(cachedEntry.messagingWindow);
+      }
+      setLoadingMessages(false);
+    } else {
+      setMessages([]);
+      setLoadingMessages(true);
+    }
+
+    // 3. Sync fresh messages & details from server in background
+    loadChat(chatId);
   };
 
   /**
@@ -140,8 +195,16 @@ export function ChatProvider({ children }) {
         } catch (e) {}
       }
 
+      // Update in-memory cache
+      if (messagesCacheRef.current[chatId]) {
+        const cachedList = messagesCacheRef.current[chatId].messages || [];
+        if (!cachedList.some((m) => m.id === message.id || (m.waMessageId && m.waMessageId === message.waMessageId))) {
+          messagesCacheRef.current[chatId].messages = [...cachedList, message];
+        }
+      }
+
       // If belongs to currently open chat canvas, append immediately
-      if (chatId === activeChatId) {
+      if (chatId === activeChatIdRef.current) {
         setMessages((prev) => {
           // Avoid duplicate by id or waMessageId
           if (prev.some((m) => m.id === message.id || (m.waMessageId && m.waMessageId === message.waMessageId))) {
@@ -163,7 +226,7 @@ export function ChatProvider({ children }) {
           ...updated[index],
           lastMessagePreview: message.content || `[${message.messageType}]`,
           lastMessageAt: message.createdAt,
-          unreadCount: chatId === activeChatId ? 0 : (updated[index].unreadCount || 0) + 1,
+          unreadCount: chatId === activeChatIdRef.current ? 0 : (updated[index].unreadCount || 0) + 1,
         };
         // Sort newest on top
         return updated.sort((a, b) => new Date(b.lastMessageAt) - new Date(a.lastMessageAt));
@@ -172,7 +235,13 @@ export function ChatProvider({ children }) {
 
     // Message delivery status update (SENT -> DELIVERED -> READ)
     const handleStatusUpdate = ({ chatId, waMessageId, status }) => {
-      if (chatId === activeChatId) {
+      if (messagesCacheRef.current[chatId]) {
+        const cachedList = messagesCacheRef.current[chatId].messages || [];
+        messagesCacheRef.current[chatId].messages = cachedList.map((m) =>
+          m.waMessageId === waMessageId ? { ...m, status } : m
+        );
+      }
+      if (chatId === activeChatIdRef.current) {
         setMessages((prev) =>
           prev.map((m) => {
             if (m.waMessageId === waMessageId) {
@@ -296,7 +365,13 @@ export function ChatProvider({ children }) {
     };
 
     // Instant append in active chat
-    setMessages((prev) => [...prev, optimisticMessage]);
+    setMessages((prev) => {
+      const next = [...prev, optimisticMessage];
+      if (messagesCacheRef.current[targetChatId]) {
+        messagesCacheRef.current[targetChatId].messages = next;
+      }
+      return next;
+    });
 
     // Instant update in left conversation list
     setChats((prev) => {
@@ -323,21 +398,33 @@ export function ChatProvider({ children }) {
 
       const data = await res.json();
       if (!data.success) {
-        setMessages((prev) =>
-          prev.map((m) => (m.id === tempId ? { ...m, status: 'FAILED' } : m))
-        );
+        setMessages((prev) => {
+          const next = prev.map((m) => (m.id === tempId ? { ...m, status: 'FAILED' } : m));
+          if (messagesCacheRef.current[targetChatId]) {
+            messagesCacheRef.current[targetChatId].messages = next;
+          }
+          return next;
+        });
         throw new Error(data.error || 'Failed to send message');
       }
 
       // Replace optimistic message with confirmed database record
-      setMessages((prev) =>
-        prev.map((m) => (m.id === tempId ? data.message : m))
-      );
+      setMessages((prev) => {
+        const next = prev.map((m) => (m.id === tempId ? data.message : m));
+        if (messagesCacheRef.current[targetChatId]) {
+          messagesCacheRef.current[targetChatId].messages = next;
+        }
+        return next;
+      });
       return data;
     } catch (err) {
-      setMessages((prev) =>
-        prev.map((m) => (m.id === tempId ? { ...m, status: 'FAILED' } : m))
-      );
+      setMessages((prev) => {
+        const next = prev.map((m) => (m.id === tempId ? { ...m, status: 'FAILED' } : m));
+        if (messagesCacheRef.current[targetChatId]) {
+          messagesCacheRef.current[targetChatId].messages = next;
+        }
+        return next;
+      });
       throw err;
     }
   };

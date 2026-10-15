@@ -13,7 +13,7 @@ import BroadcastModal from './components/modals/BroadcastModal';
 
 export default function App() {
   const { token, loading } = useAuth();
-  const { activeChat, selectChat } = useChat();
+  const { activeChat, activeChatId, selectChat } = useChat();
 
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isTemplateModalOpen, setIsTemplateModalOpen] = useState(false);
@@ -48,7 +48,7 @@ export default function App() {
   return (
     <div className="app-container">
       {/* 3-Column WhatsApp Shared Inbox Layout */}
-      <div className={`inbox-layout ${activeChat ? 'has-active-chat' : 'no-active-chat'}`}>
+      <div className={`inbox-layout ${(activeChat || activeChatId) ? 'has-active-chat' : 'no-active-chat'}`}>
         {/* Column 1: Navigation & Conversation List */}
         <ConversationList
           onOpenSettings={() => setIsSettingsOpen(true)}

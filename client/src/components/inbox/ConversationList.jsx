@@ -65,7 +65,7 @@ export default function ConversationList({
   return (
     <aside className="col-conversations">
       {/* Top Header: Business Branding & Quick Action Badges */}
-      <div style={{ padding: '16px 16px 12px 16px', borderBottom: '1px solid var(--border-subtle)' }}>
+      <div className="conversations-header" style={{ padding: '16px 16px 12px 16px', borderBottom: '1px solid var(--border-subtle)' }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
             <div
@@ -382,6 +382,9 @@ export default function ConversationList({
                   cursor: 'pointer',
                   transition: 'background 0.15s ease',
                   position: 'relative',
+                  touchAction: 'manipulation',
+                  WebkitTapHighlightColor: 'transparent',
+                  userSelect: 'none',
                 }}
                 onMouseEnter={(e) => {
                   if (!isSelected) e.currentTarget.style.background = 'var(--bg-surface)';
