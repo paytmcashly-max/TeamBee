@@ -16,11 +16,20 @@ import {
   Phone,
   Info,
   ChevronDown,
+  Lock,
+  MessageSquare,
+  Plus,
+  Trash2,
+  X,
+  ExternalLink,
+  MapPin,
+  Flame,
+  ArrowLeft,
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { useChat } from '../../context/ChatContext';
 
-export default function ChatCanvas({ onOpenTemplatePicker, onToggleSidebar, isSidebarOpen }) {
+export default function ChatCanvas({ onOpenTemplatePicker, onToggleSidebar, isSidebarOpen, onBack }) {
   const { agent, isAdmin } = useAuth();
   const {
     activeChat,
@@ -34,10 +43,20 @@ export default function ChatCanvas({ onOpenTemplatePicker, onToggleSidebar, isSi
   } = useChat();
 
   const [inputContent, setInputContent] = useState('');
+  const [composeMode, setComposeMode] = useState('WHATSAPP'); // 'WHATSAPP' | 'NOTE' | 'INTERACTIVE'
   const [sending, setSending] = useState(false);
   const [agentsList, setAgentsList] = useState([]);
   const [showQuickReplies, setShowQuickReplies] = useState(false);
+  const [showAttachmentMenu, setShowAttachmentMenu] = useState(false);
+  const [interactiveButtons, setInteractiveButtons] = useState([
+    'Book Live Demo',
+    'Download Syllabus',
+    'Talk to Counselor',
+  ]);
+  const [newBtnInput, setNewBtnInput] = useState('');
+
   const messagesEndRef = useRef(null);
+  const textareaRef = useRef(null);
 
   // Auto-scroll to bottom of messages
   useEffect(() => {
@@ -68,13 +87,38 @@ export default function ChatCanvas({ onOpenTemplatePicker, onToggleSidebar, isSi
     if (!inputContent.trim() || sending) return;
 
     const content = inputContent.trim();
-    setInputContent('');
     setSending(true);
 
     try {
-      await sendMessage(content, 'TEXT');
+      if (composeMode === 'NOTE') {
+        // Send Private Team Note
+        await sendMessage(content, {
+          isInternal: true,
+          messageType: 'NOTE',
+        });
+      } else if (composeMode === 'INTERACTIVE') {
+        // Send WhatsApp Interactive Message with quick action buttons
+        const formattedButtons = interactiveButtons
+          .filter((b) => b.trim().length > 0)
+          .slice(0, 3)
+          .map((title, idx) => ({
+            id: `btn_${idx + 1}`,
+            title: title.trim().slice(0, 20),
+          }));
+
+        await sendMessage(content, {
+          messageType: 'INTERACTIVE',
+          buttons: formattedButtons,
+        });
+      } else {
+        // Standard WhatsApp Outbound Message
+        await sendMessage(content, {
+          messageType: 'TEXT',
+        });
+      }
+      setInputContent('');
     } catch (err) {
-      alert(`Delivery notice: ${err.message}`);
+      alert(`Notice: ${err.message}`);
     } finally {
       setSending(false);
     }
@@ -87,11 +131,46 @@ export default function ChatCanvas({ onOpenTemplatePicker, onToggleSidebar, isSi
     }
   };
 
+  // Quick Emoji Click
+  const insertEmoji = (emoji) => {
+    setInputContent((prev) => prev + emoji);
+    textareaRef.current?.focus();
+  };
+
+  // Fast Attachment Handler
+  const handleQuickAttachment = async (type, filename, url) => {
+    setShowAttachmentMenu(false);
+    setSending(true);
+    try {
+      await sendMessage(`Here is your requested ${filename}`, {
+        messageType: type,
+        mediaUrl: url,
+        mediaFilename: filename,
+      });
+    } catch (err) {
+      alert(`Attachment error: ${err.message}`);
+    } finally {
+      setSending(false);
+    }
+  };
+
   const quickReplies = [
-    { label: 'NEET Fees & Batches', text: 'Namaste! Our NEET 2026-27 batch fee is ₹85,000/year including study materials, weekly tests, and Kota top mentors.' },
-    { label: 'Demo Class Schedule', text: 'You can attend a complimentary 2-hour Live Demo this Saturday at 5 PM. Would you like us to register your slot?' },
-    { label: 'Center Location & Timings', text: 'Our center is open Mon-Sat from 9 AM to 7 PM at 3rd Floor, Apex Tower, Kota / Bandra West, Mumbai.' },
-    { label: 'Scholarship Test', text: 'We offer up to 90% scholarship based on the Apex Talent Hunt Test (ATHT) conducted every Sunday online and offline.' },
+    {
+      label: 'NEET Fees & Batches',
+      text: 'Namaste! Our NEET 2026-27 batch fee is ₹85,000/year including study materials, weekly tests, and Kota top mentors.',
+    },
+    {
+      label: 'Demo Class Schedule',
+      text: 'You can attend a complimentary 2-hour Live Demo this Saturday at 5 PM. Would you like us to register your slot?',
+    },
+    {
+      label: 'Center Location & Timings',
+      text: 'Our center is open Mon-Sat from 9 AM to 7 PM at 3rd Floor, Apex Tower, Kota / Bandra West, Mumbai.',
+    },
+    {
+      label: 'Scholarship Test',
+      text: 'We offer up to 90% scholarship based on the Apex Talent Hunt Test (ATHT) conducted every Sunday online and offline.',
+    },
   ];
 
   if (!activeChat) {
@@ -133,22 +212,37 @@ export default function ChatCanvas({ onOpenTemplatePicker, onToggleSidebar, isSi
       {/* 1. Chat Header */}
       <div
         style={{
-          padding: '12px 20px',
-          background: 'rgba(15, 22, 36, 0.95)',
+          padding: '12px 16px',
+          background: 'rgba(14, 21, 36, 0.96)',
           backdropFilter: 'blur(10px)',
           borderBottom: '1px solid var(--border-subtle)',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'space-between',
           zIndex: 5,
+          gap: '8px',
         }}
       >
-        <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', minWidth: 0 }}>
+          {/* Mobile Back Button */}
+          {onBack && (
+            <button
+              type="button"
+              onClick={onBack}
+              className="btn btn-ghost btn-mobile-back"
+              style={{ padding: '6px', color: '#fff', borderRadius: '6px' }}
+              title="Back to conversation queue"
+            >
+              <ArrowLeft size={20} />
+            </button>
+          )}
+
           {/* Customer Avatar */}
           <div
             style={{
-              width: '42px',
-              height: '42px',
+              width: '40px',
+              height: '40px',
+              minWidth: '40px',
               borderRadius: '50%',
               background: 'linear-gradient(135deg, #10b981 0%, #047857 100%)',
               display: 'flex',
@@ -162,9 +256,19 @@ export default function ChatCanvas({ onOpenTemplatePicker, onToggleSidebar, isSi
             {activeChat.contact?.name ? activeChat.contact.name.charAt(0).toUpperCase() : 'C'}
           </div>
 
-          <div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <span style={{ fontWeight: '700', fontSize: '15.5px', color: '#fff' }}>
+          <div style={{ minWidth: 0 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+              <span
+                style={{
+                  fontWeight: '700',
+                  fontSize: '15px',
+                  color: '#fff',
+                  whiteSpace: 'nowrap',
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                  maxWidth: '180px',
+                }}
+              >
                 {activeChat.contact?.name || 'Customer'}
               </span>
               <span
@@ -172,25 +276,26 @@ export default function ChatCanvas({ onOpenTemplatePicker, onToggleSidebar, isSi
                   display: 'inline-flex',
                   alignItems: 'center',
                   gap: '3px',
-                  fontSize: '10.5px',
+                  fontSize: '10px',
                   background: 'rgba(37, 211, 102, 0.15)',
                   color: '#25D366',
                   padding: '1px 6px',
                   borderRadius: '4px',
                   fontWeight: '600',
+                  whiteSpace: 'nowrap',
                 }}
               >
-                <CheckCheck size={12} /> WhatsApp Official
+                <CheckCheck size={11} /> Meta Official
               </span>
             </div>
-            <div style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>
-              +{activeChat.contact?.waId} • Channel: Cloud API v20.0
+            <div style={{ fontSize: '11.5px', color: 'var(--text-secondary)', whiteSpace: 'nowrap' }}>
+              +{activeChat.contact?.waId}
             </div>
           </div>
         </div>
 
         {/* Action Controls: Assignment, Resolution, Sidebar Toggle */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexShrink: 0 }}>
           {/* Status Badge */}
           <span
             className={
@@ -215,37 +320,38 @@ export default function ChatCanvas({ onOpenTemplatePicker, onToggleSidebar, isSi
                   color: '#fff',
                   border: '1px solid var(--border-medium)',
                   borderRadius: 'var(--radius-md)',
-                  padding: '6px 26px 6px 10px',
-                  fontSize: '12.5px',
+                  padding: '6px 24px 6px 8px',
+                  fontSize: '12px',
                   cursor: 'pointer',
                   appearance: 'none',
                   outline: 'none',
                   fontFamily: 'inherit',
+                  maxWidth: '120px',
                 }}
               >
                 <option value="">Unassigned</option>
                 {agentsList.map((a) => (
                   <option key={a.id} value={a.id}>
-                    Assign: {a.name} ({a.role})
+                    {a.name}
                   </option>
                 ))}
               </select>
               <ChevronDown
-                size={13}
-                style={{ position: 'absolute', right: '8px', top: '10px', pointerEvents: 'none', color: '#94a3b8' }}
+                size={12}
+                style={{ position: 'absolute', right: '6px', top: '9px', pointerEvents: 'none', color: '#94a3b8' }}
               />
             </div>
           ) : isUnassigned ? (
             <button
               onClick={() => assignChat(activeChat.id, agent.id)}
               className="btn btn-primary"
-              style={{ padding: '6px 12px', fontSize: '12px' }}
+              style={{ padding: '5px 10px', fontSize: '11.5px' }}
             >
-              <UserCheck size={14} /> Claim Chat
+              <UserCheck size={13} /> Claim
             </button>
           ) : (
-            <span style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>
-              Assigned: {activeChat.assignedAgent?.name || 'You'}
+            <span style={{ fontSize: '11px', color: 'var(--text-secondary)' }}>
+              {activeChat.assignedAgent?.name || 'You'}
             </span>
           )}
 
@@ -254,17 +360,19 @@ export default function ChatCanvas({ onOpenTemplatePicker, onToggleSidebar, isSi
             <button
               onClick={() => updateChatStatus(activeChat.id, 'OPEN')}
               className="btn btn-secondary"
-              style={{ padding: '6px 12px', fontSize: '12px' }}
+              style={{ padding: '5px 8px', fontSize: '11.5px' }}
+              title="Reopen Conversation"
             >
-              <RotateCcw size={13} /> Reopen
+              <RotateCcw size={13} />
             </button>
           ) : (
             <button
               onClick={() => updateChatStatus(activeChat.id, 'RESOLVED')}
               className="btn btn-secondary"
-              style={{ padding: '6px 12px', fontSize: '12px' }}
+              style={{ padding: '5px 8px', fontSize: '11.5px' }}
+              title="Mark Resolved"
             >
-              <CheckCircle2 size={13} style={{ color: '#10b981' }} /> Resolve
+              <CheckCircle2 size={13} style={{ color: '#10b981' }} />
             </button>
           )}
 
@@ -288,26 +396,27 @@ export default function ChatCanvas({ onOpenTemplatePicker, onToggleSidebar, isSi
         style={{
           background: messagingWindow.isOpen ? 'rgba(16, 185, 129, 0.08)' : 'rgba(239, 68, 68, 0.1)',
           borderBottom: `1px solid ${messagingWindow.isOpen ? 'rgba(16, 185, 129, 0.2)' : 'rgba(239, 68, 68, 0.25)'}`,
-          padding: '6px 20px',
+          padding: '6px 16px',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'space-between',
-          fontSize: '12px',
+          fontSize: '11.5px',
+          gap: '8px',
         }}
       >
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', minWidth: 0, overflow: 'hidden' }}>
           {messagingWindow.isOpen ? (
             <>
-              <Clock size={13} style={{ color: '#10b981' }} />
-              <span style={{ color: '#6ee7b7' }}>
-                WhatsApp 24-Hour Customer Window Active • {messagingWindow.hoursRemaining} hours remaining for freeform replies.
+              <Clock size={13} style={{ color: '#10b981', flexShrink: 0 }} />
+              <span style={{ color: '#6ee7b7', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                Meta 24h Window Active: {messagingWindow.hoursRemaining}h remaining
               </span>
             </>
           ) : (
             <>
-              <AlertTriangle size={14} style={{ color: '#f87171' }} />
-              <span style={{ color: '#fca5a5' }}>
-                WhatsApp 24-Hour Reply Window Expired • Customer must be re-engaged with an approved Template message.
+              <AlertTriangle size={13} style={{ color: '#f87171', flexShrink: 0 }} />
+              <span style={{ color: '#fca5a5', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                24h Window Expired: Send template to re-engage
               </span>
             </>
           )}
@@ -316,9 +425,9 @@ export default function ChatCanvas({ onOpenTemplatePicker, onToggleSidebar, isSi
         <button
           onClick={onOpenTemplatePicker}
           className="btn btn-ghost"
-          style={{ padding: '2px 8px', fontSize: '11.5px', color: '#25D366', gap: '4px' }}
+          style={{ padding: '2px 6px', fontSize: '11px', color: '#25D366', gap: '4px', flexShrink: 0 }}
         >
-          <Sparkles size={12} /> Use Meta Template
+          <Sparkles size={12} /> Template
         </button>
       </div>
 
@@ -327,10 +436,10 @@ export default function ChatCanvas({ onOpenTemplatePicker, onToggleSidebar, isSi
         style={{
           flex: 1,
           overflowY: 'auto',
-          padding: '20px 24px',
+          padding: '16px',
           display: 'flex',
           flexDirection: 'column',
-          gap: '12px',
+          gap: '10px',
         }}
       >
         {loadingMessages ? (
@@ -345,7 +454,12 @@ export default function ChatCanvas({ onOpenTemplatePicker, onToggleSidebar, isSi
           messages.map((msg) => {
             const isInbound = msg.direction === 'INBOUND';
             const isSystem = msg.senderType === 'SYSTEM';
+            const isNote = msg.messageType === 'NOTE' || msg.senderType === 'NOTE';
 
+            const formatMsgTime = (d) =>
+              new Date(d).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true });
+
+            // 3.1. System Log Bubble
             if (isSystem) {
               return (
                 <div key={msg.id} className="msg-bubble-system">
@@ -354,9 +468,62 @@ export default function ChatCanvas({ onOpenTemplatePicker, onToggleSidebar, isSi
               );
             }
 
-            const formatMsgTime = (d) =>
-              new Date(d).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true });
+            // 3.2. Private Internal Team Note Bubble
+            if (isNote) {
+              return (
+                <div
+                  key={msg.id}
+                  style={{
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: 'center',
+                    width: '100%',
+                    margin: '4px 0',
+                  }}
+                >
+                  <div
+                    style={{
+                      background: 'rgba(245, 158, 11, 0.1)',
+                      border: '1px solid rgba(245, 158, 11, 0.35)',
+                      borderRadius: '12px',
+                      padding: '10px 14px',
+                      maxWidth: '85%',
+                      width: '100%',
+                      boxShadow: '0 4px 12px rgba(0, 0, 0, 0.25)',
+                    }}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '4px' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '11px', color: '#f59e0b', fontWeight: '700' }}>
+                        <Lock size={12} />
+                        <span>INTERNAL NOTE • Team only</span>
+                      </div>
+                      <span style={{ fontSize: '10px', color: 'var(--text-muted)' }}>
+                        {formatMsgTime(msg.createdAt)}
+                      </span>
+                    </div>
+                    <div style={{ fontSize: '13px', color: '#fef3c7', lineHeight: 1.45, whiteSpace: 'pre-wrap' }}>
+                      {msg.content}
+                    </div>
+                    {msg.senderAgent && (
+                      <div style={{ fontSize: '10.5px', color: '#fbbf24', marginTop: '4px', textAlign: 'right' }}>
+                        — {msg.senderAgent.name}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              );
+            }
 
+            // 3.3. Parse interactive buttons if message is interactive
+            let interactivePills = [];
+            if (msg.messageType === 'INTERACTIVE' && msg.rawPayload) {
+              try {
+                const parsed = JSON.parse(msg.rawPayload);
+                interactivePills = parsed.buttons || [];
+              } catch (e) {}
+            }
+
+            // 3.4. Regular Inbound / Outbound WhatsApp Bubble
             return (
               <div
                 key={msg.id}
@@ -369,7 +536,7 @@ export default function ChatCanvas({ onOpenTemplatePicker, onToggleSidebar, isSi
                 <div className={isInbound ? 'msg-bubble-inbound' : 'msg-bubble-outbound'}>
                   {/* Sender label if outbound agent */}
                   {!isInbound && msg.senderAgent && (
-                    <div style={{ fontSize: '11px', color: '#a7f3d0', fontWeight: '600', marginBottom: '2px' }}>
+                    <div style={{ fontSize: '10.5px', color: '#a7f3d0', fontWeight: '600', marginBottom: '2px' }}>
                       {msg.senderAgent.name}
                     </div>
                   )}
@@ -381,8 +548,8 @@ export default function ChatCanvas({ onOpenTemplatePicker, onToggleSidebar, isSi
                         src={msg.mediaUrl || 'https://images.unsplash.com/photo-1576091160399-112ba8d25d1d?w=600'}
                         alt="WhatsApp Attachment"
                         style={{
-                          maxWidth: '280px',
-                          maxHeight: '220px',
+                          maxWidth: '100%',
+                          maxHeight: '200px',
                           borderRadius: '8px',
                           display: 'block',
                           objectFit: 'cover',
@@ -396,7 +563,7 @@ export default function ChatCanvas({ onOpenTemplatePicker, onToggleSidebar, isSi
                     <div
                       style={{
                         background: 'rgba(0,0,0,0.2)',
-                        padding: '8px 12px',
+                        padding: '6px 10px',
                         borderRadius: '6px',
                         display: 'flex',
                         alignItems: 'center',
@@ -404,17 +571,40 @@ export default function ChatCanvas({ onOpenTemplatePicker, onToggleSidebar, isSi
                         marginBottom: '6px',
                       }}
                     >
-                      <FileText size={20} style={{ color: '#38bdf8' }} />
-                      <div style={{ fontSize: '12px', fontWeight: '500' }}>
+                      <FileText size={18} style={{ color: '#38bdf8' }} />
+                      <div style={{ fontSize: '11.5px', fontWeight: '500', wordBreak: 'break-all' }}>
                         {msg.mediaFilename || 'Document.pdf'}
                       </div>
                     </div>
                   )}
 
                   {/* Text / Caption */}
-                  <div style={{ fontSize: '13.5px', whiteSpace: 'pre-wrap', wordBreak: 'break-word', lineHeight: 1.45 }}>
+                  <div style={{ fontSize: '13px', whiteSpace: 'pre-wrap', wordBreak: 'break-word', lineHeight: 1.45 }}>
                     {msg.content}
                   </div>
+
+                  {/* Interactive Button Pills (Rendered on message) */}
+                  {interactivePills.length > 0 && (
+                    <div style={{ marginTop: '6px', display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                      {interactivePills.map((btn, bIdx) => (
+                        <div
+                          key={bIdx}
+                          style={{
+                            background: 'rgba(255, 255, 255, 0.12)',
+                            border: '1px solid rgba(255, 255, 255, 0.2)',
+                            borderRadius: '6px',
+                            padding: '5px 8px',
+                            fontSize: '11.5px',
+                            color: '#fff',
+                            textAlign: 'center',
+                            fontWeight: '600',
+                          }}
+                        >
+                          🔘 {btn.title || btn.text || `Option ${bIdx + 1}`}
+                        </div>
+                      ))}
+                    </div>
+                  )}
 
                   {/* Footer: Time & Meta WhatsApp Tick Status */}
                   <div
@@ -423,8 +613,8 @@ export default function ChatCanvas({ onOpenTemplatePicker, onToggleSidebar, isSi
                       alignItems: 'center',
                       justifyContent: 'flex-end',
                       gap: '4px',
-                      marginTop: '4px',
-                      fontSize: '10.5px',
+                      marginTop: '3px',
+                      fontSize: '10px',
                       color: isInbound ? 'var(--text-muted)' : '#d1fae5',
                     }}
                   >
@@ -432,15 +622,15 @@ export default function ChatCanvas({ onOpenTemplatePicker, onToggleSidebar, isSi
                     {!isInbound && (
                       <span>
                         {msg.status === 'READ' ? (
-                          <CheckCheck size={13} style={{ color: 'var(--wa-blue-tick)' }} title="Read by recipient" />
+                          <CheckCheck size={12} style={{ color: 'var(--wa-blue-tick)' }} title="Read by recipient" />
                         ) : msg.status === 'DELIVERED' ? (
-                          <CheckCheck size={13} style={{ color: '#a7f3d0' }} title="Delivered to device" />
+                          <CheckCheck size={12} style={{ color: '#a7f3d0' }} title="Delivered to device" />
                         ) : msg.status === 'SENT' ? (
-                          <Check size={13} style={{ color: '#a7f3d0' }} title="Sent via Meta Cloud API" />
+                          <Check size={12} style={{ color: '#a7f3d0' }} title="Sent via Meta Cloud API" />
                         ) : msg.status === 'FAILED' ? (
-                          <AlertTriangle size={13} style={{ color: '#f87171' }} title={msg.errorMessage || 'Failed'} />
+                          <AlertTriangle size={12} style={{ color: '#f87171' }} title={msg.errorMessage || 'Failed'} />
                         ) : (
-                          <Clock size={12} title="Pending" />
+                          <Clock size={11} title="Pending" />
                         )}
                       </span>
                     )}
@@ -453,8 +643,8 @@ export default function ChatCanvas({ onOpenTemplatePicker, onToggleSidebar, isSi
 
         {/* Live typing indicator */}
         {Object.entries(typingUsers).some(([, isTyping]) => isTyping) && (
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '6px 12px' }}>
-            <span style={{ fontSize: '12px', color: 'var(--wa-primary)', fontStyle: 'italic' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '4px 8px' }}>
+            <span style={{ fontSize: '11.5px', color: 'var(--wa-primary)', fontStyle: 'italic' }}>
               Staff member is typing...
             </span>
           </div>
@@ -468,15 +658,17 @@ export default function ChatCanvas({ onOpenTemplatePicker, onToggleSidebar, isSi
         <div
           style={{
             position: 'absolute',
-            bottom: '80px',
-            left: '20px',
-            right: '20px',
+            bottom: '115px',
+            left: '12px',
+            right: '12px',
             background: 'var(--bg-surface)',
             border: '1px solid var(--border-medium)',
             borderRadius: 'var(--radius-lg)',
             padding: '12px',
             boxShadow: 'var(--shadow-card)',
             zIndex: 20,
+            maxHeight: '260px',
+            overflowY: 'auto',
           }}
         >
           <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
@@ -489,27 +681,28 @@ export default function ChatCanvas({ onOpenTemplatePicker, onToggleSidebar, isSi
               ✕ Close
             </button>
           </div>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '8px' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '6px' }}>
             {quickReplies.map((qr, idx) => (
               <button
                 key={idx}
                 onClick={() => {
                   setInputContent(qr.text);
                   setShowQuickReplies(false);
+                  textareaRef.current?.focus();
                 }}
                 className="btn btn-secondary"
-                style={{ textAlign: 'left', padding: '8px 10px', fontSize: '12px', justifyContent: 'flex-start' }}
+                style={{ textAlign: 'left', padding: '6px 8px', fontSize: '11.5px', justifyContent: 'flex-start' }}
               >
                 <div>
                   <div style={{ fontWeight: '600', color: 'var(--wa-primary)' }}>{qr.label}</div>
                   <div
                     style={{
-                      fontSize: '11px',
+                      fontSize: '10.5px',
                       color: 'var(--text-muted)',
                       overflow: 'hidden',
                       textOverflow: 'ellipsis',
                       whiteSpace: 'nowrap',
-                      maxWidth: '240px',
+                      maxWidth: '220px',
                     }}
                   >
                     {qr.text}
@@ -521,57 +714,348 @@ export default function ChatCanvas({ onOpenTemplatePicker, onToggleSidebar, isSi
         </div>
       )}
 
-      {/* 5. Interactive Composer Box */}
+      {/* 5. Quick Attachment Flyout */}
+      {showAttachmentMenu && (
+        <div
+          style={{
+            position: 'absolute',
+            bottom: '115px',
+            left: '16px',
+            background: 'var(--bg-surface)',
+            border: '1px solid var(--border-medium)',
+            borderRadius: 'var(--radius-lg)',
+            padding: '10px',
+            boxShadow: 'var(--shadow-card)',
+            zIndex: 20,
+            width: '260px',
+            maxWidth: '90vw',
+          }}
+        >
+          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px', alignItems: 'center' }}>
+            <span style={{ fontSize: '11.5px', fontWeight: '600', color: '#fff' }}>📎 Attach Media / Doc</span>
+            <button
+              onClick={() => setShowAttachmentMenu(false)}
+              className="btn btn-ghost"
+              style={{ padding: '2px 6px', fontSize: '11px' }}
+            >
+              ✕
+            </button>
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '5px' }}>
+            <button
+              onClick={() =>
+                handleQuickAttachment(
+                  'DOCUMENT',
+                  'NEET_Course_Brochure_2026.pdf',
+                  'https://www.w3.org/WAI/ER/tests/xhtml/testfiles/resources/pdf/dummy.pdf'
+                )
+              }
+              className="btn btn-secondary"
+              style={{ justifyContent: 'flex-start', fontSize: '11.5px', padding: '5px 8px', gap: '8px' }}
+            >
+              <FileText size={14} style={{ color: '#38bdf8' }} />
+              <span>Kota NEET Brochure (PDF)</span>
+            </button>
+
+            <button
+              onClick={() =>
+                handleQuickAttachment(
+                  'DOCUMENT',
+                  'Fee_Structure_Installments_2026.pdf',
+                  'https://www.w3.org/WAI/ER/tests/xhtml/testfiles/resources/pdf/dummy.pdf'
+                )
+              }
+              className="btn btn-secondary"
+              style={{ justifyContent: 'flex-start', fontSize: '11.5px', padding: '5px 8px', gap: '8px' }}
+            >
+              <FileText size={14} style={{ color: '#10b981' }} />
+              <span>Fee Structure & EMI</span>
+            </button>
+
+            <button
+              onClick={() =>
+                handleQuickAttachment(
+                  'IMAGE',
+                  'Apex_Scholarship_Admit_Card.jpg',
+                  'https://images.unsplash.com/photo-1576091160399-112ba8d25d1d?w=600'
+                )
+              }
+              className="btn btn-secondary"
+              style={{ justifyContent: 'flex-start', fontSize: '11.5px', padding: '5px 8px', gap: '8px' }}
+            >
+              <ImageIcon size={14} style={{ color: '#f59e0b' }} />
+              <span>Scholarship Admit Card (JPG)</span>
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* 6. Interactive Composer Container */}
       <div
         style={{
-          padding: '14px 20px',
-          background: 'rgba(15, 22, 36, 0.98)',
+          padding: '8px 12px',
+          background: 'rgba(14, 21, 36, 0.98)',
           borderTop: '1px solid var(--border-subtle)',
         }}
       >
-        <form onSubmit={handleSend} style={{ display: 'flex', alignItems: 'flex-end', gap: '10px' }}>
-          {/* Quick Reply & Template Action Buttons */}
-          <div style={{ display: 'flex', gap: '4px', paddingBottom: '4px' }}>
+        {/* 6.1 Mode Switcher Tabs */}
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            marginBottom: '6px',
+            overflowX: 'auto',
+            gap: '8px',
+          }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', gap: '4px', flexShrink: 0 }}>
+            <button
+              type="button"
+              onClick={() => setComposeMode('WHATSAPP')}
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '4px',
+                padding: '3px 8px',
+                borderRadius: '6px',
+                fontSize: '11px',
+                fontWeight: '600',
+                cursor: 'pointer',
+                border: 'none',
+                background: composeMode === 'WHATSAPP' ? 'rgba(37, 211, 102, 0.18)' : 'transparent',
+                color: composeMode === 'WHATSAPP' ? '#25D366' : 'var(--text-secondary)',
+              }}
+            >
+              <MessageSquare size={12} />
+              <span>WhatsApp</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setComposeMode('NOTE')}
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '4px',
+                padding: '3px 8px',
+                borderRadius: '6px',
+                fontSize: '11px',
+                fontWeight: '600',
+                cursor: 'pointer',
+                border: 'none',
+                background: composeMode === 'NOTE' ? 'rgba(245, 158, 11, 0.18)' : 'transparent',
+                color: composeMode === 'NOTE' ? '#f59e0b' : 'var(--text-secondary)',
+              }}
+            >
+              <Lock size={11} />
+              <span>Team Note</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setComposeMode('INTERACTIVE')}
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '4px',
+                padding: '3px 8px',
+                borderRadius: '6px',
+                fontSize: '11px',
+                fontWeight: '600',
+                cursor: 'pointer',
+                border: 'none',
+                background: composeMode === 'INTERACTIVE' ? 'rgba(56, 189, 248, 0.18)' : 'transparent',
+                color: composeMode === 'INTERACTIVE' ? '#38bdf8' : 'var(--text-secondary)',
+              }}
+            >
+              <Sparkles size={11} />
+              <span>Buttons</span>
+            </button>
+          </div>
+
+          {/* Quick Reaction Pills */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '2px', flexShrink: 0 }}>
+            {['👍', '🙏', '❤️', '🎓', '📚'].map((emoji) => (
+              <button
+                key={emoji}
+                type="button"
+                onClick={() => insertEmoji(emoji)}
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  fontSize: '12px',
+                  cursor: 'pointer',
+                  padding: '2px',
+                  borderRadius: '4px',
+                }}
+                title={`Insert ${emoji}`}
+              >
+                {emoji}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* 6.2 Interactive Buttons Config Bar (Visible only when in INTERACTIVE mode) */}
+        {composeMode === 'INTERACTIVE' && (
+          <div
+            style={{
+              background: 'rgba(56, 189, 248, 0.08)',
+              border: '1px solid rgba(56, 189, 248, 0.25)',
+              borderRadius: '8px',
+              padding: '6px 10px',
+              marginBottom: '6px',
+            }}
+          >
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
+              <span style={{ fontSize: '11px', fontWeight: '600', color: '#38bdf8' }}>
+                WhatsApp Action Buttons (Max 3)
+              </span>
+            </div>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px', alignItems: 'center' }}>
+              {interactiveButtons.map((btn, idx) => (
+                <span
+                  key={idx}
+                  style={{
+                    fontSize: '11px',
+                    background: 'rgba(255, 255, 255, 0.1)',
+                    color: '#fff',
+                    padding: '2px 6px',
+                    borderRadius: '4px',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '4px',
+                  }}
+                >
+                  <span>{btn}</span>
+                  <button
+                    type="button"
+                    onClick={() => setInteractiveButtons((prev) => prev.filter((_, i) => i !== idx))}
+                    style={{ background: 'none', border: 'none', color: '#f87171', cursor: 'pointer', padding: 0 }}
+                  >
+                    ×
+                  </button>
+                </span>
+              ))}
+
+              {interactiveButtons.length < 3 && (
+                <div style={{ display: 'inline-flex', gap: '3px' }}>
+                  <input
+                    type="text"
+                    value={newBtnInput}
+                    onChange={(e) => setNewBtnInput(e.target.value)}
+                    placeholder="New button..."
+                    maxLength={20}
+                    style={{
+                      background: 'var(--bg-surface)',
+                      border: '1px solid var(--border-medium)',
+                      borderRadius: '4px',
+                      color: '#fff',
+                      fontSize: '10.5px',
+                      padding: '2px 5px',
+                      outline: 'none',
+                      width: '90px',
+                    }}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault();
+                        if (newBtnInput.trim()) {
+                          setInteractiveButtons((prev) => [...prev, newBtnInput.trim()]);
+                          setNewBtnInput('');
+                        }
+                      }
+                    }}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (newBtnInput.trim()) {
+                        setInteractiveButtons((prev) => [...prev, newBtnInput.trim()]);
+                        setNewBtnInput('');
+                      }
+                    }}
+                    className="btn btn-secondary"
+                    style={{ padding: '2px 5px', fontSize: '10.5px' }}
+                  >
+                    +
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* 6.3 Input Box & Action Buttons */}
+        <form onSubmit={handleSend} style={{ display: 'flex', alignItems: 'flex-end', gap: '8px' }}>
+          {/* Quick Action Buttons */}
+          <div style={{ display: 'flex', gap: '2px', paddingBottom: '3px' }}>
             <button
               type="button"
               onClick={() => setShowQuickReplies(!showQuickReplies)}
               className="btn btn-ghost"
-              style={{ padding: '8px', color: showQuickReplies ? 'var(--wa-primary)' : 'var(--text-secondary)' }}
+              style={{ padding: '6px', color: showQuickReplies ? 'var(--wa-primary)' : 'var(--text-secondary)' }}
               title="Canned Quick Responses"
             >
               ⚡
             </button>
+
+            <button
+              type="button"
+              onClick={() => setShowAttachmentMenu(!showAttachmentMenu)}
+              className="btn btn-ghost"
+              style={{ padding: '6px', color: showAttachmentMenu ? '#38bdf8' : 'var(--text-secondary)' }}
+              title="Attach Document or Brochure"
+            >
+              <Paperclip size={15} />
+            </button>
+
             <button
               type="button"
               onClick={onOpenTemplatePicker}
               className="btn btn-ghost"
-              style={{ padding: '8px', color: 'var(--text-secondary)' }}
+              style={{ padding: '6px', color: 'var(--text-secondary)' }}
               title="Send Approved WhatsApp Template"
             >
-              <Sparkles size={17} />
+              <Sparkles size={15} />
             </button>
           </div>
 
           {/* Text Area */}
           <div style={{ flex: 1, position: 'relative' }}>
             <textarea
+              ref={textareaRef}
               rows={2}
               value={inputContent}
               onChange={(e) => setInputContent(e.target.value)}
               onKeyDown={handleKeyDown}
               placeholder={
-                messagingWindow.isOpen
-                  ? 'Type an official WhatsApp reply... (Press Enter to send)'
-                  : '⚠️ 24-hr window expired. Use Template above or type to override...'
+                composeMode === 'NOTE'
+                  ? '🔒 Add a private note for staff...'
+                  : composeMode === 'INTERACTIVE'
+                  ? 'Type question with your action buttons...'
+                  : messagingWindow.isOpen
+                  ? 'Type WhatsApp reply... (Enter to send)'
+                  : '⚠️ 24-hr window expired. Use Template...'
               }
               style={{
                 width: '100%',
-                background: 'var(--bg-surface)',
-                border: '1px solid var(--border-medium)',
+                background:
+                  composeMode === 'NOTE'
+                    ? 'rgba(245, 158, 11, 0.05)'
+                    : composeMode === 'INTERACTIVE'
+                    ? 'rgba(56, 189, 248, 0.05)'
+                    : 'var(--bg-surface)',
+                border:
+                  composeMode === 'NOTE'
+                    ? '1px solid rgba(245, 158, 11, 0.4)'
+                    : composeMode === 'INTERACTIVE'
+                    ? '1px solid rgba(56, 189, 248, 0.4)'
+                    : '1px solid var(--border-medium)',
                 borderRadius: 'var(--radius-md)',
                 color: '#fff',
-                padding: '10px 14px',
-                fontSize: '13.5px',
+                padding: '8px 12px',
+                fontSize: '13px',
                 resize: 'none',
                 outline: 'none',
                 fontFamily: 'inherit',
@@ -586,14 +1070,20 @@ export default function ChatCanvas({ onOpenTemplatePicker, onToggleSidebar, isSi
             disabled={!inputContent.trim() || sending}
             className="btn btn-primary"
             style={{
-              padding: '10px 16px',
-              height: '42px',
+              padding: '8px 14px',
+              height: '38px',
               borderRadius: 'var(--radius-md)',
+              background:
+                composeMode === 'NOTE'
+                  ? 'linear-gradient(135deg, #f59e0b 0%, #d97706 100%)'
+                  : composeMode === 'INTERACTIVE'
+                  ? 'linear-gradient(135deg, #0284c7 0%, #0369a1 100%)'
+                  : undefined,
               opacity: !inputContent.trim() || sending ? 0.6 : 1,
             }}
           >
-            <Send size={16} />
-            <span>Send</span>
+            {composeMode === 'NOTE' ? <Lock size={14} /> : <Send size={14} />}
+            <span style={{ fontSize: '12px' }}>{composeMode === 'NOTE' ? 'Note' : 'Send'}</span>
           </button>
         </form>
       </div>

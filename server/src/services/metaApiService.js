@@ -4,11 +4,11 @@ const { v4: uuidv4 } = require('uuid');
 const META_GRAPH_URL = 'https://graph.facebook.com';
 const API_VERSION = process.env.META_API_VERSION || 'v20.0';
 
-function isLiveMetaToken(token) {
-  if (!token) return false;
-  if (token === 'MOCK_TOKEN') return false;
-  if (token.startsWith('EAAG_PERMANENT_META_SYSTEM_USER_TOKEN')) return false;
-  return token.length > 30;
+function isLiveConfig(tenant) {
+  if (!tenant || !tenant.accessToken || !tenant.phoneNumberId) return false;
+  if (tenant.accessToken === 'MOCK_TOKEN' || tenant.accessToken.startsWith('EAAG_PERMANENT_META_SYSTEM_USER_TOKEN')) return false;
+  if (tenant.phoneNumberId.startsWith('PHONE_ID_')) return false;
+  return tenant.accessToken.length > 30;
 }
 
 class MetaApiService {
@@ -19,7 +19,7 @@ class MetaApiService {
     const cleanPhone = toPhoneNumber.replace(/\D/g, '');
 
     // If live credentials configured, dispatch real Meta Graph API call
-    if (tenant.phoneNumberId && isLiveMetaToken(tenant.accessToken)) {
+    if (isLiveConfig(tenant)) {
       try {
         const url = `${META_GRAPH_URL}/${API_VERSION}/${tenant.phoneNumberId}/messages`;
         const response = await axios.post(
@@ -69,7 +69,7 @@ class MetaApiService {
   static async sendMediaMessage(tenant, toPhoneNumber, { type, mediaUrl, caption, filename }) {
     const cleanPhone = toPhoneNumber.replace(/\D/g, '');
 
-    if (tenant.phoneNumberId && isLiveMetaToken(tenant.accessToken)) {
+    if (isLiveConfig(tenant)) {
       try {
         const url = `${META_GRAPH_URL}/${API_VERSION}/${tenant.phoneNumberId}/messages`;
         const mediaPayload = {
@@ -121,7 +121,7 @@ class MetaApiService {
   static async sendTemplateMessage(tenant, toPhoneNumber, templateName, languageCode = 'en', components = []) {
     const cleanPhone = toPhoneNumber.replace(/\D/g, '');
 
-    if (tenant.phoneNumberId && isLiveMetaToken(tenant.accessToken)) {
+    if (isLiveConfig(tenant)) {
       try {
         const url = `${META_GRAPH_URL}/${API_VERSION}/${tenant.phoneNumberId}/messages`;
         const response = await axios.post(
@@ -192,6 +192,64 @@ class MetaApiService {
         error: err.response?.data?.error?.message || err.message,
       };
     }
+  }
+
+  /**
+   * Send WhatsApp Interactive Button Message (Quick Action Buttons)
+   */
+  static async sendInteractiveButtons(tenant, toPhoneNumber, bodyText, buttons = []) {
+    const cleanPhone = toPhoneNumber.replace(/\D/g, '');
+
+    if (isLiveConfig(tenant)) {
+      try {
+        const url = `${META_GRAPH_URL}/${API_VERSION}/${tenant.phoneNumberId}/messages`;
+        const response = await axios.post(
+          url,
+          {
+            messaging_product: 'whatsapp',
+            recipient_type: 'individual',
+            to: cleanPhone,
+            type: 'interactive',
+            interactive: {
+              type: 'button',
+              body: { text: bodyText },
+              action: {
+                buttons: buttons.slice(0, 3).map((b, i) => ({
+                  type: 'reply',
+                  reply: {
+                    id: b.id || `btn_${i + 1}`,
+                    title: (b.title || b.text || `Option ${i + 1}`).slice(0, 20),
+                  },
+                })),
+              },
+            },
+          },
+          {
+            headers: {
+              Authorization: `Bearer ${tenant.accessToken}`,
+              'Content-Type': 'application/json',
+            },
+            timeout: 10000,
+          }
+        );
+
+        const wamid = response.data?.messages?.[0]?.id || `wamid.HBgL${uuidv4().replace(/-/g, '')}`;
+        return { success: true, wamid, data: response.data };
+      } catch (err) {
+        console.error('[Meta API Interactive Error]:', err.response?.data || err.message);
+        return {
+          success: false,
+          error: err.response?.data?.error?.message || err.message,
+        };
+      }
+    }
+
+    const mockWamid = `wamid.HBgL${uuidv4().replace(/-/g, '').slice(0, 24)}BTN_MOCK`;
+    return {
+      success: true,
+      wamid: mockWamid,
+      isMock: true,
+    };
   }
 }
 

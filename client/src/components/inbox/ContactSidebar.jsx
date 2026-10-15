@@ -13,13 +13,25 @@ import {
   X,
   Clock,
   ShieldCheck,
+  Edit2,
+  Check,
+  Mail,
+  Award,
 } from 'lucide-react';
 import { useChat } from '../../context/ChatContext';
 
-export default function ContactSidebar({ onOpenTemplatePicker }) {
-  const { activeChat, updateChatTags } = useChat();
+export default function ContactSidebar({ onOpenTemplatePicker, onClose }) {
+  const { activeChat, updateChatTags, updateContact, messagingWindow } = useChat();
+
+  const [isEditingName, setIsEditingName] = useState(false);
+  const [nameInput, setNameInput] = useState('');
   const [newTagInput, setNewTagInput] = useState('');
   const [isAddingTag, setIsAddingTag] = useState(false);
+
+  // Custom Lead Field Editor
+  const [isAddingField, setIsAddingField] = useState(false);
+  const [fieldKey, setFieldKey] = useState('');
+  const [fieldVal, setFieldVal] = useState('');
 
   if (!activeChat) return null;
 
@@ -32,6 +44,12 @@ export default function ContactSidebar({ onOpenTemplatePicker }) {
   }
 
   const tags = activeChat.tags ? JSON.parse(activeChat.tags) : [];
+
+  const handleSaveName = async () => {
+    if (!nameInput.trim()) return;
+    await updateContact(activeChat.id, { name: nameInput.trim() });
+    setIsEditingName(false);
+  };
 
   const handleAddTag = async () => {
     if (!newTagInput.trim()) return;
@@ -49,10 +67,48 @@ export default function ContactSidebar({ onOpenTemplatePicker }) {
     await updateChatTags(activeChat.id, updated);
   };
 
+  const handleSaveCustomField = async () => {
+    if (!fieldKey.trim() || !fieldVal.trim()) return;
+    const updatedAttrs = {
+      ...customAttrs,
+      [fieldKey.trim()]: fieldVal.trim(),
+    };
+    await updateContact(activeChat.id, { customAttributes: updatedAttrs });
+    setFieldKey('');
+    setFieldVal('');
+    setIsAddingField(false);
+  };
+
+  const handleRemoveCustomField = async (keyToRemove) => {
+    const updatedAttrs = { ...customAttrs };
+    delete updatedAttrs[keyToRemove];
+    await updateContact(activeChat.id, { customAttributes: updatedAttrs });
+  };
+
+  const hoursRemaining = parseFloat(messagingWindow?.hoursRemaining || 0);
+  const slaPercentage = Math.min(100, Math.max(0, (hoursRemaining / 24) * 100));
+
   return (
     <aside className="col-crm-sidebar">
-      {/* Top Profile Summary */}
-      <div style={{ padding: '20px', borderBottom: '1px solid var(--border-subtle)', textAlign: 'center' }}>
+      {/* 1. Top Profile Summary */}
+      <div style={{ padding: '20px', borderBottom: '1px solid var(--border-subtle)', textAlign: 'center', position: 'relative' }}>
+        {/* Close Button for Drawer (Tablet / Mobile) */}
+        {onClose && (
+          <button
+            onClick={onClose}
+            className="btn btn-ghost"
+            style={{
+              position: 'absolute',
+              top: '12px',
+              right: '12px',
+              padding: '6px',
+              color: 'var(--text-secondary)',
+            }}
+            title="Close CRM Sidebar"
+          >
+            <X size={18} />
+          </button>
+        )}
         <div
           style={{
             width: '64px',
@@ -72,9 +128,67 @@ export default function ContactSidebar({ onOpenTemplatePicker }) {
           {contact?.name ? contact.name.charAt(0).toUpperCase() : 'C'}
         </div>
 
-        <h3 style={{ fontSize: '16px', color: '#fff', marginBottom: '4px' }}>
-          {contact?.name || 'Customer'}
-        </h3>
+        {/* Name with inline editing */}
+        {isEditingName ? (
+          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', justifyContent: 'center', marginBottom: '6px' }}>
+            <input
+              type="text"
+              value={nameInput}
+              onChange={(e) => setNameInput(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && handleSaveName()}
+              autoFocus
+              style={{
+                background: 'var(--bg-surface)',
+                border: '1px solid var(--border-medium)',
+                borderRadius: '4px',
+                color: '#fff',
+                padding: '4px 8px',
+                fontSize: '14px',
+                textAlign: 'center',
+                outline: 'none',
+              }}
+            />
+            <button
+              onClick={handleSaveName}
+              className="btn btn-primary"
+              style={{ padding: '4px 8px', fontSize: '11px' }}
+            >
+              <Check size={13} />
+            </button>
+            <button
+              onClick={() => setIsEditingName(false)}
+              className="btn btn-ghost"
+              style={{ padding: '4px 6px', fontSize: '11px' }}
+            >
+              ✕
+            </button>
+          </div>
+        ) : (
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: '6px',
+              marginBottom: '4px',
+            }}
+          >
+            <h3 style={{ fontSize: '16px', color: '#fff', fontWeight: '700' }}>
+              {contact?.name || 'Customer'}
+            </h3>
+            <button
+              onClick={() => {
+                setNameInput(contact?.name || '');
+                setIsEditingName(true);
+              }}
+              className="btn btn-ghost"
+              style={{ padding: '2px', color: 'var(--text-muted)' }}
+              title="Edit contact name"
+            >
+              <Edit2 size={12} />
+            </button>
+          </div>
+        )}
 
         <div
           style={{
@@ -92,73 +206,182 @@ export default function ContactSidebar({ onOpenTemplatePicker }) {
 
         <div>
           <a
-            href={`https://wa.me/${contact?.waId}`}
+            href={`https://wa.me/${contact?.waId}?text=${encodeURIComponent('Namaste! Connecting regarding your query on ChatFlow.')}`}
             target="_blank"
             rel="noopener noreferrer"
             className="btn btn-secondary"
             style={{ width: '100%', fontSize: '12px', padding: '6px 10px', textDecoration: 'none' }}
           >
-            <ExternalLink size={13} /> Open WhatsApp Web
+            <ExternalLink size={13} /> Direct WhatsApp Web
           </a>
         </div>
       </div>
 
-      {/* CRM Intelligence / Custom Attributes */}
+      {/* 2. Meta 24-Hour SLA Window Progress Meter */}
       <div style={{ padding: '16px 20px', borderBottom: '1px solid var(--border-subtle)' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
+          <span style={{ fontSize: '11px', fontWeight: '700', color: 'var(--text-muted)', textTransform: 'uppercase' }}>
+            24h WhatsApp SLA Window
+          </span>
+          <span
+            style={{
+              fontSize: '11.5px',
+              fontWeight: '700',
+              color: messagingWindow?.isOpen ? '#10b981' : '#f87171',
+            }}
+          >
+            {messagingWindow?.isOpen ? `${hoursRemaining}h remaining` : 'EXPIRED'}
+          </span>
+        </div>
         <div
           style={{
-            fontSize: '11px',
-            fontWeight: '700',
-            color: 'var(--text-muted)',
-            textTransform: 'uppercase',
-            letterSpacing: '0.05em',
-            marginBottom: '12px',
+            height: '6px',
+            width: '100%',
+            background: 'rgba(255, 255, 255, 0.08)',
+            borderRadius: '999px',
+            overflow: 'hidden',
           }}
         >
-          Lead & CRM Profile
+          <div
+            style={{
+              height: '100%',
+              width: `${slaPercentage}%`,
+              background:
+                slaPercentage > 50
+                  ? 'linear-gradient(90deg, #10b981, #25D366)'
+                  : slaPercentage > 20
+                  ? 'linear-gradient(90deg, #f59e0b, #fbbf24)'
+                  : 'linear-gradient(90deg, #ef4444, #f87171)',
+              transition: 'width 0.3s ease',
+            }}
+          />
+        </div>
+        <p style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '6px', lineHeight: 1.3 }}>
+          {messagingWindow?.isOpen
+            ? 'Free inbound/outbound session active. Send any message.'
+            : 'Session expired. Send Meta pre-approved template to restart timer.'}
+        </p>
+      </div>
+
+      {/* 3. CRM Intelligence / Custom Attributes */}
+      <div style={{ padding: '16px 20px', borderBottom: '1px solid var(--border-subtle)' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
+          <span
+            style={{
+              fontSize: '11px',
+              fontWeight: '700',
+              color: 'var(--text-muted)',
+              textTransform: 'uppercase',
+              letterSpacing: '0.05em',
+            }}
+          >
+            Lead & CRM Profile
+          </span>
+          <button
+            onClick={() => setIsAddingField(true)}
+            className="btn btn-ghost"
+            style={{ padding: '2px 6px', fontSize: '11px' }}
+          >
+            <Plus size={13} /> Field
+          </button>
         </div>
 
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', fontSize: '12.5px' }}>
-          {customAttrs.leadStage && (
-            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-              <span style={{ color: 'var(--text-muted)' }}>Lead Stage:</span>
-              <span
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', fontSize: '12.5px' }}>
+          {Object.entries(customAttrs).map(([key, val]) => (
+            <div key={key} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <span style={{ color: 'var(--text-muted)', textTransform: 'capitalize' }}>{key}:</span>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <span
+                  style={{
+                    color: '#fff',
+                    fontWeight: '600',
+                    background: 'rgba(255, 255, 255, 0.05)',
+                    padding: '2px 6px',
+                    borderRadius: '4px',
+                    fontSize: '11.5px',
+                  }}
+                >
+                  {String(val)}
+                </span>
+                <button
+                  onClick={() => handleRemoveCustomField(key)}
+                  style={{
+                    background: 'none',
+                    border: 'none',
+                    color: 'var(--text-muted)',
+                    cursor: 'pointer',
+                    padding: 0,
+                  }}
+                  title="Remove field"
+                >
+                  <X size={11} />
+                </button>
+              </div>
+            </div>
+          ))}
+
+          {isAddingField && (
+            <div
+              style={{
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '6px',
+                background: 'var(--bg-surface)',
+                padding: '8px',
+                borderRadius: '6px',
+                marginTop: '6px',
+              }}
+            >
+              <input
+                type="text"
+                placeholder="Field name (e.g. Budget, City)"
+                value={fieldKey}
+                onChange={(e) => setFieldKey(e.target.value)}
                 style={{
-                  fontWeight: '600',
-                  color: '#38bdf8',
-                  background: 'rgba(56, 189, 248, 0.12)',
-                  padding: '2px 8px',
+                  background: 'rgba(0,0,0,0.2)',
+                  border: '1px solid var(--border-medium)',
                   borderRadius: '4px',
-                  fontSize: '11px',
+                  color: '#fff',
+                  padding: '4px 6px',
+                  fontSize: '11.5px',
+                  outline: 'none',
                 }}
-              >
-                {customAttrs.leadStage}
-              </span>
+              />
+              <input
+                type="text"
+                placeholder="Value (e.g. ₹85,000, Mumbai)"
+                value={fieldVal}
+                onChange={(e) => setFieldVal(e.target.value)}
+                style={{
+                  background: 'rgba(0,0,0,0.2)',
+                  border: '1px solid var(--border-medium)',
+                  borderRadius: '4px',
+                  color: '#fff',
+                  padding: '4px 6px',
+                  fontSize: '11.5px',
+                  outline: 'none',
+                }}
+              />
+              <div style={{ display: 'flex', gap: '4px', justifyContent: 'flex-end' }}>
+                <button
+                  onClick={handleSaveCustomField}
+                  className="btn btn-primary"
+                  style={{ padding: '2px 8px', fontSize: '11px' }}
+                >
+                  Save
+                </button>
+                <button
+                  onClick={() => setIsAddingField(false)}
+                  className="btn btn-ghost"
+                  style={{ padding: '2px 6px', fontSize: '11px' }}
+                >
+                  Cancel
+                </button>
+              </div>
             </div>
           )}
 
-          {customAttrs.targetExam && (
-            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-              <span style={{ color: 'var(--text-muted)' }}>Target Program:</span>
-              <span style={{ color: '#fff', fontWeight: '500' }}>{customAttrs.targetExam}</span>
-            </div>
-          )}
-
-          {customAttrs.city && (
-            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-              <span style={{ color: 'var(--text-muted)' }}>City / Region:</span>
-              <span style={{ color: '#fff', fontWeight: '500' }}>{customAttrs.city}</span>
-            </div>
-          )}
-
-          {customAttrs.school && (
-            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-              <span style={{ color: 'var(--text-muted)' }}>Institution:</span>
-              <span style={{ color: '#fff', fontWeight: '500' }}>{customAttrs.school}</span>
-            </div>
-          )}
-
-          <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '4px' }}>
             <span style={{ color: 'var(--text-muted)' }}>First Contact:</span>
             <span style={{ color: 'var(--text-secondary)' }}>
               {new Date(contact?.createdAt || Date.now()).toLocaleDateString('en-IN', {
@@ -171,7 +394,7 @@ export default function ContactSidebar({ onOpenTemplatePicker }) {
         </div>
       </div>
 
-      {/* Dynamic Tags Manager */}
+      {/* 4. Dynamic Tags Manager */}
       <div style={{ padding: '16px 20px', borderBottom: '1px solid var(--border-subtle)' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
           <span
@@ -258,7 +481,7 @@ export default function ContactSidebar({ onOpenTemplatePicker }) {
         </div>
       </div>
 
-      {/* Meta WhatsApp Quick Template Launcher */}
+      {/* 5. Meta WhatsApp Quick Template Launcher */}
       <div style={{ padding: '16px 20px', borderBottom: '1px solid var(--border-subtle)' }}>
         <div
           style={{
@@ -284,7 +507,7 @@ export default function ContactSidebar({ onOpenTemplatePicker }) {
         </button>
       </div>
 
-      {/* Operational SLA & SLA Security */}
+      {/* 6. Operational Audit */}
       <div style={{ padding: '16px 20px' }}>
         <div
           style={{
@@ -305,7 +528,7 @@ export default function ContactSidebar({ onOpenTemplatePicker }) {
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
             <Clock size={14} style={{ color: '#38bdf8' }} />
-            <span>Average Agent First Response: 1m 24s</span>
+            <span>Average Agent Response: 1m 24s</span>
           </div>
         </div>
       </div>

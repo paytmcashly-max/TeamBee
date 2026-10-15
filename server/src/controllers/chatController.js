@@ -292,6 +292,44 @@ class ChatController {
       return res.status(500).json({ success: false, error: 'Failed to update tags' });
     }
   }
+
+  /**
+   * PUT /api/chats/:id/contact: Update contact name, email, and custom CRM attributes
+   */
+  static async updateContact(req, res) {
+    try {
+      const { id } = req.params;
+      const { name, email, customAttributes } = req.body;
+
+      const chat = await prisma.chat.findUnique({
+        where: { id },
+        include: { contact: true },
+      });
+      if (!chat || chat.tenantId !== req.tenantId) {
+        return res.status(404).json({ success: false, error: 'Chat not found' });
+      }
+
+      const updateData = {};
+      if (name !== undefined) updateData.name = name;
+      if (email !== undefined) updateData.email = email;
+      if (customAttributes !== undefined) {
+        updateData.customAttributes =
+          typeof customAttributes === 'string'
+            ? customAttributes
+            : JSON.stringify(customAttributes);
+      }
+
+      const updatedContact = await prisma.contact.update({
+        where: { id: chat.contactId },
+        data: updateData,
+      });
+
+      return res.json({ success: true, contact: updatedContact });
+    } catch (error) {
+      console.error('[Update Contact Error]:', error);
+      return res.status(500).json({ success: false, error: 'Failed to update contact' });
+    }
+  }
 }
 
 module.exports = ChatController;

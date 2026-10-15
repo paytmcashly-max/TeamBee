@@ -107,22 +107,25 @@ class TemplateController {
         return res.status(404).json({ success: false, error: 'Template not found' });
       }
 
-      // Replace {{1}}, {{2}} with dynamic variables
+      // Check if template body actually expects parameters (e.g. {{1}}, {{2}})
+      const matches = template.bodyText.match(/\{\{(\d+)\}\}/g) || [];
+      const expectedParamsCount = matches.length;
+
       let renderedBody = template.bodyText;
-      const parameters = [];
+      let components = [];
 
-      Object.keys(variables).forEach((key) => {
-        const val = String(variables[key] || '');
-        renderedBody = renderedBody.replace(new RegExp(`\\{\\{${key}\\}\\}`, 'g'), val);
-        parameters.push({ type: 'text', text: val });
-      });
-
-      const components = [
-        {
+      if (expectedParamsCount > 0) {
+        const parameters = [];
+        for (let i = 1; i <= expectedParamsCount; i++) {
+          const val = String(variables[i] || `Sample ${i}`);
+          renderedBody = renderedBody.replace(new RegExp(`\\{\\{${i}\\}\\}`, 'g'), val);
+          parameters.push({ type: 'text', text: val });
+        }
+        components.push({
           type: 'body',
           parameters,
-        },
-      ];
+        });
+      }
 
       // Send via Meta Cloud API
       const apiResult = await MetaApiService.sendTemplateMessage(

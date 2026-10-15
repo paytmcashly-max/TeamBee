@@ -72,7 +72,15 @@ class MessageController {
   static async sendMessage(req, res) {
     try {
       const { chatId } = req.params;
-      const { content, messageType = 'TEXT', mediaUrl, mediaFilename, forceSend = false } = req.body;
+      const {
+        content,
+        messageType = 'TEXT',
+        mediaUrl,
+        mediaFilename,
+        forceSend = false,
+        isInternal = false,
+        buttons = [],
+      } = req.body;
       const { id: agentId, name: agentName, tenantId } = req.agent;
 
       if (!content && !mediaUrl) {
@@ -88,6 +96,50 @@ class MessageController {
         return res.status(404).json({ success: false, error: 'Chat session not found' });
       }
 
+      const now = new Date();
+
+      // -------------------------------------------------------------
+      // 1. PRIVATE INTERNAL TEAM NOTE (Bypasses Meta Cloud API)
+      // -------------------------------------------------------------
+      if (isInternal || messageType === 'NOTE') {
+        const noteMessage = await prisma.message.create({
+          data: {
+            chatId: chat.id,
+            tenantId: chat.tenantId,
+            senderType: 'NOTE',
+            senderId: agentId,
+            messageType: 'NOTE',
+            content,
+            direction: 'OUTBOUND',
+            status: 'DELIVERED',
+            createdAt: now,
+          },
+          include: {
+            senderAgent: {
+              select: { id: true, name: true, avatarUrl: true },
+            },
+          },
+        });
+
+        // Update chat preview with lock emoji
+        await prisma.chat.update({
+          where: { id: chat.id },
+          data: {
+            lastMessagePreview: `🔒 Internal Note: ${content.slice(0, 40)}`,
+            lastMessageAt: now,
+          },
+        });
+
+        // Broadcast to active room
+        broadcastNewMessage(tenantId, chat.id, noteMessage, chat.assignedAgentId || agentId);
+
+        return res.status(201).json({
+          success: true,
+          message: noteMessage,
+          isInternal: true,
+        });
+      }
+
       // Check 24-hour window SLA
       if (chat.lastCustomerMessageAt && !forceSend) {
         const lastMsgTime = new Date(chat.lastCustomerMessageAt).getTime();
@@ -101,9 +153,13 @@ class MessageController {
         }
       }
 
-      // Dispatch outbound message via Meta Cloud API service
+      // -------------------------------------------------------------
+      // 2. DISPATCH OUTBOUND MESSAGE VIA META CLOUD API
+      // -------------------------------------------------------------
       let apiResult;
-      if (messageType === 'TEXT') {
+      if (buttons && Array.isArray(buttons) && buttons.length > 0) {
+        apiResult = await MetaApiService.sendInteractiveButtons(chat.tenant, chat.contact.waId, content, buttons);
+      } else if (messageType === 'TEXT') {
         apiResult = await MetaApiService.sendTextMessage(chat.tenant, chat.contact.waId, content);
       } else {
         apiResult = await MetaApiService.sendMediaMessage(chat.tenant, chat.contact.waId, {
@@ -122,8 +178,6 @@ class MessageController {
         });
       }
 
-      const now = new Date();
-
       // Persist outbound message in database
       const message = await prisma.message.create({
         data: {
@@ -132,10 +186,11 @@ class MessageController {
           senderType: 'AGENT',
           senderId: agentId,
           waMessageId: apiResult.wamid,
-          messageType,
+          messageType: buttons && buttons.length > 0 ? 'INTERACTIVE' : messageType,
           content: content || (mediaFilename ? `Attachment: ${mediaFilename}` : `[${messageType}]`),
           mediaUrl,
           mediaFilename,
+          rawPayload: buttons && buttons.length > 0 ? JSON.stringify({ buttons }) : null,
           direction: 'OUTBOUND',
           status: 'SENT',
           createdAt: now,

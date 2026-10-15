@@ -39,17 +39,21 @@ export default function TemplateModal({ isOpen, onClose }) {
 
   const initVariables = (tpl) => {
     let defaults = {};
-    if (tpl.exampleVariables) {
-      try {
-        const arr = JSON.parse(tpl.exampleVariables);
-        arr.forEach((val, idx) => {
-          defaults[idx + 1] = val;
-        });
-      } catch (e) {}
-    }
-    // Prefill customer name if variable 1
-    if (activeChat?.contact?.name) {
-      defaults[1] = activeChat.contact.name;
+    const matches = (tpl.bodyText || '').match(/\{\{(\d+)\}\}/g) || [];
+    if (matches.length > 0) {
+      if (tpl.exampleVariables) {
+        try {
+          const arr = JSON.parse(tpl.exampleVariables);
+          arr.forEach((val, idx) => {
+            if (idx + 1 <= matches.length) defaults[idx + 1] = val;
+          });
+        } catch (e) {}
+      }
+      for (let i = 1; i <= matches.length; i++) {
+        if (!defaults[i]) {
+          defaults[i] = i === 1 && activeChat?.contact?.name ? activeChat.contact.name : `Value ${i}`;
+        }
+      }
     }
     setVariables(defaults);
   };
@@ -150,8 +154,8 @@ export default function TemplateModal({ isOpen, onClose }) {
           </button>
         </div>
 
-        {/* Content Body: Split view (Template selector + Live Preview) */}
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', minHeight: '380px' }}>
+        {/* Content Body: Responsive Split view (Template selector + Live Preview) */}
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', minHeight: '380px' }}>
           {/* Left: Template Selector & Variables */}
           <div style={{ padding: '20px', borderRight: '1px solid var(--border-subtle)' }}>
             <label style={{ display: 'block', fontSize: '12px', fontWeight: '600', color: '#fff', marginBottom: '8px' }}>
@@ -209,30 +213,36 @@ export default function TemplateModal({ isOpen, onClose }) {
                 <label style={{ display: 'block', fontSize: '12px', fontWeight: '600', color: '#fff', marginBottom: '8px' }}>
                   Dynamic Variable Fields
                 </label>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                  {Object.keys(variables).map((key) => (
-                    <div key={key}>
-                      <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>Variable {`{{${key}}}`}</span>
-                      <input
-                        type="text"
-                        value={variables[key]}
-                        onChange={(e) => handleVariableChange(key, e.target.value)}
-                        placeholder={`Value for {{${key}}}`}
-                        style={{
-                          width: '100%',
-                          background: 'var(--bg-surface)',
-                          border: '1px solid var(--border-medium)',
-                          borderRadius: '6px',
-                          padding: '6px 10px',
-                          color: '#fff',
-                          fontSize: '12px',
-                          outline: 'none',
-                          marginTop: '2px',
-                        }}
-                      />
-                    </div>
-                  ))}
-                </div>
+                {Object.keys(variables).length > 0 ? (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                    {Object.keys(variables).map((key) => (
+                      <div key={key}>
+                        <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>Variable {`{{${key}}}`}</span>
+                        <input
+                          type="text"
+                          value={variables[key]}
+                          onChange={(e) => handleVariableChange(key, e.target.value)}
+                          placeholder={`Value for {{${key}}}`}
+                          style={{
+                            width: '100%',
+                            background: 'var(--bg-surface)',
+                            border: '1px solid var(--border-medium)',
+                            borderRadius: '6px',
+                            padding: '6px 10px',
+                            color: '#fff',
+                            fontSize: '12px',
+                            outline: 'none',
+                            marginTop: '2px',
+                          }}
+                        />
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div style={{ fontSize: '12px', color: 'var(--text-secondary)', background: 'var(--bg-surface)', padding: '10px', borderRadius: '6px', border: '1px solid var(--border-subtle)' }}>
+                    ✅ This template uses standard pre-approved wording and requires no variable inputs.
+                  </div>
+                )}
               </div>
             )}
           </div>

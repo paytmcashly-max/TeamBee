@@ -93,8 +93,13 @@ export function ChatProvider({ children }) {
     if (activeChatId && activeChatId !== chatId) {
       leaveChat(activeChatId);
     }
-    setActiveChatId(chatId);
-    loadChat(chatId);
+    setActiveChatId(chatId || null);
+    if (chatId) {
+      loadChat(chatId);
+    } else {
+      setActiveChat(null);
+      setMessages([]);
+    }
   };
 
   /**
@@ -105,6 +110,27 @@ export function ChatProvider({ children }) {
 
     // Incoming new message (customer or agent)
     const handleNewMessage = ({ chatId, message }) => {
+      // Play pleasant sound chime for customer messages
+      if (message.senderType === 'CUSTOMER' || message.direction === 'INBOUND') {
+        try {
+          const AudioContext = window.AudioContext || window.webkitAudioContext;
+          if (AudioContext) {
+            const ctx = new AudioContext();
+            const osc = ctx.createOscillator();
+            const gain = ctx.createGain();
+            osc.type = 'sine';
+            osc.frequency.setValueAtTime(587.33, ctx.currentTime); // D5
+            osc.frequency.exponentialRampToValueAtTime(880, ctx.currentTime + 0.12); // A5
+            gain.gain.setValueAtTime(0.15, ctx.currentTime);
+            gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.35);
+            osc.connect(gain);
+            gain.connect(ctx.destination);
+            osc.start();
+            osc.stop(ctx.currentTime + 0.35);
+          }
+        } catch (e) {}
+      }
+
       // If belongs to currently open chat canvas, append immediately
       if (chatId === activeChatId) {
         setMessages((prev) => {
@@ -128,7 +154,7 @@ export function ChatProvider({ children }) {
           ...updated[index],
           lastMessagePreview: message.content || `[${message.messageType}]`,
           lastMessageAt: message.createdAt,
-          unreadCount: chatId === activeChatId ? 0 : updated[index].unreadCount + 1,
+          unreadCount: chatId === activeChatId ? 0 : (updated[index].unreadCount || 0) + 1,
         };
         // Sort newest on top
         return updated.sort((a, b) => new Date(b.lastMessageAt) - new Date(a.lastMessageAt));
@@ -211,10 +237,31 @@ export function ChatProvider({ children }) {
   }, [socket, activeChatId, fetchChats]);
 
   /**
-   * Send outbound message
+   * Send outbound message or private note with flexible options
    */
-  const sendMessage = async (content, messageType = 'TEXT', mediaUrl = null, mediaFilename = null) => {
+  const sendMessage = async (content, options = 'TEXT', mediaUrl = null, mediaFilename = null) => {
     if (!activeChatId || !token) return;
+
+    let payload = {
+      content,
+      messageType: 'TEXT',
+      mediaUrl: null,
+      mediaFilename: null,
+      isInternal: false,
+      buttons: null,
+    };
+
+    if (typeof options === 'string') {
+      payload.messageType = options;
+      payload.mediaUrl = mediaUrl;
+      payload.mediaFilename = mediaFilename;
+    } else if (typeof options === 'object' && options !== null) {
+      payload.messageType = options.messageType || 'TEXT';
+      payload.mediaUrl = options.mediaUrl || null;
+      payload.mediaFilename = options.mediaFilename || null;
+      payload.isInternal = !!options.isInternal;
+      payload.buttons = options.buttons || null;
+    }
 
     const res = await fetch(`/api/messages/${activeChatId}`, {
       method: 'POST',
@@ -222,12 +269,7 @@ export function ChatProvider({ children }) {
         'Content-Type': 'application/json',
         Authorization: `Bearer ${token}`,
       },
-      body: JSON.stringify({
-        content,
-        messageType,
-        mediaUrl,
-        mediaFilename,
-      }),
+      body: JSON.stringify(payload),
     });
 
     const data = await res.json();
@@ -306,6 +348,31 @@ export function ChatProvider({ children }) {
     return data;
   };
 
+  /**
+   * Update contact CRM details (name, email, customAttributes)
+   */
+  const updateContact = async (chatId, contactData) => {
+    if (!token) return;
+    const res = await fetch(`/api/chats/${chatId}/contact`, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify(contactData),
+    });
+    const data = await res.json();
+    if (data.success && data.contact) {
+      if (activeChatId === chatId) {
+        setActiveChat((prev) => (prev ? { ...prev, contact: data.contact } : null));
+      }
+      setChats((prev) =>
+        prev.map((c) => (c.id === chatId ? { ...c, contact: data.contact } : c))
+      );
+    }
+    return data;
+  };
+
   return (
     <ChatContext.Provider
       value={{
@@ -328,6 +395,7 @@ export function ChatProvider({ children }) {
         assignChat,
         updateChatStatus,
         updateChatTags,
+        updateContact,
         fetchChats,
       }}
     >

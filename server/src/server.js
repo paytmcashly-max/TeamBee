@@ -11,6 +11,7 @@ const agentRoutes = require('./routes/agentRoutes');
 const chatRoutes = require('./routes/chatRoutes');
 const messageRoutes = require('./routes/messageRoutes');
 const templateRoutes = require('./routes/templateRoutes');
+const broadcastRoutes = require('./routes/broadcastRoutes');
 const simulatorRoutes = require('./routes/simulatorRoutes');
 
 const app = express();
@@ -52,6 +53,7 @@ app.use('/api/agents', agentRoutes);
 app.use('/api/chats', chatRoutes);
 app.use('/api/messages', messageRoutes);
 app.use('/api/templates', templateRoutes);
+app.use('/api/broadcasts', broadcastRoutes);
 app.use('/api/simulator', simulatorRoutes);
 
 // Error Handling Middleware

@@ -11,6 +11,8 @@ import {
   Filter,
   Flame,
   Radio,
+  Sparkles,
+  LogOut,
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { useChat } from '../../context/ChatContext';
@@ -153,42 +155,50 @@ export default function ConversationList({
             </div>
           </div>
 
-          <div style={{ display: 'flex', gap: '4px' }}>
+          <div style={{ display: 'flex', gap: '3px', alignItems: 'center' }}>
             {isAdmin && (
               <>
                 <button
                   onClick={onOpenAgents}
                   className="btn btn-ghost"
-                  style={{ padding: '4px 6px', fontSize: '11px' }}
-                  title="Team Staff"
+                  style={{ padding: '6px', color: 'var(--text-secondary)' }}
+                  title="Team Staff & Agents"
                 >
-                  <Users size={14} />
+                  <Users size={15} />
                 </button>
                 <button
                   onClick={onOpenSettings}
                   className="btn btn-ghost"
-                  style={{ padding: '4px 6px', fontSize: '11px' }}
-                  title="Meta Settings"
+                  style={{ padding: '6px', color: 'var(--text-secondary)' }}
+                  title="Meta API Credentials"
                 >
-                  <Shield size={14} />
+                  <Shield size={15} />
                 </button>
               </>
             )}
             <button
               onClick={onOpenTemplates}
               className="btn btn-ghost"
-              style={{ padding: '4px 6px', fontSize: '11px' }}
-              title="Templates"
+              style={{ padding: '6px', color: 'var(--text-secondary)' }}
+              title="Approved WhatsApp Templates"
             >
-              Templates
+              <Sparkles size={15} />
+            </button>
+            <button
+              onClick={onOpenBroadcasts}
+              className="btn btn-ghost"
+              style={{ padding: '6px', color: '#38bdf8' }}
+              title="Outbound Broadcast Campaigns"
+            >
+              <Radio size={15} />
             </button>
             <button
               onClick={logout}
               className="btn btn-ghost"
-              style={{ padding: '4px 6px', fontSize: '11px', color: '#f87171' }}
-              title="Logout"
+              style={{ padding: '6px', color: '#f87171' }}
+              title="Sign out"
             >
-              Exit
+              <LogOut size={15} />
             </button>
           </div>
         </div>
