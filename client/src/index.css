@@ -247,10 +247,20 @@ h1, h2, h3, h4, h5, h6 {
 /* Safe Area Layout Rules for iOS Safari Notch & Bottom Bar */
 .chat-canvas-header {
   padding-top: max(14px, env(safe-area-inset-top, 14px)) !important;
+  position: sticky !important;
+  top: 0 !important;
+  z-index: 50 !important;
+  flex-shrink: 0 !important;
+  width: 100% !important;
 }
 
 .conversations-header {
   padding-top: max(14px, env(safe-area-inset-top, 14px)) !important;
+  position: sticky !important;
+  top: 0 !important;
+  z-index: 50 !important;
+  flex-shrink: 0 !important;
+  width: 100% !important;
 }
 
 .chat-composer-box {
@@ -259,6 +269,7 @@ h1, h2, h3, h4, h5, h6 {
   border-top: 1px solid var(--border-subtle);
   position: relative;
   z-index: 20;
+  flex-shrink: 0 !important;
 }
 
 .chat-textarea {
@@ -513,6 +524,8 @@ h1, h2, h3, h4, h5, h6 {
     max-width: 100vw;
     min-width: 100vw;
     height: 100dvh;
+    max-height: 100dvh;
+    overflow: hidden !important;
   }
 
   .msg-bubble-inbound,

@@ -56,12 +56,23 @@ export default function ChatCanvas({ onOpenTemplatePicker, onToggleSidebar, isSi
   const [newBtnInput, setNewBtnInput] = useState('');
 
   const messagesEndRef = useRef(null);
+  const messagesContainerRef = useRef(null);
   const textareaRef = useRef(null);
 
-  // Auto-scroll to bottom of messages
+  // Safe container-only auto-scroll (never scrolls window, document, or header off-screen)
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    if (messagesContainerRef.current) {
+      messagesContainerRef.current.scrollTop = messagesContainerRef.current.scrollHeight;
+    }
   }, [messages, typingUsers]);
+
+  // Keep window and canvas header pinned to top when switching chats
+  useEffect(() => {
+    window.scrollTo(0, 0);
+    if (messagesContainerRef.current) {
+      messagesContainerRef.current.scrollTop = messagesContainerRef.current.scrollHeight;
+    }
+  }, [activeChat?.id]);
 
   // Load staff agents for reassignment dropdown
   useEffect(() => {
@@ -209,9 +220,22 @@ export default function ChatCanvas({ onOpenTemplatePicker, onToggleSidebar, isSi
   const isUnassigned = activeChat.status === 'UNASSIGNED';
   const isResolved = activeChat.status === 'RESOLVED';
 
+  // Extract contact details safely
+  const contactName = activeChat?.contact?.name;
+  const contactPhone = activeChat?.contact?.waId;
+  const displayName = contactName && contactName.trim()
+    ? contactName
+    : (contactPhone ? `+${contactPhone}` : 'Customer');
+  const subText = contactName && contactPhone
+    ? `+${contactPhone}`
+    : (activeChat?.status ? `Status: ${activeChat.status}` : '');
+  const avatarLetter = contactName && contactName.trim()
+    ? contactName.trim().charAt(0).toUpperCase()
+    : (contactPhone ? '📱' : 'C');
+
   return (
     <main className="col-chat-canvas">
-      {/* 1. Chat Header (Safe from iPhone notch and dynamic island) */}
+      {/* 1. Chat Header (Permanently pinned at top, safe from notches and dynamic island) */}
       <div
         className="chat-canvas-header"
         style={{
@@ -222,8 +246,12 @@ export default function ChatCanvas({ onOpenTemplatePicker, onToggleSidebar, isSi
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'space-between',
-          zIndex: 25,
+          zIndex: 50,
           gap: '8px',
+          flexShrink: 0,
+          position: 'sticky',
+          top: 0,
+          width: '100%',
         }}
       >
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px', minWidth: 0, flex: 1 }}>
@@ -269,7 +297,7 @@ export default function ChatCanvas({ onOpenTemplatePicker, onToggleSidebar, isSi
               flexShrink: 0,
             }}
           >
-            {activeChat.contact?.name ? activeChat.contact.name.charAt(0).toUpperCase() : 'C'}
+            {avatarLetter}
           </div>
 
           <div style={{ minWidth: 0, flex: 1 }}>
@@ -277,15 +305,15 @@ export default function ChatCanvas({ onOpenTemplatePicker, onToggleSidebar, isSi
               <span
                 style={{
                   fontWeight: '700',
-                  fontSize: '14.5px',
+                  fontSize: '15px',
                   color: '#fff',
                   whiteSpace: 'nowrap',
                   overflow: 'hidden',
                   textOverflow: 'ellipsis',
-                  maxWidth: '160px',
+                  display: 'block',
                 }}
               >
-                {activeChat.contact?.name || 'Customer'}
+                {displayName}
               </span>
               <span
                 className="desktop-only-header-control"
@@ -305,9 +333,11 @@ export default function ChatCanvas({ onOpenTemplatePicker, onToggleSidebar, isSi
                 <CheckCheck size={11} /> Meta Official
               </span>
             </div>
-            <div style={{ fontSize: '11px', color: 'var(--text-secondary)', whiteSpace: 'nowrap' }}>
-              +{activeChat.contact?.waId}
-            </div>
+            {subText && (
+              <div style={{ fontSize: '11px', color: 'var(--text-secondary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                {subText}
+              </div>
+            )}
           </div>
         </div>
 
@@ -430,6 +460,7 @@ export default function ChatCanvas({ onOpenTemplatePicker, onToggleSidebar, isSi
           justifyContent: 'space-between',
           fontSize: '11.5px',
           gap: '8px',
+          flexShrink: 0,
         }}
       >
         <div style={{ display: 'flex', alignItems: 'center', gap: '6px', minWidth: 0, overflow: 'hidden' }}>
@@ -461,8 +492,10 @@ export default function ChatCanvas({ onOpenTemplatePicker, onToggleSidebar, isSi
 
       {/* 3. Messages Stream */}
       <div
+        ref={messagesContainerRef}
         style={{
-          flex: 1,
+          flex: '1 1 0%',
+          minHeight: 0,
           overflowY: 'auto',
           padding: '16px',
           display: 'flex',
@@ -1037,16 +1070,6 @@ export default function ChatCanvas({ onOpenTemplatePicker, onToggleSidebar, isSi
               title="Attach Document or Brochure"
             >
               <Paperclip size={17} />
-            </button>
-
-            <button
-              type="button"
-              onClick={onOpenTemplatePicker}
-              className="btn-tool"
-              style={{ color: 'var(--text-secondary)' }}
-              title="Send Approved WhatsApp Template"
-            >
-              <Sparkles size={17} />
             </button>
           </div>
 
