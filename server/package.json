@@ -10,9 +10,11 @@
     "prisma:migrate": "prisma migrate dev",
     "prisma:push": "prisma db push",
     "seed": "node src/db/seed.js",
-    "test": "node tests/test-webhook-parser.js"
+    "test": "node tests/test-webhook-parser.js",
+    "postinstall": "prisma generate"
   },
   "dependencies": {
+    "@prisma/client": "^6.3.1",
     "axios": "^1.7.9",
     "bcryptjs": "^2.4.3",
     "cors": "^2.8.5",
@@ -20,11 +22,8 @@
     "express": "^4.21.2",
     "jsonwebtoken": "^9.0.2",
     "localtunnel": "^2.0.2",
+    "prisma": "^6.3.1",
     "socket.io": "^4.8.1",
     "uuid": "^11.0.5"
-  },
-  "devDependencies": {
-    "@prisma/client": "^6.3.1",
-    "prisma": "^6.3.1"
   }
 }
