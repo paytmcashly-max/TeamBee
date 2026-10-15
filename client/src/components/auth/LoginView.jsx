@@ -117,9 +117,8 @@ export default function LoginView() {
                 background: '#0b1120',
                 border: '1px solid rgba(255, 255, 255, 0.12)',
                 borderRadius: '8px',
-                padding: '10px 12px',
+                padding: '12px 14px',
                 color: '#fff',
-                fontSize: '13px',
                 outline: 'none',
               }}
             />
@@ -139,9 +138,8 @@ export default function LoginView() {
                 background: '#0b1120',
                 border: '1px solid rgba(255, 255, 255, 0.12)',
                 borderRadius: '8px',
-                padding: '10px 12px',
+                padding: '12px 14px',
                 color: '#fff',
-                fontSize: '13px',
                 outline: 'none',
               }}
             />

@@ -84,9 +84,11 @@ export default function ChatCanvas({ onOpenTemplatePicker, onToggleSidebar, isSi
 
   const handleSend = async (e) => {
     if (e) e.preventDefault();
-    if (!inputContent.trim() || sending) return;
+    if (!inputContent.trim()) return;
 
     const content = inputContent.trim();
+    // ⚡ Clear input immediately so user feels 0ms latency
+    setInputContent('');
     setSending(true);
 
     try {
@@ -792,8 +794,10 @@ export default function ChatCanvas({ onOpenTemplatePicker, onToggleSidebar, isSi
 
       {/* 6. Interactive Composer Container */}
       <div
+        className="chat-composer-box"
         style={{
-          padding: '8px 12px',
+          padding: '10px 12px',
+          paddingBottom: 'max(10px, env(safe-area-inset-bottom, 10px))',
           background: 'rgba(14, 21, 36, 0.98)',
           borderTop: '1px solid var(--border-subtle)',
         }}
@@ -817,9 +821,9 @@ export default function ChatCanvas({ onOpenTemplatePicker, onToggleSidebar, isSi
                 display: 'inline-flex',
                 alignItems: 'center',
                 gap: '4px',
-                padding: '3px 8px',
+                padding: '4px 10px',
                 borderRadius: '6px',
-                fontSize: '11px',
+                fontSize: '11.5px',
                 fontWeight: '600',
                 cursor: 'pointer',
                 border: 'none',
@@ -838,9 +842,9 @@ export default function ChatCanvas({ onOpenTemplatePicker, onToggleSidebar, isSi
                 display: 'inline-flex',
                 alignItems: 'center',
                 gap: '4px',
-                padding: '3px 8px',
+                padding: '4px 10px',
                 borderRadius: '6px',
-                fontSize: '11px',
+                fontSize: '11.5px',
                 fontWeight: '600',
                 cursor: 'pointer',
                 border: 'none',
@@ -859,9 +863,9 @@ export default function ChatCanvas({ onOpenTemplatePicker, onToggleSidebar, isSi
                 display: 'inline-flex',
                 alignItems: 'center',
                 gap: '4px',
-                padding: '3px 8px',
+                padding: '4px 10px',
                 borderRadius: '6px',
-                fontSize: '11px',
+                fontSize: '11.5px',
                 fontWeight: '600',
                 cursor: 'pointer',
                 border: 'none',
@@ -875,7 +879,7 @@ export default function ChatCanvas({ onOpenTemplatePicker, onToggleSidebar, isSi
           </div>
 
           {/* Quick Reaction Pills */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: '2px', flexShrink: 0 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '3px', flexShrink: 0 }}>
             {['👍', '🙏', '❤️', '🎓', '📚'].map((emoji) => (
               <button
                 key={emoji}
@@ -884,9 +888,9 @@ export default function ChatCanvas({ onOpenTemplatePicker, onToggleSidebar, isSi
                 style={{
                   background: 'none',
                   border: 'none',
-                  fontSize: '12px',
+                  fontSize: '13px',
                   cursor: 'pointer',
-                  padding: '2px',
+                  padding: '3px 4px',
                   borderRadius: '4px',
                 }}
                 title={`Insert ${emoji}`}
@@ -952,10 +956,9 @@ export default function ChatCanvas({ onOpenTemplatePicker, onToggleSidebar, isSi
                       border: '1px solid var(--border-medium)',
                       borderRadius: '4px',
                       color: '#fff',
-                      fontSize: '10.5px',
-                      padding: '2px 5px',
+                      padding: '3px 6px',
                       outline: 'none',
-                      width: '90px',
+                      width: '110px',
                     }}
                     onKeyDown={(e) => {
                       if (e.key === 'Enter') {
@@ -976,7 +979,7 @@ export default function ChatCanvas({ onOpenTemplatePicker, onToggleSidebar, isSi
                       }
                     }}
                     className="btn btn-secondary"
-                    style={{ padding: '2px 5px', fontSize: '10.5px' }}
+                    style={{ padding: '2px 6px', fontSize: '11px' }}
                   >
                     +
                   </button>
@@ -994,7 +997,7 @@ export default function ChatCanvas({ onOpenTemplatePicker, onToggleSidebar, isSi
               type="button"
               onClick={() => setShowQuickReplies(!showQuickReplies)}
               className="btn btn-ghost"
-              style={{ padding: '6px', color: showQuickReplies ? 'var(--wa-primary)' : 'var(--text-secondary)' }}
+              style={{ padding: '8px', color: showQuickReplies ? 'var(--wa-primary)' : 'var(--text-secondary)' }}
               title="Canned Quick Responses"
             >
               ⚡
@@ -1004,20 +1007,20 @@ export default function ChatCanvas({ onOpenTemplatePicker, onToggleSidebar, isSi
               type="button"
               onClick={() => setShowAttachmentMenu(!showAttachmentMenu)}
               className="btn btn-ghost"
-              style={{ padding: '6px', color: showAttachmentMenu ? '#38bdf8' : 'var(--text-secondary)' }}
+              style={{ padding: '8px', color: showAttachmentMenu ? '#38bdf8' : 'var(--text-secondary)' }}
               title="Attach Document or Brochure"
             >
-              <Paperclip size={15} />
+              <Paperclip size={16} />
             </button>
 
             <button
               type="button"
               onClick={onOpenTemplatePicker}
               className="btn btn-ghost"
-              style={{ padding: '6px', color: 'var(--text-secondary)' }}
+              style={{ padding: '8px', color: 'var(--text-secondary)' }}
               title="Send Approved WhatsApp Template"
             >
-              <Sparkles size={15} />
+              <Sparkles size={16} />
             </button>
           </div>
 
@@ -1054,12 +1057,11 @@ export default function ChatCanvas({ onOpenTemplatePicker, onToggleSidebar, isSi
                     : '1px solid var(--border-medium)',
                 borderRadius: 'var(--radius-md)',
                 color: '#fff',
-                padding: '8px 12px',
-                fontSize: '13px',
+                padding: '9px 12px',
                 resize: 'none',
                 outline: 'none',
                 fontFamily: 'inherit',
-                lineHeight: 1.4,
+                lineHeight: 1.45,
               }}
             />
           </div>

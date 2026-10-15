@@ -20,19 +20,28 @@ export function ChatProvider({ children }) {
   const [tabFilter, setTabFilter] = useState('mine'); // 'mine' | 'unassigned' | 'all'
   const [statusFilter, setStatusFilter] = useState('OPEN'); // 'OPEN' | 'UNASSIGNED' | 'RESOLVED' | 'ALL'
   const [searchQuery, setSearchQuery] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
   const [typingUsers, setTypingUsers] = useState({});
+
+  // ⚡ Debounce search input by 300ms to eliminate network spam & spinner flicker
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearch(searchQuery);
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [searchQuery]);
 
   /**
    * Fetch chats from backend
    */
-  const fetchChats = useCallback(async () => {
+  const fetchChats = useCallback(async (silent = false) => {
     if (!token) return;
-    setLoadingChats(true);
+    if (!silent) setLoadingChats(true);
     try {
       const params = new URLSearchParams({
         filter: tabFilter,
         status: statusFilter,
-        search: searchQuery,
+        search: debouncedSearch,
       });
 
       const res = await fetch(`/api/chats?${params.toString()}`, {
@@ -45,9 +54,9 @@ export function ChatProvider({ children }) {
     } catch (err) {
       console.error('Fetch chats error:', err);
     } finally {
-      setLoadingChats(false);
+      if (!silent) setLoadingChats(false);
     }
-  }, [token, tabFilter, statusFilter, searchQuery]);
+  }, [token, tabFilter, statusFilter, debouncedSearch]);
 
   useEffect(() => {
     fetchChats();
@@ -263,20 +272,74 @@ export function ChatProvider({ children }) {
       payload.buttons = options.buttons || null;
     }
 
-    const res = await fetch(`/api/messages/${activeChatId}`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${token}`,
-      },
-      body: JSON.stringify(payload),
+    // ⚡ Instant Optimistic UI (0ms latency): Append bubble immediately with PENDING clock
+    const tempId = `temp-${Date.now()}`;
+    const targetChatId = activeChatId;
+    const nowIso = new Date().toISOString();
+
+    const optimisticMessage = {
+      id: tempId,
+      chatId: targetChatId,
+      senderType: 'AGENT',
+      direction: 'OUTBOUND',
+      senderAgentId: agent?.id,
+      senderAgent: agent ? { id: agent.id, name: agent.name } : null,
+      messageType: payload.messageType,
+      content: payload.content,
+      mediaUrl: payload.mediaUrl,
+      mediaFilename: payload.mediaFilename,
+      buttons: payload.buttons ? (typeof payload.buttons === 'string' ? payload.buttons : JSON.stringify(payload.buttons)) : null,
+      status: 'PENDING',
+      isInternal: payload.isInternal,
+      createdAt: nowIso,
+      updatedAt: nowIso,
+    };
+
+    // Instant append in active chat
+    setMessages((prev) => [...prev, optimisticMessage]);
+
+    // Instant update in left conversation list
+    setChats((prev) => {
+      const idx = prev.findIndex((c) => c.id === targetChatId);
+      if (idx === -1) return prev;
+      const copy = [...prev];
+      copy[idx] = {
+        ...copy[idx],
+        lastMessagePreview: payload.content || `[${payload.messageType}]`,
+        lastMessageAt: nowIso,
+      };
+      return copy.sort((a, b) => new Date(b.lastMessageAt) - new Date(a.lastMessageAt));
     });
 
-    const data = await res.json();
-    if (!data.success) {
-      throw new Error(data.error || 'Failed to send message');
+    try {
+      const res = await fetch(`/api/messages/${targetChatId}`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify(payload),
+      });
+
+      const data = await res.json();
+      if (!data.success) {
+        setMessages((prev) =>
+          prev.map((m) => (m.id === tempId ? { ...m, status: 'FAILED' } : m))
+        );
+        throw new Error(data.error || 'Failed to send message');
+      }
+
+      // Replace optimistic message with confirmed database record
+      setMessages((prev) =>
+        prev.map((m) => (m.id === tempId ? data.message : m))
+      );
+      return data;
+    } catch (err) {
+      setMessages((prev) =>
+        prev.map((m) => (m.id === tempId ? { ...m, status: 'FAILED' } : m))
+      );
+      throw err;
     }
-    return data;
   };
 
   /**
@@ -284,22 +347,50 @@ export function ChatProvider({ children }) {
    */
   const assignChat = async (chatId, targetAgentId) => {
     if (!token) return;
-    const res = await fetch(`/api/chats/${chatId}/assign`, {
-      method: 'PUT',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${token}`,
-      },
-      body: JSON.stringify({ agentId: targetAgentId }),
-    });
-    const data = await res.json();
-    if (data.success) {
-      fetchChats();
-      if (activeChatId === chatId) {
-        setActiveChat(data.chat);
-      }
+    // Optimistic update in state
+    setChats((prev) =>
+      prev.map((c) =>
+        c.id === chatId
+          ? {
+              ...c,
+              assignedAgentId: targetAgentId,
+              status: targetAgentId ? 'OPEN' : 'UNASSIGNED',
+            }
+          : c
+      )
+    );
+    if (activeChatId === chatId) {
+      setActiveChat((prev) =>
+        prev
+          ? {
+              ...prev,
+              assignedAgentId: targetAgentId,
+              status: targetAgentId ? 'OPEN' : 'UNASSIGNED',
+            }
+          : null
+      );
     }
-    return data;
+
+    try {
+      const res = await fetch(`/api/chats/${chatId}/assign`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ agentId: targetAgentId }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        fetchChats(true);
+        if (activeChatId === chatId) {
+          setActiveChat(data.chat);
+        }
+      }
+      return data;
+    } catch (err) {
+      fetchChats(true);
+    }
   };
 
   /**
@@ -307,22 +398,34 @@ export function ChatProvider({ children }) {
    */
   const updateChatStatus = async (chatId, status) => {
     if (!token) return;
-    const res = await fetch(`/api/chats/${chatId}/status`, {
-      method: 'PUT',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${token}`,
-      },
-      body: JSON.stringify({ status }),
-    });
-    const data = await res.json();
-    if (data.success) {
-      fetchChats();
-      if (activeChatId === chatId) {
-        setActiveChat(data.chat);
-      }
+    // Optimistic update in state
+    setChats((prev) =>
+      prev.map((c) => (c.id === chatId ? { ...c, status } : c))
+    );
+    if (activeChatId === chatId) {
+      setActiveChat((prev) => (prev ? { ...prev, status } : null));
     }
-    return data;
+
+    try {
+      const res = await fetch(`/api/chats/${chatId}/status`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ status }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        fetchChats(true);
+        if (activeChatId === chatId) {
+          setActiveChat(data.chat);
+        }
+      }
+      return data;
+    } catch (err) {
+      fetchChats(true);
+    }
   };
 
   /**

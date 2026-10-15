@@ -52,6 +52,16 @@ export default function ConversationList({
     return date.toLocaleDateString('en-IN', { month: 'short', day: 'numeric' });
   };
 
+  // ⚡ Instant in-memory search filtering (0ms latency while typing)
+  const filteredChats = chats.filter((c) => {
+    if (!searchQuery.trim()) return true;
+    const q = searchQuery.toLowerCase();
+    const nameMatch = c.contact?.name?.toLowerCase().includes(q);
+    const phoneMatch = c.contact?.waId?.includes(q);
+    const previewMatch = c.lastMessagePreview?.toLowerCase().includes(q);
+    return nameMatch || phoneMatch || previewMatch;
+  });
+
   return (
     <aside className="col-conversations">
       {/* Top Header: Business Branding & Quick Action Badges */}
@@ -283,18 +293,18 @@ export default function ConversationList({
             style={{ position: 'absolute', left: '10px', top: '9px', color: 'var(--text-muted)' }}
           />
           <input
-            type="text"
+            type="search"
+            className="chat-search-input"
             placeholder="Search customer name or phone..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             style={{
               width: '100%',
-              padding: '8px 10px 8px 32px',
+              padding: '10px 12px 10px 34px',
               background: 'var(--bg-surface)',
               border: '1px solid var(--border-subtle)',
               borderRadius: 'var(--radius-md)',
               color: '#fff',
-              fontSize: '12.5px',
               outline: 'none',
               fontFamily: 'inherit',
             }}
@@ -341,22 +351,22 @@ export default function ConversationList({
 
       {/* Conversation Cards List */}
       <div style={{ flex: 1, overflowY: 'auto' }}>
-        {loadingChats ? (
+        {loadingChats && chats.length === 0 ? (
           <div style={{ padding: '30px', textAlign: 'center', color: 'var(--text-muted)', fontSize: '13px' }}>
             Loading WhatsApp chats...
           </div>
-        ) : chats.length === 0 ? (
+        ) : filteredChats.length === 0 ? (
           <div style={{ padding: '40px 20px', textAlign: 'center' }}>
             <MessageSquare size={32} style={{ color: 'var(--text-muted)', marginBottom: '10px', opacity: 0.5 }} />
             <div style={{ fontSize: '14px', fontWeight: '500', color: 'var(--text-secondary)' }}>
               No conversations found
             </div>
             <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '4px' }}>
-              Try switching tabs or click Simulator to fire a mock inbound WhatsApp lead!
+              {searchQuery ? 'No match for your search query.' : 'Try switching tabs or click Simulator to fire a mock inbound WhatsApp lead!'}
             </div>
           </div>
         ) : (
-          chats.map((chat) => {
+          filteredChats.map((chat) => {
             const isSelected = chat.id === activeChatId;
             const parsedTags = chat.tags ? JSON.parse(chat.tags) : [];
 
