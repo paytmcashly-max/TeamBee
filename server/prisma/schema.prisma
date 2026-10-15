@@ -2,7 +2,7 @@
 // Configured with SQLite for seamless standalone local testing & PostgreSQL compatibility
 
 datasource db {
-  provider = "sqlite"
+  provider = "postgresql"
   url      = env("DATABASE_URL")
 }
 
