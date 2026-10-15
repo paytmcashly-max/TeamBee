@@ -1,0 +1,23 @@
+{
+  "name": "chatflow-monorepo",
+  "version": "1.0.0",
+  "description": "ChatFlow - B2B Multi-Agent WhatsApp Shared Team Inbox SaaS for Indian SMBs & D2C Brands",
+  "scripts": {
+    "start:server": "npm --prefix server start",
+    "dev:server": "npm --prefix server run dev",
+    "dev:client": "npm --prefix client run dev",
+    "seed": "npm --prefix server run seed",
+    "test:server": "npm --prefix server test",
+    "build:client": "npm --prefix client run build"
+  },
+  "keywords": [
+    "whatsapp",
+    "shared-inbox",
+    "meta-cloud-api",
+    "socket-io",
+    "multi-agent",
+    "saas"
+  ],
+  "author": "ChatFlow Core Engineering",
+  "license": "ISC"
+}

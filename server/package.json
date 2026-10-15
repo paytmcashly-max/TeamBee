@@ -1,0 +1,29 @@
+{
+  "name": "chatflow-server",
+  "version": "1.0.0",
+  "description": "ChatFlow - B2B Multi-Agent WhatsApp Shared Team Inbox Backend & Meta Webhook Engine",
+  "main": "src/server.js",
+  "scripts": {
+    "start": "node src/server.js",
+    "dev": "node --watch src/server.js",
+    "prisma:generate": "prisma generate",
+    "prisma:migrate": "prisma migrate dev",
+    "prisma:push": "prisma db push",
+    "seed": "node src/db/seed.js",
+    "test": "node tests/test-webhook-parser.js"
+  },
+  "dependencies": {
+    "axios": "^1.7.9",
+    "bcryptjs": "^2.4.3",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.7",
+    "express": "^4.21.2",
+    "jsonwebtoken": "^9.0.2",
+    "socket.io": "^4.8.1",
+    "uuid": "^11.0.5"
+  },
+  "devDependencies": {
+    "@prisma/client": "^6.3.1",
+    "prisma": "^6.3.1"
+  }
+}

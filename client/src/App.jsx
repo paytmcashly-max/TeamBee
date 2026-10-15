@@ -1,0 +1,78 @@
+import React, { useState } from 'react';
+import { useAuth } from './context/AuthContext';
+import { useChat } from './context/ChatContext';
+import LoginView from './components/auth/LoginView';
+import ConversationList from './components/inbox/ConversationList';
+import ChatCanvas from './components/inbox/ChatCanvas';
+import ContactSidebar from './components/inbox/ContactSidebar';
+import MetaOnboardingModal from './components/modals/MetaOnboardingModal';
+import TemplateModal from './components/modals/TemplateModal';
+import AgentManagementModal from './components/modals/AgentManagementModal';
+import SimulatorModal from './components/modals/SimulatorModal';
+
+export default function App() {
+  const { token, loading } = useAuth();
+  const { activeChat } = useChat();
+
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [isTemplateModalOpen, setIsTemplateModalOpen] = useState(false);
+  const [isAgentsModalOpen, setIsAgentsModalOpen] = useState(false);
+  const [isSimulatorOpen, setIsSimulatorOpen] = useState(false);
+  const [isSidebarOpen, setIsSidebarOpen] = useState(true);
+
+  if (loading) {
+    return (
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          height: '100vh',
+          background: '#090d16',
+          color: '#25D366',
+          fontSize: '15px',
+          fontWeight: '600',
+        }}
+      >
+        Loading ChatFlow WhatsApp SaaS...
+      </div>
+    );
+  }
+
+  if (!token) {
+    return <LoginView />;
+  }
+
+  return (
+    <div className="app-container">
+      {/* 3-Column WhatsApp Shared Inbox Layout */}
+      <div className="inbox-layout">
+        {/* Column 1: Navigation & Conversation List */}
+        <ConversationList
+          onOpenSettings={() => setIsSettingsOpen(true)}
+          onOpenTemplates={() => setIsTemplateModalOpen(true)}
+          onOpenAgents={() => setIsAgentsModalOpen(true)}
+          onOpenSimulator={() => setIsSimulatorOpen(true)}
+        />
+
+        {/* Column 2: Active Chat Canvas */}
+        <ChatCanvas
+          onOpenTemplatePicker={() => setIsTemplateModalOpen(true)}
+          onToggleSidebar={() => setIsSidebarOpen(!isSidebarOpen)}
+          isSidebarOpen={isSidebarOpen}
+        />
+
+        {/* Column 3: Contact & CRM Intelligence Sidebar */}
+        {isSidebarOpen && activeChat && (
+          <ContactSidebar onOpenTemplatePicker={() => setIsTemplateModalOpen(true)} />
+        )}
+      </div>
+
+      {/* Modals & Consoles */}
+      <MetaOnboardingModal isOpen={isSettingsOpen} onClose={() => setIsSettingsOpen(false)} />
+      <TemplateModal isOpen={isTemplateModalOpen} onClose={() => setIsTemplateModalOpen(false)} />
+      <AgentManagementModal isOpen={isAgentsModalOpen} onClose={() => setIsAgentsModalOpen(false)} />
+      <SimulatorModal isOpen={isSimulatorOpen} onClose={() => setIsSimulatorOpen(false)} />
+    </div>
+  );
+}
