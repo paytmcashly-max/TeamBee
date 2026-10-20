@@ -46,10 +46,16 @@ class AgentController {
    */
   static async createAgent(req, res) {
     try {
-      const { name, email, password, role = 'AGENT' } = req.body;
+      const name = typeof req.body?.name === 'string' ? req.body.name.trim().slice(0, 120) : '';
+      const email = typeof req.body?.email === 'string' ? req.body.email.trim().toLowerCase() : '';
+      const password = typeof req.body?.password === 'string' ? req.body.password : '';
+      const role = typeof req.body?.role === 'string' ? req.body.role.toUpperCase() : 'AGENT';
 
-      if (!name || !email || !password) {
+      if (!name || !email || !password || !/^\S+@\S+\.\S+$/.test(email) || password.length < 10 || password.length > 256) {
         return res.status(400).json({ success: false, error: 'Name, email, and temporary password are required' });
+      }
+      if (!['AGENT', 'SUPERVISOR'].includes(role)) {
+        return res.status(400).json({ success: false, error: 'Invalid agent role' });
       }
 
       // Check duplicate
@@ -72,7 +78,7 @@ class AgentController {
           name,
           email,
           passwordHash,
-          role: role.toUpperCase(),
+           role,
           status: 'OFFLINE',
           isActive: true,
         },
@@ -100,7 +106,20 @@ class AgentController {
   static async updateAgent(req, res) {
     try {
       const { id } = req.params;
-      const { role, isActive, status, name } = req.body;
+      const role = typeof req.body?.role === 'string' ? req.body.role.toUpperCase() : undefined;
+      const isActive = req.body?.isActive;
+      const status = typeof req.body?.status === 'string' ? req.body.status.toUpperCase() : undefined;
+      const name = typeof req.body?.name === 'string' ? req.body.name.trim().slice(0, 120) : undefined;
+
+      if (role !== undefined && !['AGENT', 'SUPERVISOR', 'ADMIN'].includes(role)) {
+        return res.status(400).json({ success: false, error: 'Invalid agent role' });
+      }
+      if (status !== undefined && !['ONLINE', 'BUSY', 'OFFLINE'].includes(status)) {
+        return res.status(400).json({ success: false, error: 'Invalid agent status' });
+      }
+      if (isActive !== undefined && typeof isActive !== 'boolean') {
+        return res.status(400).json({ success: false, error: 'isActive must be a boolean' });
+      }
 
       // Regular agents can only update their own status (ONLINE / BUSY / OFFLINE)
       if (req.agent.role === 'AGENT' && req.agent.id !== id) {
@@ -113,12 +132,24 @@ class AgentController {
 
       // Admin only permissions
       if (req.agent.role === 'ADMIN' || req.agent.role === 'SUPERVISOR') {
-        if (role) updateData.role = role;
+        // Supervisors cannot grant/revoke tenant-admin privileges.
+        if (role && (req.agent.role === 'ADMIN' || role !== 'ADMIN')) updateData.role = role;
         if (isActive !== undefined) updateData.isActive = isActive;
       }
 
+      const target = await prisma.agent.findFirst({
+        where: { id, tenantId: req.tenantId },
+        select: { id: true, role: true },
+      });
+      if (!target) {
+        return res.status(404).json({ success: false, error: 'Agent not found' });
+      }
+      if (req.agent.role === 'SUPERVISOR' && target.role === 'ADMIN') {
+        return res.status(403).json({ success: false, error: 'Supervisors cannot update tenant administrators' });
+      }
+
       const updated = await prisma.agent.update({
-        where: { id },
+        where: { id: target.id },
         data: updateData,
         select: {
           id: true,
@@ -148,6 +179,27 @@ class AgentController {
       const resolvedChats = await prisma.chat.count({ where: { tenantId: req.tenantId, status: 'RESOLVED' } });
       const totalMessages = await prisma.message.count({ where: { tenantId: req.tenantId } });
 
+      const recentMessages = await prisma.message.findMany({
+        where: { tenantId: req.tenantId },
+        orderBy: { createdAt: 'asc' },
+        take: 10000,
+        select: { chatId: true, direction: true, createdAt: true },
+      });
+      const waitingSince = new Map();
+      const responseTimes = [];
+      for (const message of recentMessages) {
+        if (message.direction === 'INBOUND' && !waitingSince.has(message.chatId)) {
+          waitingSince.set(message.chatId, message.createdAt);
+        } else if (message.direction === 'OUTBOUND' && waitingSince.has(message.chatId)) {
+          responseTimes.push((message.createdAt.getTime() - waitingSince.get(message.chatId).getTime()) / 1000);
+          waitingSince.delete(message.chatId);
+        }
+      }
+      const averageResponse = responseTimes.length
+        ? Math.round(responseTimes.reduce((sum, value) => sum + value, 0) / responseTimes.length)
+        : null;
+      const resolutionRate = totalChats ? `${((resolvedChats / totalChats) * 100).toFixed(1)}%` : '0.0%';
+
       return res.json({
         success: true,
         metrics: {
@@ -156,8 +208,8 @@ class AgentController {
           unassignedChats,
           resolvedChats,
           totalMessages,
-          avgResponseTimeSec: 84, // 1m 24s average SLA in demo
-          firstContactResolutionRate: '78.5%',
+          avgResponseTimeSec: averageResponse,
+          firstContactResolutionRate: resolutionRate,
         },
       });
     } catch (error) {

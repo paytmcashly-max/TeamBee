@@ -1,4 +1,5 @@
 const prisma = require('../db/prisma');
+const { encryptSecret, hashSecret } = require('../services/credentialCrypto');
 
 class TenantController {
   /**
@@ -15,12 +16,9 @@ class TenantController {
           wabaId: true,
           phoneNumberId: true,
           displayPhoneNumber: true,
-          webhookVerifyToken: true,
-          appSecret: true,
           plan: true,
           createdAt: true,
           updatedAt: true,
-          accessToken: true,
         },
       });
 
@@ -28,17 +26,12 @@ class TenantController {
         return res.status(404).json({ success: false, error: 'Tenant not found' });
       }
 
-      // Mask access token for security (e.g. EAAG...xxxx)
-      const maskedToken = tenant.accessToken
-        ? `${tenant.accessToken.slice(0, 8)}...${tenant.accessToken.slice(-6)}`
-        : null;
-
       return res.json({
         success: true,
         settings: {
           ...tenant,
-          accessToken: maskedToken,
-          isConfigured: Boolean(tenant.phoneNumberId && tenant.wabaId && tenant.accessToken),
+          // Credential values are intentionally never returned to clients.
+         isConfigured: Boolean(tenant.phoneNumberId && tenant.wabaId && req.tenant.accessToken),
           webhookUrl: `${req.protocol}://${req.get('host')}/webhook`,
         },
       });
@@ -63,17 +56,38 @@ class TenantController {
         displayPhoneNumber,
       } = req.body;
 
+      const stringFields = {
+        name,
+        wabaId,
+        phoneNumberId,
+        accessToken,
+        webhookVerifyToken,
+        appSecret,
+        displayPhoneNumber,
+      };
+      for (const [field, value] of Object.entries(stringFields)) {
+        if (value !== undefined && typeof value !== 'string') {
+          return res.status(400).json({ success: false, error: `${field} must be a string` });
+        }
+        if (typeof value === 'string' && value.length > 512) {
+          return res.status(400).json({ success: false, error: `${field} is too long` });
+        }
+      }
+
       const updateData = {};
-      if (name) updateData.name = name;
-      if (wabaId !== undefined) updateData.wabaId = wabaId;
-      if (phoneNumberId !== undefined) updateData.phoneNumberId = phoneNumberId;
-      if (webhookVerifyToken !== undefined) updateData.webhookVerifyToken = webhookVerifyToken;
-      if (appSecret !== undefined) updateData.appSecret = appSecret;
-      if (displayPhoneNumber !== undefined) updateData.displayPhoneNumber = displayPhoneNumber;
+      if (name?.trim()) updateData.name = name.trim().slice(0, 120);
+      if (wabaId !== undefined) updateData.wabaId = wabaId.trim() || null;
+      if (phoneNumberId !== undefined) updateData.phoneNumberId = phoneNumberId.trim() || null;
+       if (webhookVerifyToken !== undefined) {
+         updateData.webhookVerifyToken = null;
+         updateData.webhookVerifyTokenHash = webhookVerifyToken.trim() ? hashSecret(webhookVerifyToken.trim()) : null;
+       }
+       if (appSecret !== undefined) updateData.appSecret = appSecret.trim() ? encryptSecret(appSecret.trim()) : null;
+      if (displayPhoneNumber !== undefined) updateData.displayPhoneNumber = displayPhoneNumber.trim() || null;
 
       // Only update access token if a new, unmasked token string was submitted
-      if (accessToken && !accessToken.includes('...')) {
-        updateData.accessToken = accessToken.trim();
+      if (accessToken?.trim() && !accessToken.includes('...')) {
+         updateData.accessToken = encryptSecret(accessToken.trim());
       }
 
       const updated = await prisma.tenant.update({
@@ -90,7 +104,7 @@ class TenantController {
           wabaId: updated.wabaId,
           phoneNumberId: updated.phoneNumberId,
           displayPhoneNumber: updated.displayPhoneNumber,
-          isConfigured: Boolean(updated.phoneNumberId && updated.wabaId && updated.accessToken),
+           isConfigured: Boolean(updated.phoneNumberId && updated.wabaId && updated.accessToken),
         },
       });
     } catch (error) {

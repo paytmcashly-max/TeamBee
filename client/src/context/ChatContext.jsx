@@ -4,9 +4,30 @@ import { useSocket } from './SocketContext';
 
 const ChatContext = createContext(null);
 
+function sameMessage(left, right) {
+  return Boolean(
+    (left?.id && right?.id && left.id === right.id) ||
+    (left?.waMessageId && right?.waMessageId && left.waMessageId === right.waMessageId) ||
+    (left?.clientMessageId && right?.clientMessageId && left.clientMessageId === right.clientMessageId)
+  );
+}
+
+function mergeMessage(list, incoming) {
+  const existingIndex = list.findIndex((message) => sameMessage(message, incoming));
+  if (existingIndex === -1) return [...list, incoming];
+  const merged = [...list];
+  merged[existingIndex] = { ...merged[existingIndex], ...incoming };
+  return merged;
+}
+
+function mergeMessageLists(left, right) {
+  const merged = right.reduce((list, message) => mergeMessage(list, message), [...left]);
+  return merged.sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt));
+}
+
 export function ChatProvider({ children }) {
   const { token, agent, isAdmin } = useAuth();
-  const { socket, joinChat, leaveChat } = useSocket();
+  const { socket, connected, joinChat, leaveChat } = useSocket();
 
   const [chats, setChats] = useState([]);
   const [activeChatId, setActiveChatId] = useState(null);
@@ -15,6 +36,8 @@ export function ChatProvider({ children }) {
   const [messagingWindow, setMessagingWindow] = useState({ isOpen: true, hoursRemaining: 24 });
   const [loadingChats, setLoadingChats] = useState(false);
   const [loadingMessages, setLoadingMessages] = useState(false);
+  const [chatPagination, setChatPagination] = useState({ hasMore: false, nextCursor: null });
+  const [messagePagination, setMessagePagination] = useState({ hasMore: false, nextBefore: null });
 
   // ⚡ Memory cache for 0ms instant chat switching across conversations
   const messagesCacheRef = useRef({});
@@ -39,29 +62,39 @@ export function ChatProvider({ children }) {
   /**
    * Fetch chats from backend
    */
-  const fetchChats = useCallback(async (silent = false) => {
-    if (!token) return;
+  const fetchChats = useCallback(async (silent = false, cursor = null) => {
+    if (!agent) return;
     if (!silent) setLoadingChats(true);
     try {
       const params = new URLSearchParams({
         filter: tabFilter,
         status: statusFilter,
         search: debouncedSearch,
+        limit: '100',
       });
+      if (cursor) params.set('cursor', cursor);
 
       const res = await fetch(`/api/chats?${params.toString()}`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       const data = await res.json();
       if (data.success) {
-        setChats(data.chats);
+        setChats((previous) => cursor ? [...previous, ...(data.chats || [])] : data.chats || []);
+        setChatPagination(data.pagination || { hasMore: false, nextCursor: null });
       }
     } catch (err) {
       console.error('Fetch chats error:', err);
     } finally {
       if (!silent) setLoadingChats(false);
     }
-  }, [token, tabFilter, statusFilter, debouncedSearch]);
+  }, [agent, token, tabFilter, statusFilter, debouncedSearch]);
+
+  const loadMoreChats = useCallback(() => {
+    if (chatPagination.hasMore && chatPagination.nextCursor) {
+      return fetchChats(true, chatPagination.nextCursor);
+    }
+    return Promise.resolve();
+  }, [chatPagination, fetchChats]);
 
   useEffect(() => {
     fetchChats();
@@ -72,7 +105,7 @@ export function ChatProvider({ children }) {
    */
   const loadChat = useCallback(
     async (chatId) => {
-      if (!chatId || !token) return;
+      if (!chatId || !agent) return;
 
       // Join Socket.io room asynchronously in background (don't block network fetches)
       joinChat(chatId).catch((err) => console.warn('Socket join warning:', err));
@@ -80,7 +113,7 @@ export function ChatProvider({ children }) {
       try {
         const [chatRes, msgRes] = await Promise.all([
           fetch(`/api/chats/${chatId}`, { headers: { Authorization: `Bearer ${token}` } }),
-          fetch(`/api/messages/${chatId}`, { headers: { Authorization: `Bearer ${token}` } }),
+          fetch(`/api/messages/${chatId}?limit=100`, { headers: { Authorization: `Bearer ${token}` } }),
         ]);
 
         const chatData = await chatRes.json();
@@ -95,6 +128,7 @@ export function ChatProvider({ children }) {
           messages: fetchedMessages,
           messagingWindow: fetchedWindow,
           chat: fetchedChat,
+          pagination: msgData.pagination || { hasMore: false, nextBefore: null },
         };
 
         // Only commit to active state if user is STILL viewing this exact chat
@@ -105,6 +139,10 @@ export function ChatProvider({ children }) {
           if (msgData.success) {
             setMessages(fetchedMessages);
             setMessagingWindow(fetchedWindow);
+            setMessagePagination(msgData.pagination || { hasMore: false, nextBefore: null });
+            setChats((previous) => previous.map((chat) =>
+              chat.id === chatId ? { ...chat, unreadCount: 0 } : chat
+            ));
           }
         }
       } catch (err) {
@@ -115,8 +153,35 @@ export function ChatProvider({ children }) {
         }
       }
     },
-    [token, joinChat]
+    [agent, token, joinChat]
   );
+
+  // Reconcile state after a socket reconnect. Socket.IO does not replay
+  // events emitted while the browser was offline.
+  useEffect(() => {
+    if (!connected || !agent) return;
+    fetchChats(true);
+    if (activeChatIdRef.current) loadChat(activeChatIdRef.current);
+  }, [connected, agent, token, fetchChats, loadChat]);
+
+  const loadOlderMessages = useCallback(async () => {
+    const chatId = activeChatIdRef.current;
+    const before = messagePagination.nextBefore;
+    if (!chatId || !agent || !messagePagination.hasMore || !before) return;
+
+    const res = await fetch(`/api/messages/${chatId}?limit=100&before=${encodeURIComponent(before)}`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    const data = await res.json();
+    if (!data.success) throw new Error(data.error || 'Failed to load older messages');
+    setMessages((previous) => mergeMessageLists(data.messages || [], previous));
+    messagesCacheRef.current[chatId] = {
+      ...(messagesCacheRef.current[chatId] || {}),
+      messages: mergeMessageLists(data.messages || [], messagesCacheRef.current[chatId]?.messages || []),
+      pagination: data.pagination || { hasMore: false, nextBefore: null },
+    };
+    setMessagePagination(data.pagination || { hasMore: false, nextBefore: null });
+  }, [messagePagination, agent, token]);
 
   /**
    * ⚡ Instant 0ms Chat Selection:
@@ -132,6 +197,7 @@ export function ChatProvider({ children }) {
       activeChatIdRef.current = null;
       setActiveChat(null);
       setMessages([]);
+      setMessagePagination({ hasMore: false, nextBefore: null });
       return;
     }
 
@@ -156,9 +222,11 @@ export function ChatProvider({ children }) {
       if (cachedEntry.messagingWindow) {
         setMessagingWindow(cachedEntry.messagingWindow);
       }
+      setMessagePagination(cachedEntry.pagination || { hasMore: false, nextBefore: null });
       setLoadingMessages(false);
     } else {
       setMessages([]);
+      setMessagePagination({ hasMore: false, nextBefore: null });
       setLoadingMessages(true);
     }
 
@@ -198,20 +266,12 @@ export function ChatProvider({ children }) {
       // Update in-memory cache
       if (messagesCacheRef.current[chatId]) {
         const cachedList = messagesCacheRef.current[chatId].messages || [];
-        if (!cachedList.some((m) => m.id === message.id || (m.waMessageId && m.waMessageId === message.waMessageId))) {
-          messagesCacheRef.current[chatId].messages = [...cachedList, message];
-        }
+        messagesCacheRef.current[chatId].messages = mergeMessage(cachedList, message);
       }
 
       // If belongs to currently open chat canvas, append immediately
       if (chatId === activeChatIdRef.current) {
-        setMessages((prev) => {
-          // Avoid duplicate by id or waMessageId
-          if (prev.some((m) => m.id === message.id || (m.waMessageId && m.waMessageId === message.waMessageId))) {
-            return prev;
-          }
-          return [...prev, message];
-        });
+        setMessages((prev) => mergeMessage(prev, message));
       }
 
       // Update previews in conversation list
@@ -233,18 +293,39 @@ export function ChatProvider({ children }) {
       });
     };
 
+    // The server emits previews only to authorized queue/role rooms. This
+    // keeps list ordering and unread counts live without exposing full message
+    // payloads to unrelated agents.
+    const handleChatPreviewUpdated = ({ chatId, lastMessage, lastMessageAt }) => {
+      setChats((prev) => {
+        const index = prev.findIndex((chat) => chat.id === chatId);
+        if (index === -1) {
+          fetchChats(true);
+          return prev;
+        }
+        const updated = [...prev];
+        updated[index] = {
+          ...updated[index],
+          lastMessagePreview: lastMessage,
+          lastMessageAt,
+          unreadCount: chatId === activeChatIdRef.current ? 0 : (updated[index].unreadCount || 0) + 1,
+        };
+        return updated.sort((a, b) => new Date(b.lastMessageAt) - new Date(a.lastMessageAt));
+      });
+    };
+
     // Message delivery status update (SENT -> DELIVERED -> READ)
-    const handleStatusUpdate = ({ chatId, waMessageId, status }) => {
+    const handleStatusUpdate = ({ chatId, messageId, waMessageId, status }) => {
       if (messagesCacheRef.current[chatId]) {
         const cachedList = messagesCacheRef.current[chatId].messages || [];
         messagesCacheRef.current[chatId].messages = cachedList.map((m) =>
-          m.waMessageId === waMessageId ? { ...m, status } : m
+          m.waMessageId === waMessageId || m.id === messageId ? { ...m, status } : m
         );
       }
       if (chatId === activeChatIdRef.current) {
         setMessages((prev) =>
           prev.map((m) => {
-            if (m.waMessageId === waMessageId) {
+            if (m.waMessageId === waMessageId || m.id === messageId) {
               return { ...m, status };
             }
             return m;
@@ -255,6 +336,7 @@ export function ChatProvider({ children }) {
 
     // Chat assignment change
     const handleChatAssigned = ({ chatId, assignedAgentId, assignedAgentName, status }) => {
+      fetchChats(true);
       setChats((prev) =>
         prev.map((c) => {
           if (c.id === chatId) {
@@ -284,6 +366,7 @@ export function ChatProvider({ children }) {
 
     // Chat status changed (UNASSIGNED / OPEN / RESOLVED)
     const handleChatStatusChanged = ({ chatId, status }) => {
+      fetchChats(true);
       setChats((prev) =>
         prev.map((c) => (c.id === chatId ? { ...c, status } : c))
       );
@@ -300,6 +383,7 @@ export function ChatProvider({ children }) {
     };
 
     socket.on('new_message', handleNewMessage);
+    socket.on('chat_preview_updated', handleChatPreviewUpdated);
     socket.on('message_status_updated', handleStatusUpdate);
     socket.on('chat_assigned', handleChatAssigned);
     socket.on('chat_status_changed', handleChatStatusChanged);
@@ -307,6 +391,7 @@ export function ChatProvider({ children }) {
 
     return () => {
       socket.off('new_message', handleNewMessage);
+      socket.off('chat_preview_updated', handleChatPreviewUpdated);
       socket.off('message_status_updated', handleStatusUpdate);
       socket.off('chat_assigned', handleChatAssigned);
       socket.off('chat_status_changed', handleChatStatusChanged);
@@ -318,7 +403,7 @@ export function ChatProvider({ children }) {
    * Send outbound message or private note with flexible options
    */
   const sendMessage = async (content, options = 'TEXT', mediaUrl = null, mediaFilename = null) => {
-    if (!activeChatId || !token) return;
+    if (!activeChatId || !agent) return;
 
     let payload = {
       content,
@@ -326,7 +411,7 @@ export function ChatProvider({ children }) {
       mediaUrl: null,
       mediaFilename: null,
       isInternal: false,
-      buttons: null,
+      buttons: [],
     };
 
     if (typeof options === 'string') {
@@ -338,11 +423,13 @@ export function ChatProvider({ children }) {
       payload.mediaUrl = options.mediaUrl || null;
       payload.mediaFilename = options.mediaFilename || null;
       payload.isInternal = !!options.isInternal;
-      payload.buttons = options.buttons || null;
+      payload.buttons = options.buttons || [];
     }
 
     // ⚡ Instant Optimistic UI (0ms latency): Append bubble immediately with PENDING clock
-    const tempId = `temp-${Date.now()}`;
+    const tempId = `temp-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+    const clientMessageId = tempId;
+    payload.clientMessageId = clientMessageId;
     const targetChatId = activeChatId;
     const nowIso = new Date().toISOString();
 
@@ -360,6 +447,7 @@ export function ChatProvider({ children }) {
       buttons: payload.buttons ? (typeof payload.buttons === 'string' ? payload.buttons : JSON.stringify(payload.buttons)) : null,
       status: 'PENDING',
       isInternal: payload.isInternal,
+      clientMessageId,
       createdAt: nowIso,
       updatedAt: nowIso,
     };
@@ -399,7 +487,9 @@ export function ChatProvider({ children }) {
       const data = await res.json();
       if (!data.success) {
         setMessages((prev) => {
-          const next = prev.map((m) => (m.id === tempId ? { ...m, status: 'FAILED' } : m));
+          const next = data.message
+            ? mergeMessage(prev, { ...data.message, clientMessageId })
+            : prev.map((m) => (m.id === tempId ? { ...m, status: 'FAILED', errorMessage: data.error } : m));
           if (messagesCacheRef.current[targetChatId]) {
             messagesCacheRef.current[targetChatId].messages = next;
           }
@@ -410,7 +500,7 @@ export function ChatProvider({ children }) {
 
       // Replace optimistic message with confirmed database record
       setMessages((prev) => {
-        const next = prev.map((m) => (m.id === tempId ? data.message : m));
+        const next = mergeMessage(prev, { ...data.message, clientMessageId });
         if (messagesCacheRef.current[targetChatId]) {
           messagesCacheRef.current[targetChatId].messages = next;
         }
@@ -419,7 +509,7 @@ export function ChatProvider({ children }) {
       return data;
     } catch (err) {
       setMessages((prev) => {
-        const next = prev.map((m) => (m.id === tempId ? { ...m, status: 'FAILED' } : m));
+        const next = prev.map((m) => (m.id === tempId ? { ...m, status: 'FAILED', errorMessage: err.message } : m));
         if (messagesCacheRef.current[targetChatId]) {
           messagesCacheRef.current[targetChatId].messages = next;
         }
@@ -433,7 +523,7 @@ export function ChatProvider({ children }) {
    * Assign chat to an agent or claim it
    */
   const assignChat = async (chatId, targetAgentId) => {
-    if (!token) return;
+    if (!agent) return;
     // Optimistic update in state
     setChats((prev) =>
       prev.map((c) =>
@@ -484,7 +574,7 @@ export function ChatProvider({ children }) {
    * Update chat status (OPEN, RESOLVED, UNASSIGNED)
    */
   const updateChatStatus = async (chatId, status) => {
-    if (!token) return;
+    if (!agent) return;
     // Optimistic update in state
     setChats((prev) =>
       prev.map((c) => (c.id === chatId ? { ...c, status } : c))
@@ -519,7 +609,7 @@ export function ChatProvider({ children }) {
    * Update chat tags
    */
   const updateChatTags = async (chatId, tags) => {
-    if (!token) return;
+    if (!agent) return;
     const res = await fetch(`/api/chats/${chatId}/tags`, {
       method: 'PUT',
       headers: {
@@ -542,7 +632,7 @@ export function ChatProvider({ children }) {
    * Update contact CRM details (name, email, customAttributes)
    */
   const updateContact = async (chatId, contactData) => {
-    if (!token) return;
+    if (!agent) return;
     const res = await fetch(`/api/chats/${chatId}/contact`, {
       method: 'PUT',
       headers: {
@@ -571,8 +661,10 @@ export function ChatProvider({ children }) {
         activeChat,
         messages,
         messagingWindow,
-        loadingChats,
-        loadingMessages,
+         loadingChats,
+         loadingMessages,
+         chatPagination,
+         messagePagination,
         tabFilter,
         setTabFilter,
         statusFilter,
@@ -586,7 +678,9 @@ export function ChatProvider({ children }) {
         updateChatStatus,
         updateChatTags,
         updateContact,
-        fetchChats,
+         fetchChats,
+         loadMoreChats,
+         loadOlderMessages,
       }}
     >
       {children}

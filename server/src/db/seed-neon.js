@@ -1,7 +1,32 @@
 const { PrismaClient } = require('@prisma/client');
 const bcrypt = require('bcryptjs');
+const crypto = require('crypto');
+const { encryptSecret, hashSecret } = require('../services/credentialCrypto');
 
 const prisma = new PrismaClient();
+
+function runtimeSecret(name, developmentFallback) {
+  if (process.env[name]) return process.env[name];
+  if (process.env.NODE_ENV === 'production') {
+    throw new Error(`${name} must be configured before running the Neon seed in production`);
+  }
+  return developmentFallback || crypto.randomBytes(24).toString('hex');
+}
+
+function requiredSecret(name) {
+  if (!process.env[name]) throw new Error(`${name} must be configured before seeding`);
+  return process.env[name];
+}
+
+const seedAdminPassword = requiredSecret('SEED_ADMIN_PASSWORD');
+const webhookVerifyToken = runtimeSecret('WEBHOOK_VERIFY_TOKEN');
+const metaAppSecret = runtimeSecret('META_APP_SECRET');
+const metaAccessToken = runtimeSecret('META_ACCESS_TOKEN', 'MOCK_TOKEN');
+const metaPhoneNumberId = runtimeSecret('META_PHONE_NUMBER_ID', 'PHONE_ID_SEED');
+const metaWabaId = runtimeSecret('META_WABA_ID', 'WABA_SEED');
+const encryptedMetaAccessToken = encryptSecret(metaAccessToken);
+const encryptedMetaAppSecret = encryptSecret(metaAppSecret);
+const hashedWebhookVerifyToken = hashSecret(webhookVerifyToken);
 
 async function seed() {
   console.log('🌱 Seeding Neon PostgreSQL Database...');
@@ -10,28 +35,32 @@ async function seed() {
   const tenant = await prisma.tenant.upsert({
     where: { slug: 'apex-educare' },
     update: {
-      accessToken: process.env.META_ACCESS_TOKEN || 'EAAUzCgD1Xc0BSnUNzGnji7e9ZA067IgCTh5j6ZAC8WlxrExnLz4iojO9UETJoRaGaRFBFHNxFwPtrRgOANZBUEs542Mj6HwuKR5kNL1vwLu6ZAOgeYd7krDKMfhFrEBsJhIp7OIxJjtxluacM0PQL1UZCu9HHGvZArjhk69QXZBUzp7e3y0uToulFA00Loa2DsmkuDJVjK6wZBjVwjRVWPcNYc8PaXTJNNgrFsZCf9ngiA4SlHy3Ktw4zyzPQ42u1ZANmPFFsGUQOKjtMyy6qPL8CEf1H5EgZDZD',
-      phoneNumberId: process.env.META_PHONE_NUMBER_ID || '1297293256810964',
-      wabaId: process.env.META_WABA_ID || '1297293256810964',
+        accessToken: encryptedMetaAccessToken,
+       phoneNumberId: metaPhoneNumberId,
+       wabaId: metaWabaId,
       displayPhoneNumber: '+1 555-676-6956',
-      webhookVerifyToken: process.env.WEBHOOK_VERIFY_TOKEN || 'chatflow_verify_token_2026',
+         webhookVerifyToken: null,
+         webhookVerifyTokenHash: hashedWebhookVerifyToken,
+         appSecret: encryptedMetaAppSecret,
     },
     create: {
       id: '720de0ce-182f-4c1c-acb6-351a74154f80',
       name: 'Apex EduCare Academy',
       slug: 'apex-educare',
-      phoneNumberId: process.env.META_PHONE_NUMBER_ID || '1297293256810964',
-      wabaId: process.env.META_WABA_ID || '1297293256810964',
+       phoneNumberId: metaPhoneNumberId,
+       wabaId: metaWabaId,
       displayPhoneNumber: '+1 555-676-6956',
-      accessToken: process.env.META_ACCESS_TOKEN || 'EAAUzCgD1Xc0BSnUNzGnji7e9ZA067IgCTh5j6ZAC8WlxrExnLz4iojO9UETJoRaGaRFBFHNxFwPtrRgOANZBUEs542Mj6HwuKR5kNL1vwLu6ZAOgeYd7krDKMfhFrEBsJhIp7OIxJjtxluacM0PQL1UZCu9HHGvZArjhk69QXZBUzp7e3y0uToulFA00Loa2DsmkuDJVjK6wZBjVwjRVWPcNYc8PaXTJNNgrFsZCf9ngiA4SlHy3Ktw4zyzPQ42u1ZANmPFFsGUQOKjtMyy6qPL8CEf1H5EgZDZD',
-      webhookVerifyToken: process.env.WEBHOOK_VERIFY_TOKEN || 'chatflow_verify_token_2026',
+        accessToken: encryptedMetaAccessToken,
+        webhookVerifyToken: null,
+        webhookVerifyTokenHash: hashedWebhookVerifyToken,
+        appSecret: encryptedMetaAppSecret,
     },
   });
 
   console.log('✅ Tenant ready:', tenant.name, tenant.id);
 
   // 2. Create Admin Agent
-  const passwordHash = await bcrypt.hash('Admin@123', 10);
+  const passwordHash = await bcrypt.hash(seedAdminPassword, 10);
   const adminAgent = await prisma.agent.upsert({
     where: { tenantId_email: { tenantId: tenant.id, email: 'rahul.verma@apexeducare.in' } },
     update: { passwordHash },

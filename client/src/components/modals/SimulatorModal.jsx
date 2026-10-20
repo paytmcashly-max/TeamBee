@@ -5,7 +5,7 @@ import { useChat } from '../../context/ChatContext';
 
 export default function SimulatorModal({ isOpen, onClose }) {
   const { token } = useAuth();
-  const { activeChat } = useChat();
+  const { messages } = useChat();
 
   const [senderPhone, setSenderPhone] = useState('919876543210');
   const [senderName, setSenderName] = useState('Aarav Patel');
@@ -97,10 +97,17 @@ export default function SimulatorModal({ isOpen, onClose }) {
     setResultMessage(null);
 
     try {
-      // Find latest outbound message in active chat or use fallback
-      const waMessageId =
-        activeChat?.messages?.find((m) => m.direction === 'OUTBOUND')?.waMessageId ||
-        `wamid.HBgL${Math.random().toString(36).substring(2, 15)}`;
+      // Target the latest persisted outbound message in the active thread.
+      // A fabricated WAMID makes the simulator report success while updating
+      // nothing, so require a real message instead.
+      const latestOutbound = [...(messages || [])]
+        .filter((message) => message.direction === 'OUTBOUND' && message.waMessageId)
+        .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))[0];
+      if (!latestOutbound) {
+        setResultMessage({ type: 'error', text: 'Send an outbound message in the active chat before simulating delivery.' });
+        return;
+      }
+      const waMessageId = latestOutbound.waMessageId;
 
       const res = await fetch('/api/simulator/simulate-status', {
         method: 'POST',

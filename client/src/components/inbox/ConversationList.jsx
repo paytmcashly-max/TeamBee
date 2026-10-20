@@ -36,6 +36,8 @@ export default function ConversationList({
     searchQuery,
     setSearchQuery,
     loadingChats,
+    chatPagination,
+    loadMoreChats,
   } = useChat();
 
   const formatTime = (isoString) => {
@@ -50,6 +52,15 @@ export default function ConversationList({
     if (diffMins < 60) return `${diffMins}m`;
     if (diffHours < 24) return `${diffHours}h`;
     return date.toLocaleDateString('en-IN', { month: 'short', day: 'numeric' });
+  };
+
+  const parseTags = (value) => {
+    try {
+      const parsed = value ? JSON.parse(value) : [];
+      return Array.isArray(parsed) ? parsed : [];
+    } catch {
+      return [];
+    }
   };
 
   // ⚡ Instant in-memory search filtering (0ms latency while typing)
@@ -368,7 +379,7 @@ export default function ConversationList({
         ) : (
           filteredChats.map((chat) => {
             const isSelected = chat.id === activeChatId;
-            const parsedTags = chat.tags ? JSON.parse(chat.tags) : [];
+            const parsedTags = parseTags(chat.tags);
 
             return (
               <div
@@ -529,6 +540,18 @@ export default function ConversationList({
               </div>
             );
           })
+        )}
+        {chatPagination?.hasMore && (
+          <div style={{ padding: '10px 16px', textAlign: 'center' }}>
+            <button
+              type="button"
+              onClick={loadMoreChats}
+              className="btn btn-secondary"
+              style={{ width: '100%', fontSize: '11px', padding: '6px' }}
+            >
+              Load older conversations
+            </button>
+          </div>
         )}
       </div>
     </aside>

@@ -3,6 +3,7 @@ const {
   broadcastChatAssignment,
   broadcastChatStatusTransition,
 } = require('../services/socketService');
+const { canAccessChat } = require('../middleware/authMiddleware');
 
 class ChatController {
   /**
@@ -14,16 +15,28 @@ class ChatController {
    */
   static async listChats(req, res) {
     try {
-      const { filter = 'all', status = 'ALL', search = '' } = req.query;
-      const { role, id: agentId } = req.agent;
-      const tenantId = req.tenantId;
+        const { filter = 'all', status = 'ALL', search = '' } = req.query;
+        const requestedLimit = Number.parseInt(req.query.limit || '100', 10);
+        const cursor = typeof req.query.cursor === 'string' ? req.query.cursor : null;
+       const { role, id: agentId } = req.agent;
+       const tenantId = req.tenantId;
+
+       if (!['mine', 'unassigned', 'all'].includes(filter) || !['UNASSIGNED', 'OPEN', 'RESOLVED', 'ALL'].includes(status)) {
+         return res.status(400).json({ success: false, error: 'Invalid chat filter' });
+       }
+        if (typeof search !== 'string' || search.length > 100) {
+          return res.status(400).json({ success: false, error: 'Invalid search query' });
+        }
+        if (!Number.isInteger(requestedLimit) || requestedLimit < 1 || requestedLimit > 100) {
+          return res.status(400).json({ success: false, error: 'limit must be between 1 and 100' });
+        }
 
       const whereClause = {
         tenantId,
       };
 
       // 1. ROLE-BASED ACCESS CONTROL FILTERING
-      if (role === 'AGENT') {
+       if (role === 'AGENT') {
         // Regular Agents can ONLY see chats assigned to them OR in the global unassigned pool
         if (filter === 'mine') {
           whereClause.assignedAgentId = agentId;
@@ -61,7 +74,15 @@ class ChatController {
         };
       }
 
-      const chats = await prisma.chat.findMany({
+      if (cursor) {
+        const cursorDate = new Date(cursor);
+        if (Number.isNaN(cursorDate.getTime())) {
+          return res.status(400).json({ success: false, error: 'Invalid chat cursor' });
+        }
+        whereClause.lastMessageAt = { lt: cursorDate };
+      }
+
+      const rows = await prisma.chat.findMany({
         where: whereClause,
         include: {
           contact: true,
@@ -70,9 +91,13 @@ class ChatController {
           },
         },
         orderBy: { lastMessageAt: 'desc' },
+        take: requestedLimit + 1,
       });
+      const hasMore = rows.length > requestedLimit;
+      const chats = hasMore ? rows.slice(0, requestedLimit) : rows;
+      const nextCursor = hasMore ? chats[chats.length - 1]?.lastMessageAt : null;
 
-      return res.json({ success: true, chats });
+      return res.json({ success: true, chats, pagination: { hasMore, nextCursor } });
     } catch (error) {
       console.error('[List Chats Error]:', error);
       return res.status(500).json({ success: false, error: 'Failed to load conversations' });
@@ -101,16 +126,11 @@ class ChatController {
         return res.status(404).json({ success: false, error: 'Conversation session not found' });
       }
 
-      // RBAC check for standard agent
-      if (role === 'AGENT') {
-        const isMine = chat.assignedAgentId === agentId;
-        const isUnassigned = chat.status === 'UNASSIGNED';
-        if (!isMine && !isUnassigned) {
-          return res.status(403).json({
-            success: false,
-            error: 'You do not have access to view this conversation',
-          });
-        }
+       if (!canAccessChat(req.agent, chat)) {
+         return res.status(403).json({
+           success: false,
+           error: 'You do not have access to view this conversation',
+         });
       }
 
       // Mark unread count as 0 when viewed
@@ -134,28 +154,38 @@ class ChatController {
    */
   static async assignChat(req, res) {
     try {
-      const { id } = req.params;
-      const { agentId } = req.body; // Can be specific agent ID or null to unassign
-      const { role, id: requesterAgentId, name: requesterName } = req.agent;
+       const { id } = req.params;
+       const { agentId } = req.body; // Can be specific agent ID or null to unassign
+       const { role, id: requesterAgentId, name: requesterName } = req.agent;
+
+       if (agentId !== undefined && agentId !== null && typeof agentId !== 'string') {
+         return res.status(400).json({ success: false, error: 'agentId must be a string or null' });
+       }
 
       const chat = await prisma.chat.findUnique({ where: { id } });
       if (!chat || chat.tenantId !== req.tenantId) {
         return res.status(404).json({ success: false, error: 'Chat not found' });
       }
 
-      // Permission check: Agents can only claim unassigned chats for themselves
-      let targetAgentId = agentId;
-      if (role === 'AGENT') {
-        // Agent is "claiming" the chat for themselves
-        targetAgentId = requesterAgentId;
-      }
+       if (!canAccessChat(req.agent, chat)) {
+         return res.status(403).json({ success: false, error: 'You do not have access to this conversation' });
+       }
+
+       // Standard agents can only claim an unassigned conversation for themselves.
+       let targetAgentId = agentId;
+       if (role === 'AGENT') {
+         if (chat.assignedAgentId && chat.assignedAgentId !== requesterAgentId) {
+           return res.status(403).json({ success: false, error: 'You cannot reassign another agent\'s conversation' });
+         }
+         targetAgentId = requesterAgentId;
+       }
 
       let assignedAgent = null;
       let newStatus = chat.status;
 
       if (targetAgentId) {
-        assignedAgent = await prisma.agent.findFirst({
-          where: { id: targetAgentId, tenantId: req.tenantId },
+       assignedAgent = await prisma.agent.findFirst({
+           where: { id: targetAgentId, tenantId: req.tenantId, isActive: true },
         });
 
         if (!assignedAgent) {
@@ -203,6 +233,7 @@ class ChatController {
       // Broadcast assignment via WebSockets
       broadcastChatAssignment(req.tenantId, chat.id, {
         assignedAgentId: targetAgentId || null,
+        previousAssignedAgentId: chat.assignedAgentId,
         assignedAgentName: assignedAgent ? assignedAgent.name : null,
         status: newStatus,
       });
@@ -227,10 +258,13 @@ class ChatController {
         return res.status(400).json({ success: false, error: 'Invalid chat status' });
       }
 
-      const chat = await prisma.chat.findUnique({ where: { id } });
-      if (!chat || chat.tenantId !== req.tenantId) {
-        return res.status(404).json({ success: false, error: 'Chat not found' });
-      }
+       const chat = await prisma.chat.findUnique({ where: { id } });
+       if (!chat || chat.tenantId !== req.tenantId) {
+         return res.status(404).json({ success: false, error: 'Chat not found' });
+       }
+       if (!canAccessChat(req.agent, chat)) {
+         return res.status(403).json({ success: false, error: 'You do not have access to this conversation' });
+       }
 
       const updatedChat = await prisma.chat.update({
         where: { id },
@@ -257,6 +291,7 @@ class ChatController {
       broadcastChatStatusTransition(req.tenantId, chat.id, {
         status,
         updatedBy: agentName,
+        assignedAgentId: updatedChat.assignedAgentId,
       });
 
       return res.json({ success: true, chat: updatedChat });
@@ -272,12 +307,19 @@ class ChatController {
   static async updateTags(req, res) {
     try {
       const { id } = req.params;
-      const { tags } = req.body; // array of strings
+       const { tags } = req.body;
+
+       if (!Array.isArray(tags) || tags.length > 50 || tags.some((tag) => typeof tag !== 'string' || tag.length > 80)) {
+         return res.status(400).json({ success: false, error: 'tags must be an array of short strings' });
+       }
 
       const chat = await prisma.chat.findUnique({ where: { id } });
-      if (!chat || chat.tenantId !== req.tenantId) {
-        return res.status(404).json({ success: false, error: 'Chat not found' });
-      }
+       if (!chat || chat.tenantId !== req.tenantId) {
+         return res.status(404).json({ success: false, error: 'Chat not found' });
+       }
+       if (!canAccessChat(req.agent, chat)) {
+         return res.status(403).json({ success: false, error: 'You do not have access to this conversation' });
+       }
 
       const updated = await prisma.chat.update({
         where: { id },
@@ -301,23 +343,50 @@ class ChatController {
       const { id } = req.params;
       const { name, email, customAttributes } = req.body;
 
-      const chat = await prisma.chat.findUnique({
-        where: { id },
-        include: { contact: true },
-      });
-      if (!chat || chat.tenantId !== req.tenantId) {
+       const chat = await prisma.chat.findUnique({
+         where: { id },
+         include: { contact: true },
+       });
+       if (!chat || chat.tenantId !== req.tenantId || chat.contact?.tenantId !== req.tenantId) {
         return res.status(404).json({ success: false, error: 'Chat not found' });
       }
-
-      const updateData = {};
-      if (name !== undefined) updateData.name = name;
-      if (email !== undefined) updateData.email = email;
-      if (customAttributes !== undefined) {
-        updateData.customAttributes =
-          typeof customAttributes === 'string'
-            ? customAttributes
-            : JSON.stringify(customAttributes);
+      if (!canAccessChat(req.agent, chat)) {
+        return res.status(403).json({ success: false, error: 'You do not have access to this conversation' });
       }
+
+       const updateData = {};
+       if (name !== undefined && (typeof name !== 'string' || name.length > 120)) {
+         return res.status(400).json({ success: false, error: 'Invalid contact name' });
+       }
+       if (email !== undefined && (typeof email !== 'string' || email.length > 320)) {
+         return res.status(400).json({ success: false, error: 'Invalid contact email' });
+       }
+       if (name !== undefined) updateData.name = name.trim();
+       if (email !== undefined) updateData.email = email.trim().toLowerCase();
+       if (customAttributes !== undefined) {
+         if (typeof customAttributes === 'string') {
+           if (customAttributes.length > 5000) {
+             return res.status(400).json({ success: false, error: 'Custom attributes are too long' });
+           }
+           try {
+             const parsedAttributes = JSON.parse(customAttributes);
+             if (!parsedAttributes || typeof parsedAttributes !== 'object' || Array.isArray(parsedAttributes)) {
+               return res.status(400).json({ success: false, error: 'customAttributes must be a JSON object' });
+             }
+           } catch (error) {
+             return res.status(400).json({ success: false, error: 'customAttributes must be valid JSON' });
+           }
+           updateData.customAttributes = customAttributes;
+         } else if (customAttributes && typeof customAttributes === 'object' && !Array.isArray(customAttributes)) {
+           const serializedAttributes = JSON.stringify(customAttributes);
+           if (serializedAttributes.length > 5000) {
+             return res.status(400).json({ success: false, error: 'Custom attributes are too long' });
+           }
+           updateData.customAttributes = serializedAttributes;
+         } else {
+           return res.status(400).json({ success: false, error: 'customAttributes must be an object or JSON object' });
+         }
+       }
 
       const updatedContact = await prisma.contact.update({
         where: { id: chat.contactId },

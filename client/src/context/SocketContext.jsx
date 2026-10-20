@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useEffect, useState, useRef } from 'react';
+import React, { createContext, useContext, useEffect, useState, useRef, useCallback } from 'react';
 import { io } from 'socket.io-client';
 import { useAuth } from './AuthContext';
 
@@ -9,13 +9,20 @@ export function SocketProvider({ children }) {
   const [connected, setConnected] = useState(false);
   const [activeChatRoom, setActiveChatRoom] = useState(null);
   const socketRef = useRef(null);
+  const activeChatRoomRef = useRef(null);
 
   useEffect(() => {
-    if (!token || !agent) {
+    activeChatRoomRef.current = activeChatRoom;
+  }, [activeChatRoom]);
+
+  useEffect(() => {
+    if (!agent) {
       if (socketRef.current) {
         socketRef.current.disconnect();
         socketRef.current = null;
         setConnected(false);
+        activeChatRoomRef.current = null;
+        setActiveChatRoom(null);
       }
       return;
     }
@@ -24,6 +31,7 @@ export function SocketProvider({ children }) {
     const socketUrl = import.meta.env.VITE_API_URL ? import.meta.env.VITE_API_URL.replace(/\/+$/, '') : '/';
     const socket = io(socketUrl, {
       auth: { token },
+      withCredentials: true,
       transports: ['websocket', 'polling'],
       reconnectionAttempts: 10,
       reconnectionDelay: 2000,
@@ -34,6 +42,15 @@ export function SocketProvider({ children }) {
     socket.on('connect', () => {
       console.log('⚡ [Socket.io Connected]: Authenticated as', agent.name);
       setConnected(true);
+      const chatId = activeChatRoomRef.current;
+      if (chatId) {
+        socket.emit('join_chat', { chatId }, (ack) => {
+          if (!ack?.success && activeChatRoomRef.current === chatId) {
+            activeChatRoomRef.current = null;
+            setActiveChatRoom(null);
+          }
+        });
+      }
     });
 
     socket.on('disconnect', (reason) => {
@@ -50,14 +67,17 @@ export function SocketProvider({ children }) {
       socket.disconnect();
       socketRef.current = null;
       setConnected(false);
+      activeChatRoomRef.current = null;
+      setActiveChatRoom(null);
     };
   }, [token, agent?.id]);
 
   /**
    * Securely join specific chat room with server RBAC check
    */
-  const joinChat = (chatId) => {
+  const joinChat = useCallback((chatId) => {
     return new Promise((resolve, reject) => {
+      activeChatRoomRef.current = chatId;
       if (!socketRef.current || !socketRef.current.connected) {
         return resolve({ success: false, reason: 'Socket not connected' });
       }
@@ -67,31 +87,35 @@ export function SocketProvider({ children }) {
           setActiveChatRoom(chatId);
           resolve(ack);
         } else {
+          if (activeChatRoomRef.current === chatId) activeChatRoomRef.current = null;
           console.warn('Room join rejected:', ack?.error);
           resolve(ack || { success: false });
         }
       });
     });
-  };
+  }, []);
 
   /**
    * Leave chat room
    */
-  const leaveChat = (chatId) => {
+  const leaveChat = useCallback((chatId) => {
     if (socketRef.current) {
       socketRef.current.emit('leave_chat', { chatId });
-      setActiveChatRoom(null);
+      if (activeChatRoomRef.current === chatId) {
+        activeChatRoomRef.current = null;
+        setActiveChatRoom(null);
+      }
     }
-  };
+  }, []);
 
   /**
    * Emit agent typing indicator
    */
-  const emitTyping = (chatId, isTyping) => {
+  const emitTyping = useCallback((chatId, isTyping) => {
     if (socketRef.current) {
       socketRef.current.emit('typing_indicator', { chatId, isTyping });
     }
-  };
+  }, []);
 
   return (
     <SocketContext.Provider

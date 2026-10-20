@@ -14,7 +14,7 @@ if (API_URL) {
     if (typeof input === 'string' && input.startsWith('/')) {
       input = `${API_URL.replace(/\/+$/, '')}${input}`;
     }
-    return originalFetch(input, init);
+    return originalFetch(input, { ...init, credentials: init?.credentials || 'include' });
   };
 }
 

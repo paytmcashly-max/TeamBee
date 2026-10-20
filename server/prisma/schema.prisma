@@ -1,5 +1,5 @@
 // Prisma schema for ChatFlow - B2B Multi-Agent WhatsApp Shared Team Inbox
-// Configured with SQLite for seamless standalone local testing & PostgreSQL compatibility
+// PostgreSQL is the supported production datasource.
 
 datasource db {
   provider = "postgresql"
@@ -14,26 +14,28 @@ generator client {
 // TENANTS (BUSINESSES)
 // -------------------------------------------------------------
 model Tenant {
-  id                   String      @id @default(uuid())
-  name                 String
-  slug                 String      @unique
-  wabaId               String?     @map("waba_id")
-  phoneNumberId        String?     @map("phone_number_id")
-  accessToken          String?     @map("access_token")
-  webhookVerifyToken   String?     @map("webhook_verify_token")
-  appSecret            String?     @map("app_secret")
-  displayPhoneNumber   String?     @map("display_phone_number")
-  plan                 String      @default("PRO")
-  createdAt            DateTime    @default(now()) @map("created_at")
-  updatedAt            DateTime    @updatedAt @map("updated_at")
+  id                 String   @id @default(uuid())
+  name               String
+  slug               String   @unique
+  wabaId             String?  @map("waba_id")
+  phoneNumberId      String?  @map("phone_number_id")
+  accessToken        String?  @map("access_token")
+  webhookVerifyToken String?  @map("webhook_verify_token")
+  webhookVerifyTokenHash String? @map("webhook_verify_token_hash")
+  appSecret          String?  @map("app_secret")
+  displayPhoneNumber String?  @map("display_phone_number")
+  plan               String   @default("PRO")
+  createdAt          DateTime @default(now()) @map("created_at")
+  updatedAt          DateTime @updatedAt @map("updated_at")
 
   // Strict Foreign Key Relations
-  agents               Agent[]
-  contacts             Contact[]
-  chats                Chat[]
-  messages             Message[]
-  templates            Template[]
-  broadcasts           Broadcast[]
+  agents        Agent[]
+  contacts      Contact[]
+  chats         Chat[]
+  messages      Message[]
+  templates     Template[]
+  broadcasts    Broadcast[]
+  webhookEvents WebhookEvent[]
 
   @@map("tenants")
 }
@@ -42,22 +44,22 @@ model Tenant {
 // AGENTS (STAFF / USERS)
 // -------------------------------------------------------------
 model Agent {
-  id            String      @id @default(uuid())
-  tenantId      String      @map("tenant_id")
-  email         String
-  passwordHash  String      @map("password_hash")
-  name          String
-  avatarUrl     String?     @map("avatar_url")
-  role          String      @default("AGENT") // "ADMIN", "AGENT", "SUPERVISOR"
-  status        String      @default("OFFLINE") // "ONLINE", "BUSY", "OFFLINE"
-  isActive      Boolean     @default(true) @map("is_active")
-  createdAt     DateTime    @default(now()) @map("created_at")
-  updatedAt     DateTime    @updatedAt @map("updated_at")
+  id           String   @id @default(uuid())
+  tenantId     String   @map("tenant_id")
+  email        String
+  passwordHash String   @map("password_hash")
+  name         String
+  avatarUrl    String?  @map("avatar_url")
+  role         String   @default("AGENT") // "ADMIN", "AGENT", "SUPERVISOR"
+  status       String   @default("OFFLINE") // "ONLINE", "BUSY", "OFFLINE"
+  isActive     Boolean  @default(true) @map("is_active")
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
 
   // Relations
-  tenant        Tenant      @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  assignedChats Chat[]      @relation("AssignedAgent")
-  sentMessages  Message[]   @relation("AgentSender")
+  tenant        Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  assignedChats Chat[]    @relation("AssignedAgent")
+  sentMessages  Message[] @relation("AgentSender")
 
   @@unique([tenantId, email])
   @@index([tenantId, role])
@@ -68,18 +70,18 @@ model Agent {
 // CONTACTS (CUSTOMERS / END USERS)
 // -------------------------------------------------------------
 model Contact {
-  id               String      @id @default(uuid())
-  tenantId         String      @map("tenant_id")
-  waId             String      @map("wa_id") // WhatsApp phone number with country code, e.g. "919876543210"
+  id               String   @id @default(uuid())
+  tenantId         String   @map("tenant_id")
+  waId             String   @map("wa_id") // WhatsApp phone number with country code, e.g. "919876543210"
   name             String?
   email            String?
-  customAttributes String?     @default("{}") @map("custom_attributes") // JSON string for lead tags, branch, notes
-  createdAt        DateTime    @default(now()) @map("created_at")
-  updatedAt        DateTime    @updatedAt @map("updated_at")
+  customAttributes String?  @default("{}") @map("custom_attributes") // JSON string for lead tags, branch, notes
+  createdAt        DateTime @default(now()) @map("created_at")
+  updatedAt        DateTime @updatedAt @map("updated_at")
 
   // Relations
-  tenant           Tenant      @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  chats            Chat[]
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  chats  Chat[]
 
   @@unique([tenantId, waId])
   @@index([tenantId, waId])
@@ -90,24 +92,24 @@ model Contact {
 // CHATS (CONVERSATION SESSIONS)
 // -------------------------------------------------------------
 model Chat {
-  id                    String      @id @default(uuid())
-  tenantId              String      @map("tenant_id")
-  contactId             String      @map("contact_id")
-  assignedAgentId       String?     @map("assigned_agent_id")
-  status                String      @default("UNASSIGNED") // "UNASSIGNED", "OPEN", "RESOLVED"
-  lastMessagePreview    String?     @map("last_message_preview")
-  lastMessageAt         DateTime?   @default(now()) @map("last_message_at")
-  lastCustomerMessageAt DateTime?   @default(now()) @map("last_customer_message_at") // For 24-hr messaging window
-  unreadCount           Int         @default(0) @map("unread_count")
-  tags                  String?     @default("[]") // JSON string array e.g. ["Urgent", "Fee Enquiry"]
-  createdAt             DateTime    @default(now()) @map("created_at")
-  updatedAt             DateTime    @updatedAt @map("updated_at")
+  id                    String    @id @default(uuid())
+  tenantId              String    @map("tenant_id")
+  contactId             String    @map("contact_id")
+  assignedAgentId       String?   @map("assigned_agent_id")
+  status                String    @default("UNASSIGNED") // "UNASSIGNED", "OPEN", "RESOLVED"
+  lastMessagePreview    String?   @map("last_message_preview")
+  lastMessageAt         DateTime? @default(now()) @map("last_message_at")
+  lastCustomerMessageAt DateTime? @default(now()) @map("last_customer_message_at") // For 24-hr messaging window
+  unreadCount           Int       @default(0) @map("unread_count")
+  tags                  String?   @default("[]") // JSON string array e.g. ["Urgent", "Fee Enquiry"]
+  createdAt             DateTime  @default(now()) @map("created_at")
+  updatedAt             DateTime  @updatedAt @map("updated_at")
 
   // Relations
-  tenant                Tenant      @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  contact               Contact     @relation(fields: [contactId], references: [id], onDelete: Cascade)
-  assignedAgent         Agent?      @relation("AssignedAgent", fields: [assignedAgentId], references: [id], onDelete: SetNull)
-  messages              Message[]
+  tenant        Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  contact       Contact   @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  assignedAgent Agent?    @relation("AssignedAgent", fields: [assignedAgentId], references: [id], onDelete: SetNull)
+  messages      Message[]
 
   @@index([tenantId, status])
   @@index([tenantId, assignedAgentId])
@@ -119,31 +121,33 @@ model Chat {
 // MESSAGES (INTERACTION LOGS / TRANSCRIPTS)
 // -------------------------------------------------------------
 model Message {
-  id            String      @id @default(uuid())
-  chatId        String      @map("chat_id")
-  tenantId      String      @map("tenant_id")
-  senderType    String      @map("sender_type") // "CUSTOMER", "AGENT", "SYSTEM", "BOT"
-  senderId      String?     @map("sender_id") // Agent ID if sent by agent
-  waMessageId   String?     @unique @map("wa_message_id") // Meta WAMID (e.g. "wamid.HBgL...") for deduplication
-  messageType   String      @default("TEXT") @map("message_type") // TEXT, IMAGE, VIDEO, AUDIO, DOCUMENT, STICKER, LOCATION, CONTACTS, INTERACTIVE, TEMPLATE
-  content       String?
-  mediaUrl      String?     @map("media_url")
-  mediaMimeType String?     @map("media_mime_type")
-  mediaFilename String?     @map("media_filename")
-  mediaId       String?     @map("media_id") // Meta media object ID
-  rawPayload    String?     @map("raw_payload") // JSON string of incoming webhook payload
-  direction     String      @map("direction") // "INBOUND", "OUTBOUND"
-  status        String      @default("PENDING") @map("status") // PENDING, SENT, DELIVERED, READ, FAILED
-  errorCode     String?     @map("error_code")
-  errorMessage  String?     @map("error_message")
-  createdAt     DateTime    @default(now()) @map("created_at")
-  updatedAt     DateTime    @updatedAt @map("updated_at")
+  id              String   @id @default(uuid())
+  chatId          String   @map("chat_id")
+  tenantId        String   @map("tenant_id")
+  senderType      String   @map("sender_type") // "CUSTOMER", "AGENT", "SYSTEM", "BOT"
+  senderId        String?  @map("sender_id") // Agent ID if sent by agent
+  waMessageId     String?  @unique @map("wa_message_id") // Meta WAMID (e.g. "wamid.HBgL...") for deduplication
+  clientMessageId String?  @map("client_message_id") // Browser idempotency key
+  messageType     String   @default("TEXT") @map("message_type") // TEXT, IMAGE, VIDEO, AUDIO, DOCUMENT, STICKER, LOCATION, CONTACTS, INTERACTIVE, TEMPLATE
+  content         String?
+  mediaUrl        String?  @map("media_url")
+  mediaMimeType   String?  @map("media_mime_type")
+  mediaFilename   String?  @map("media_filename")
+  mediaId         String?  @map("media_id") // Meta media object ID
+  rawPayload      String?  @map("raw_payload") // JSON string of incoming webhook payload
+  direction       String   @map("direction") // "INBOUND", "OUTBOUND"
+  status          String   @default("PENDING") @map("status") // PENDING, SENT, DELIVERED, READ, FAILED
+  errorCode       String?  @map("error_code")
+  errorMessage    String?  @map("error_message")
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
 
   // Relations
-  chat          Chat        @relation(fields: [chatId], references: [id], onDelete: Cascade)
-  tenant        Tenant      @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  senderAgent   Agent?      @relation("AgentSender", fields: [senderId], references: [id], onDelete: SetNull)
+  chat        Chat   @relation(fields: [chatId], references: [id], onDelete: Cascade)
+  tenant      Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  senderAgent Agent? @relation("AgentSender", fields: [senderId], references: [id], onDelete: SetNull)
 
+  @@unique([tenantId, clientMessageId])
   @@index([chatId, createdAt])
   @@index([tenantId, createdAt])
   @@index([waMessageId])
@@ -154,24 +158,24 @@ model Message {
 // TEMPLATES (APPROVED META WHATSAPP TEMPLATES)
 // -------------------------------------------------------------
 model Template {
-  id               String      @id @default(uuid())
-  tenantId         String      @map("tenant_id")
+  id               String   @id @default(uuid())
+  tenantId         String   @map("tenant_id")
   name             String
-  category         String      @default("UTILITY") // MARKETING, UTILITY, AUTHENTICATION
-  language         String      @default("en")
-  status           String      @default("APPROVED") // APPROVED, PENDING, REJECTED
-  headerType       String      @default("NONE") @map("header_type") // NONE, TEXT, IMAGE, DOCUMENT, VIDEO
-  headerContent    String?     @map("header_content")
-  bodyText         String      @map("body_text")
-  footerText       String?     @map("footer_text")
-  buttons          String?     @default("[]") // JSON string array of buttons
-  exampleVariables String?     @default("[]") @map("example_variables") // JSON array of sample parameter replacements
-  createdAt        DateTime    @default(now()) @map("created_at")
-  updatedAt        DateTime    @updatedAt @map("updated_at")
+  category         String   @default("UTILITY") // MARKETING, UTILITY, AUTHENTICATION
+  language         String   @default("en")
+  status           String   @default("APPROVED") // APPROVED, PENDING, REJECTED
+  headerType       String   @default("NONE") @map("header_type") // NONE, TEXT, IMAGE, DOCUMENT, VIDEO
+  headerContent    String?  @map("header_content")
+  bodyText         String   @map("body_text")
+  footerText       String?  @map("footer_text")
+  buttons          String?  @default("[]") // JSON string array of buttons
+  exampleVariables String?  @default("[]") @map("example_variables") // JSON array of sample parameter replacements
+  createdAt        DateTime @default(now()) @map("created_at")
+  updatedAt        DateTime @updatedAt @map("updated_at")
 
   // Relations
-  tenant           Tenant      @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  broadcasts       Broadcast[]
+  tenant     Tenant      @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  broadcasts Broadcast[]
 
   @@unique([tenantId, name, language])
   @@map("templates")
@@ -181,23 +185,24 @@ model Template {
 // BROADCASTS (OUTBOUND CAMPAIGNS)
 // -------------------------------------------------------------
 model Broadcast {
-  id               String               @id @default(uuid())
-  tenantId         String               @map("tenant_id")
-  templateId       String               @map("template_id")
-  name             String
-  totalCount       Int                  @default(0) @map("total_count")
-  sentCount        Int                  @default(0) @map("sent_count")
-  deliveredCount   Int                  @default(0) @map("delivered_count")
-  readCount        Int                  @default(0) @map("read_count")
-  failedCount      Int                  @default(0) @map("failed_count")
-  status           String               @default("PENDING") // PENDING, RUNNING, COMPLETED, PAUSED
-  createdAt        DateTime             @default(now()) @map("created_at")
-  updatedAt        DateTime             @updatedAt @map("updated_at")
+  id             String   @id @default(uuid())
+  tenantId       String   @map("tenant_id")
+  templateId     String   @map("template_id")
+  name           String
+  totalCount     Int      @default(0) @map("total_count")
+  sentCount      Int      @default(0) @map("sent_count")
+  deliveredCount Int      @default(0) @map("delivered_count")
+  readCount      Int      @default(0) @map("read_count")
+  failedCount    Int      @default(0) @map("failed_count")
+  variables      String?  @default("{}")
+  status         String   @default("PENDING") // PENDING, RUNNING, COMPLETED, PAUSED
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
 
   // Relations
-  tenant           Tenant               @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  template         Template             @relation(fields: [templateId], references: [id], onDelete: Cascade)
-  recipients       BroadcastRecipient[]
+  tenant     Tenant               @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  template   Template             @relation(fields: [templateId], references: [id], onDelete: Cascade)
+  recipients BroadcastRecipient[]
 
   @@map("broadcasts")
 }
@@ -208,14 +213,36 @@ model BroadcastRecipient {
   phone        String
   name         String?
   waMessageId  String?   @map("wa_message_id")
-  status       String    @default("PENDING") // PENDING, SENT, DELIVERED, READ, FAILED
+  status       String    @default("PENDING") // PENDING, PROCESSING, SENT, DELIVERED, READ, FAILED
+  attempts     Int       @default(0)
   errorMessage String?   @map("error_message")
   sentAt       DateTime? @map("sent_at")
   deliveredAt  DateTime? @map("delivered_at")
   readAt       DateTime? @map("read_at")
+  lastError    String?   @map("last_error")
+  updatedAt    DateTime  @updatedAt @map("updated_at")
 
-  broadcast    Broadcast @relation(fields: [broadcastId], references: [id], onDelete: Cascade)
+  broadcast Broadcast @relation(fields: [broadcastId], references: [id], onDelete: Cascade)
 
   @@index([broadcastId, status])
   @@map("broadcast_recipients")
+}
+
+model WebhookEvent {
+  id          String    @id @default(uuid())
+  tenantId    String?   @map("tenant_id")
+  payloadHash String    @unique @map("payload_hash")
+  payload     String
+  status      String    @default("RECEIVED") // RECEIVED, PROCESSING, PROCESSED, FAILED
+  attempts    Int       @default(0)
+  lastError   String?   @map("last_error")
+  receivedAt  DateTime  @default(now()) @map("received_at")
+  processedAt DateTime? @map("processed_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+
+  tenant Tenant? @relation(fields: [tenantId], references: [id], onDelete: SetNull)
+
+  @@index([status, receivedAt])
+  @@index([tenantId, receivedAt])
+  @@map("webhook_events")
 }

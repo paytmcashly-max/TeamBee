@@ -1,0 +1,10 @@
+.git
+.gitignore
+.env
+**/.env
+node_modules
+**/node_modules
+client/dist
+server/prisma/dev.db
+server/prisma/dev.db-journal
+npm-debug.log*

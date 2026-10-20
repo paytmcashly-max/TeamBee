@@ -30,7 +30,7 @@ import { useAuth } from '../../context/AuthContext';
 import { useChat } from '../../context/ChatContext';
 
 export default function ChatCanvas({ onOpenTemplatePicker, onToggleSidebar, isSidebarOpen, onBack }) {
-  const { agent, isAdmin } = useAuth();
+  const { agent, isAdmin, token } = useAuth();
   const {
     activeChat,
     messages,
@@ -40,6 +40,8 @@ export default function ChatCanvas({ onOpenTemplatePicker, onToggleSidebar, isSi
     updateChatStatus,
     messagingWindow,
     typingUsers,
+    messagePagination,
+    loadOlderMessages,
   } = useChat();
 
   const [inputContent, setInputContent] = useState('');
@@ -78,9 +80,9 @@ export default function ChatCanvas({ onOpenTemplatePicker, onToggleSidebar, isSi
   useEffect(() => {
     async function loadAgents() {
       try {
-        const token = localStorage.getItem('chatflow_token');
         const res = await fetch('/api/agents', {
-          headers: { Authorization: `Bearer ${token}` },
+          credentials: 'include',
+          headers: token ? { Authorization: `Bearer ${token}` } : {},
         });
         const data = await res.json();
         if (data.success) {
@@ -502,7 +504,17 @@ export default function ChatCanvas({ onOpenTemplatePicker, onToggleSidebar, isSi
           flexDirection: 'column',
           gap: '10px',
         }}
-      >
+       >
+        {messagePagination?.hasMore && (
+          <button
+            type="button"
+            onClick={() => loadOlderMessages().catch((error) => alert(error.message))}
+            className="btn btn-secondary"
+            style={{ alignSelf: 'center', fontSize: '11px', padding: '5px 10px' }}
+          >
+            Load older messages
+          </button>
+        )}
         {loadingMessages && messages.length === 0 ? (
           <div style={{ textAlign: 'center', color: 'var(--text-muted)', padding: '20px' }}>
             Fetching WhatsApp message logs...
@@ -580,7 +592,7 @@ export default function ChatCanvas({ onOpenTemplatePicker, onToggleSidebar, isSi
             if (msg.messageType === 'INTERACTIVE' && msg.rawPayload) {
               try {
                 const parsed = JSON.parse(msg.rawPayload);
-                interactivePills = parsed.buttons || [];
+                interactivePills = Array.isArray(parsed.buttons) ? parsed.buttons : [];
               } catch (e) {}
             }
 

@@ -1,14 +1,40 @@
 const axios = require('axios');
 const { v4: uuidv4 } = require('uuid');
+const { decryptSecret } = require('./credentialCrypto');
 
 const META_GRAPH_URL = 'https://graph.facebook.com';
 const API_VERSION = process.env.META_API_VERSION || 'v20.0';
 
 function isLiveConfig(tenant) {
-  if (!tenant || !tenant.accessToken || !tenant.phoneNumberId) return false;
-  if (tenant.accessToken === 'MOCK_TOKEN' || tenant.accessToken.startsWith('EAAG_PERMANENT_META_SYSTEM_USER_TOKEN')) return false;
+  const accessToken = decryptSecret(tenant?.accessToken);
+  if (!tenant || !accessToken || !tenant.phoneNumberId) return false;
+  if (accessToken === 'MOCK_TOKEN' || accessToken.startsWith('EAAG_PERMANENT_META_SYSTEM_USER_TOKEN')) return false;
   if (tenant.phoneNumberId.startsWith('PHONE_ID_')) return false;
-  return tenant.accessToken.length > 30;
+  return accessToken.length > 30;
+}
+
+function hasLiveAccessToken(tenant) {
+  const accessToken = decryptSecret(tenant?.accessToken);
+  return Boolean(
+    accessToken &&
+      accessToken !== 'MOCK_TOKEN' &&
+      !accessToken.startsWith('EAAG_PERMANENT_META_SYSTEM_USER_TOKEN') &&
+      accessToken.length > 30
+  );
+}
+
+function mockAllowed() {
+  return process.env.NODE_ENV !== 'production'
+    && process.env.META_ALLOW_MOCK !== 'false'
+    && process.env.META_MODE !== 'live';
+}
+
+function missingLiveConfigError() {
+  return {
+    success: false,
+    error: 'Meta Cloud API credentials are not configured for live delivery',
+    code: 'META_NOT_CONFIGURED',
+  };
 }
 
 class MetaApiService {
@@ -17,9 +43,13 @@ class MetaApiService {
    */
   static async sendTextMessage(tenant, toPhoneNumber, text) {
     const cleanPhone = toPhoneNumber.replace(/\D/g, '');
+    if (!/^\d{3,32}$/.test(cleanPhone) || typeof text !== 'string' || !text.trim()) {
+      return { success: false, error: 'Invalid WhatsApp text message', code: 'INVALID_MESSAGE' };
+    }
 
     // If live credentials configured, dispatch real Meta Graph API call
     if (isLiveConfig(tenant)) {
+      const accessToken = decryptSecret(tenant.accessToken);
       try {
         const url = `${META_GRAPH_URL}/${API_VERSION}/${tenant.phoneNumberId}/messages`;
         const response = await axios.post(
@@ -33,7 +63,7 @@ class MetaApiService {
           },
           {
             headers: {
-              Authorization: `Bearer ${tenant.accessToken}`,
+              Authorization: `Bearer ${accessToken}`,
               'Content-Type': 'application/json',
             },
             timeout: 10000,
@@ -53,6 +83,8 @@ class MetaApiService {
       }
     }
 
+    if (!mockAllowed()) return missingLiveConfigError();
+
     // Sandbox / Simulation fallback: generates valid Meta-format WAMID
     const mockWamid = `wamid.HBgL${uuidv4().replace(/-/g, '').slice(0, 24)}MOCK`;
     console.log(`[Meta API Sandbox]: Sent mock outbound message to +${cleanPhone} -> WAMID: ${mockWamid}`);
@@ -68,15 +100,20 @@ class MetaApiService {
    */
   static async sendMediaMessage(tenant, toPhoneNumber, { type, mediaUrl, caption, filename }) {
     const cleanPhone = toPhoneNumber.replace(/\D/g, '');
+    const normalizedType = String(type || '').toLowerCase();
+    if (!/^\d{3,32}$/.test(cleanPhone) || !['image', 'video', 'audio', 'document'].includes(normalizedType) || !/^https:\/\//i.test(mediaUrl || '')) {
+      return { success: false, error: 'Invalid WhatsApp media message', code: 'INVALID_MESSAGE' };
+    }
 
     if (isLiveConfig(tenant)) {
+      const accessToken = decryptSecret(tenant.accessToken);
       try {
         const url = `${META_GRAPH_URL}/${API_VERSION}/${tenant.phoneNumberId}/messages`;
         const mediaPayload = {
           link: mediaUrl,
         };
         if (caption) mediaPayload.caption = caption;
-        if (filename && type === 'document') mediaPayload.filename = filename;
+        if (filename && normalizedType === 'document') mediaPayload.filename = filename;
 
         const response = await axios.post(
           url,
@@ -84,12 +121,12 @@ class MetaApiService {
             messaging_product: 'whatsapp',
             recipient_type: 'individual',
             to: cleanPhone,
-            type: type.toLowerCase(),
-            [type.toLowerCase()]: mediaPayload,
+            type: normalizedType,
+            [normalizedType]: mediaPayload,
           },
           {
             headers: {
-              Authorization: `Bearer ${tenant.accessToken}`,
+              Authorization: `Bearer ${accessToken}`,
               'Content-Type': 'application/json',
             },
             timeout: 15000,
@@ -107,6 +144,7 @@ class MetaApiService {
       }
     }
 
+    if (!mockAllowed()) return missingLiveConfigError();
     const mockWamid = `wamid.HBgL${uuidv4().replace(/-/g, '').slice(0, 24)}MEDIA_MOCK`;
     return {
       success: true,
@@ -120,8 +158,12 @@ class MetaApiService {
    */
   static async sendTemplateMessage(tenant, toPhoneNumber, templateName, languageCode = 'en', components = []) {
     const cleanPhone = toPhoneNumber.replace(/\D/g, '');
+    if (!/^\d{3,32}$/.test(cleanPhone) || typeof templateName !== 'string' || !/^[a-z0-9_]{1,512}$/i.test(templateName)) {
+      return { success: false, error: 'Invalid WhatsApp template message', code: 'INVALID_MESSAGE' };
+    }
 
     if (isLiveConfig(tenant)) {
+      const accessToken = decryptSecret(tenant.accessToken);
       try {
         const url = `${META_GRAPH_URL}/${API_VERSION}/${tenant.phoneNumberId}/messages`;
         const response = await axios.post(
@@ -139,7 +181,7 @@ class MetaApiService {
           },
           {
             headers: {
-              Authorization: `Bearer ${tenant.accessToken}`,
+              Authorization: `Bearer ${accessToken}`,
               'Content-Type': 'application/json',
             },
             timeout: 10000,
@@ -157,6 +199,7 @@ class MetaApiService {
       }
     }
 
+    if (!mockAllowed()) return missingLiveConfigError();
     const mockWamid = `wamid.HBgL${uuidv4().replace(/-/g, '').slice(0, 24)}TPL_MOCK`;
     return {
       success: true,
@@ -169,14 +212,15 @@ class MetaApiService {
    * Pull approved message templates from Meta Cloud API
    */
   static async fetchMetaTemplates(tenant) {
-    if (!tenant.wabaId || !tenant.accessToken || tenant.accessToken === 'MOCK_TOKEN') {
+    const accessToken = decryptSecret(tenant?.accessToken);
+    if (!tenant?.wabaId || !hasLiveAccessToken(tenant)) {
       return { success: false, reason: 'WABA ID or Access Token not configured' };
     }
 
     try {
       const url = `${META_GRAPH_URL}/${API_VERSION}/${tenant.wabaId}/message_templates`;
       const response = await axios.get(url, {
-        headers: { Authorization: `Bearer ${tenant.accessToken}` },
+        headers: { Authorization: `Bearer ${accessToken}` },
         params: { limit: 100 },
         timeout: 10000,
       });
@@ -199,8 +243,12 @@ class MetaApiService {
    */
   static async sendInteractiveButtons(tenant, toPhoneNumber, bodyText, buttons = []) {
     const cleanPhone = toPhoneNumber.replace(/\D/g, '');
+    if (!/^\d{3,32}$/.test(cleanPhone) || typeof bodyText !== 'string' || !bodyText.trim() || !Array.isArray(buttons) || buttons.length < 1) {
+      return { success: false, error: 'Invalid WhatsApp interactive message', code: 'INVALID_MESSAGE' };
+    }
 
     if (isLiveConfig(tenant)) {
+      const accessToken = decryptSecret(tenant.accessToken);
       try {
         const url = `${META_GRAPH_URL}/${API_VERSION}/${tenant.phoneNumberId}/messages`;
         const response = await axios.post(
@@ -226,7 +274,7 @@ class MetaApiService {
           },
           {
             headers: {
-              Authorization: `Bearer ${tenant.accessToken}`,
+              Authorization: `Bearer ${accessToken}`,
               'Content-Type': 'application/json',
             },
             timeout: 10000,
@@ -244,6 +292,7 @@ class MetaApiService {
       }
     }
 
+    if (!mockAllowed()) return missingLiveConfigError();
     const mockWamid = `wamid.HBgL${uuidv4().replace(/-/g, '').slice(0, 24)}BTN_MOCK`;
     return {
       success: true,

@@ -3,8 +3,24 @@ import { Sparkles, X, CheckCheck, Send, RefreshCw } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { useChat } from '../../context/ChatContext';
 
+function getVariableIndexes(bodyText = '') {
+  return [...new Set(
+    [...String(bodyText).matchAll(/\{\{(\d+)\}\}/g)].map((match) => Number(match[1]))
+  )].sort((a, b) => a - b);
+}
+
+function parseTemplateButtons(value) {
+  if (!value) return [];
+  try {
+    const parsed = typeof value === 'string' ? JSON.parse(value) : value;
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
 export default function TemplateModal({ isOpen, onClose }) {
-  const { token } = useAuth();
+  const { token, agent } = useAuth();
   const { activeChat } = useChat();
 
   const [templates, setTemplates] = useState([]);
@@ -15,7 +31,7 @@ export default function TemplateModal({ isOpen, onClose }) {
   const [message, setMessage] = useState(null);
 
   useEffect(() => {
-    if (!isOpen || !token) return;
+    if (!isOpen || !agent) return;
     async function loadTemplates() {
       setLoading(true);
       try {
@@ -35,21 +51,21 @@ export default function TemplateModal({ isOpen, onClose }) {
       }
     }
     loadTemplates();
-  }, [isOpen, token]);
+  }, [isOpen, agent, token]);
 
   const initVariables = (tpl) => {
     let defaults = {};
-    const matches = (tpl.bodyText || '').match(/\{\{(\d+)\}\}/g) || [];
-    if (matches.length > 0) {
+    const variableIndexes = getVariableIndexes(tpl.bodyText || '');
+    if (variableIndexes.length > 0) {
       if (tpl.exampleVariables) {
         try {
           const arr = JSON.parse(tpl.exampleVariables);
           arr.forEach((val, idx) => {
-            if (idx + 1 <= matches.length) defaults[idx + 1] = val;
+            if (variableIndexes.includes(idx + 1)) defaults[idx + 1] = val;
           });
         } catch (e) {}
       }
-      for (let i = 1; i <= matches.length; i++) {
+      for (const i of variableIndexes) {
         if (!defaults[i]) {
           defaults[i] = i === 1 && activeChat?.contact?.name ? activeChat.contact.name : `Value ${i}`;
         }
@@ -302,7 +318,7 @@ export default function TemplateModal({ isOpen, onClose }) {
                         gap: '6px',
                       }}
                     >
-                      {JSON.parse(selectedTemplate.buttons).map((btn, idx) => (
+                  {parseTemplateButtons(selectedTemplate.buttons).map((btn, idx) => (
                         <div
                           key={idx}
                           style={{

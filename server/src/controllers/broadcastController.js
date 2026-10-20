@@ -1,11 +1,19 @@
 const prisma = require('../db/prisma');
-const MetaApiService = require('../services/metaApiService');
-const { broadcastNewMessage } = require('../services/socketService');
+const { processBroadcast } = require('../services/broadcastWorker');
+
+const MAX_RECIPIENTS = 10000;
+
+function normalizeVariables(variables) {
+  if (!variables || typeof variables !== 'object' || Array.isArray(variables)) return null;
+  const normalized = {};
+  for (const [key, value] of Object.entries(variables)) {
+    if (!/^\d{1,3}$/.test(key) || (typeof value !== 'string' && typeof value !== 'number')) return null;
+    normalized[key] = String(value).slice(0, 1024);
+  }
+  return normalized;
+}
 
 class BroadcastController {
-  /**
-   * GET /api/broadcasts: List all broadcast campaigns for tenant
-   */
   static async listBroadcasts(req, res) {
     try {
       const broadcasts = await prisma.broadcast.findMany({
@@ -16,10 +24,12 @@ class BroadcastController {
           },
           recipients: {
             take: 5,
-            select: { phone: true, name: true, status: true, sentAt: true },
+            orderBy: { sentAt: 'desc' },
+            select: { phone: true, name: true, status: true, sentAt: true, errorMessage: true, lastError: true },
           },
         },
         orderBy: { createdAt: 'desc' },
+        take: 100,
       });
 
       return res.json({ success: true, broadcasts });
@@ -29,194 +39,72 @@ class BroadcastController {
     }
   }
 
-  /**
-   * POST /api/broadcasts: Launch a new WhatsApp template broadcast campaign
-   */
   static async createBroadcast(req, res) {
     try {
-      const { name, templateId, contactIds = [], variables = {} } = req.body;
+      const name = typeof req.body?.name === 'string' ? req.body.name.trim() : '';
+      const templateId = req.body?.templateId;
+      const contactIds = req.body?.contactIds;
+      const variables = normalizeVariables(req.body?.variables || {});
+
+      if (!name || name.length > 120 || typeof templateId !== 'string' || !Array.isArray(contactIds) ||
+        contactIds.length === 0 || contactIds.length > MAX_RECIPIENTS ||
+        contactIds.some((contactId) => typeof contactId !== 'string') || !variables) {
+        return res.status(400).json({
+          success: false,
+          error: 'Campaign name, approved template, variables, and at least one recipient are required',
+        });
+      }
+
       const tenantId = req.tenantId;
-      const { id: agentId } = req.agent;
-
-      if (!name || !templateId) {
-        return res.status(400).json({ success: false, error: 'Campaign name and template are required' });
-      }
-
-      const template = await prisma.template.findUnique({
-        where: { id: templateId },
+      const template = await prisma.template.findFirst({
+        where: { id: templateId, tenantId, status: 'APPROVED' },
       });
-
-      if (!template || template.tenantId !== tenantId) {
-        return res.status(404).json({ success: false, error: 'Template not found' });
-      }
-
-      // Fetch target contacts
-      const whereContacts = { tenantId };
-      if (contactIds && contactIds.length > 0) {
-        whereContacts.id = { in: contactIds };
-      }
+      if (!template) return res.status(404).json({ success: false, error: 'Approved template not found' });
 
       const targetContacts = await prisma.contact.findMany({
-        where: whereContacts,
+        where: { tenantId, id: { in: [...new Set(contactIds)] } },
+        select: { id: true, waId: true, name: true },
       });
-
       if (targetContacts.length === 0) {
         return res.status(400).json({ success: false, error: 'No contacts selected or found for broadcast' });
       }
 
-      // Fetch tenant details for Meta Cloud API credentials
-      const tenant = await prisma.tenant.findUnique({
-        where: { id: tenantId },
-      });
-
-      // Create broadcast record
-      const broadcast = await prisma.broadcast.create({
-        data: {
-          tenantId,
-          templateId,
-          name,
-          totalCount: targetContacts.length,
-          status: 'RUNNING',
-        },
-      });
-
-      let sentCount = 0;
-      let failedCount = 0;
-
-      // Extract template variable count
-      const matches = template.bodyText.match(/\{\{(\d+)\}\}/g) || [];
-      const expectedParamsCount = matches.length;
-
-      // Process dispatch sequentially / micro-batched
-      for (const contact of targetContacts) {
-        let recipientStatus = 'PENDING';
-        let errorMessage = null;
-        let wamid = null;
-
-        try {
-          // Prepare parameters for this contact
-          let renderedBody = template.bodyText;
-          let components = [];
-
-          if (expectedParamsCount > 0) {
-            const parameters = [];
-            for (let i = 1; i <= expectedParamsCount; i++) {
-              let val = String(variables[i] || '');
-              if (!val && i === 1 && contact.name) {
-                val = contact.name;
-              } else if (!val) {
-                val = `Sample ${i}`;
-              }
-              renderedBody = renderedBody.replace(new RegExp(`\\{\\{${i}\\}\\}`, 'g'), val);
-              parameters.push({ type: 'text', text: val });
-            }
-            components.push({
-              type: 'body',
-              parameters,
-            });
-          }
-
-          // Dispatch via Meta API
-          const apiResult = await MetaApiService.sendTemplateMessage(
-            tenant,
-            contact.waId,
-            template.name,
-            template.language,
-            components
-          );
-
-          if (apiResult.success) {
-            recipientStatus = 'SENT';
-            wamid = apiResult.wamid;
-            sentCount++;
-
-            // Ensure Chat exists and log outbound message in conversation feed
-            let chat = await prisma.chat.findFirst({
-              where: { tenantId, contactId: contact.id },
-            });
-
-            const now = new Date();
-            if (!chat) {
-              chat = await prisma.chat.create({
-                data: {
-                  tenantId,
-                  contactId: contact.id,
-                  status: 'OPEN',
-                  lastMessagePreview: renderedBody.slice(0, 80),
-                  lastMessageAt: now,
-                },
-              });
-            } else {
-              await prisma.chat.update({
-                where: { id: chat.id },
-                data: {
-                  lastMessagePreview: renderedBody.slice(0, 80),
-                  lastMessageAt: now,
-                },
-              });
-            }
-
-            // Persist message record
-            const newMsg = await prisma.message.create({
-              data: {
-                chatId: chat.id,
-                tenantId,
-                senderType: 'AGENT',
-                senderId: agentId,
-                waMessageId: wamid,
-                messageType: 'TEMPLATE',
-                content: renderedBody,
-                direction: 'OUTBOUND',
-                status: 'SENT',
-                createdAt: now,
-              },
-            });
-
-            // WebSocket broadcast for real-time inbox UI
-            broadcastNewMessage(tenantId, chat.id, newMsg, chat.assignedAgentId);
-          } else {
-            recipientStatus = 'FAILED';
-            errorMessage = apiResult.error;
-            failedCount++;
-          }
-        } catch (err) {
-          recipientStatus = 'FAILED';
-          errorMessage = err.message;
-          failedCount++;
-        }
-
-        // Create recipient log
-        await prisma.broadcastRecipient.create({
+      const broadcast = await prisma.$transaction(async (tx) => {
+        const created = await tx.broadcast.create({
           data: {
-            broadcastId: broadcast.id,
-            phone: contact.waId,
-            name: contact.name,
-            waMessageId: wamid,
-            status: recipientStatus,
-            errorMessage,
-            sentAt: recipientStatus === 'SENT' ? new Date() : null,
+            tenantId,
+            templateId,
+            name,
+            totalCount: targetContacts.length,
+            status: 'RUNNING',
+            variables: JSON.stringify(variables),
           },
         });
-      }
 
-      // Mark broadcast complete
-      const finalBroadcast = await prisma.broadcast.update({
-        where: { id: broadcast.id },
-        data: {
-          sentCount,
-          failedCount,
-          status: 'COMPLETED',
-        },
+        await tx.broadcastRecipient.createMany({
+          data: targetContacts.map((contact) => ({
+            broadcastId: created.id,
+            phone: contact.waId,
+            name: contact.name,
+            status: 'PENDING',
+          })),
+        });
+        return created;
       });
 
-      return res.status(201).json({
+      // Recipients are durable before the HTTP response. The worker can resume
+      // this campaign after a process restart.
+      setImmediate(() => processBroadcast(broadcast.id)
+        .catch((error) => console.error('[Broadcast Runner Error]:', error)));
+
+      return res.status(202).json({
         success: true,
-        broadcast: finalBroadcast,
-        stats: { total: targetContacts.length, sent: sentCount, failed: failedCount },
+        broadcast,
+        message: `Campaign queued for ${targetContacts.length} recipients`,
       });
     } catch (error) {
       console.error('[Create Broadcast Error]:', error);
-      return res.status(500).json({ success: false, error: 'Failed to launch broadcast campaign' });
+      return res.status(500).json({ success: false, error: 'Failed to queue broadcast campaign' });
     }
   }
 }

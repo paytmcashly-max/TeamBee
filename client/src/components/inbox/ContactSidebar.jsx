@@ -43,7 +43,13 @@ export default function ContactSidebar({ onOpenTemplatePicker, onClose }) {
     customAttrs = {};
   }
 
-  const tags = activeChat.tags ? JSON.parse(activeChat.tags) : [];
+  let tags = [];
+  try {
+    const parsedTags = activeChat.tags ? JSON.parse(activeChat.tags) : [];
+    tags = Array.isArray(parsedTags) ? parsedTags : [];
+  } catch {
+    tags = [];
+  }
 
   const handleSaveName = async () => {
     if (!nameInput.trim()) return;
@@ -528,7 +534,7 @@ export default function ContactSidebar({ onOpenTemplatePicker, onClose }) {
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
             <Clock size={14} style={{ color: '#38bdf8' }} />
-            <span>Average Agent Response: 1m 24s</span>
+            <span>Response SLA tracked from live message events</span>
           </div>
         </div>
       </div>

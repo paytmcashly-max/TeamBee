@@ -1,11 +1,11 @@
 import React, { useState } from 'react';
-import { MessageSquare, Shield, User, ArrowRight } from 'lucide-react';
+import { MessageSquare, ArrowRight } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 
 export default function LoginView() {
   const { login } = useAuth();
-  const [email, setEmail] = useState('rahul.verma@apexeducare.in');
-  const [password, setPassword] = useState('Admin@123');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
   const [tenantSlug, setTenantSlug] = useState('apex-educare');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
@@ -21,17 +21,6 @@ export default function LoginView() {
     } finally {
       setLoading(false);
     }
-  };
-
-  const handleDemoLogin = (demoEmail, demoPassword) => {
-    setEmail(demoEmail);
-    setPassword(demoPassword);
-    setLoading(true);
-    setError(null);
-    login(demoEmail, demoPassword, 'apex-educare').catch((err) => {
-      setError(err.message);
-      setLoading(false);
-    });
   };
 
   return (
@@ -156,54 +145,6 @@ export default function LoginView() {
           </button>
         </form>
 
-        {/* Instant Role-Based Demo Persona Switcher */}
-        <div style={{ marginTop: '24px', paddingTop: '20px', borderTop: '1px solid rgba(255, 255, 255, 0.08)' }}>
-          <div
-            style={{
-              fontSize: '11px',
-              fontWeight: '700',
-              color: 'var(--text-muted)',
-              textTransform: 'uppercase',
-              letterSpacing: '0.05em',
-              textAlign: 'center',
-              marginBottom: '10px',
-            }}
-          >
-            Instant Persona Quick Switch (Role-Based Testing)
-          </div>
-
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-            <button
-              type="button"
-              onClick={() => handleDemoLogin('rahul.verma@apexeducare.in', 'Admin@123')}
-              className="btn btn-secondary"
-              style={{ justifyContent: 'space-between', padding: '8px 12px', fontSize: '12px' }}
-            >
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <Shield size={14} style={{ color: '#a5b4fc' }} />
-                <span>Rahul Verma (Admin View)</span>
-              </div>
-              <span className="badge badge-admin" style={{ fontSize: '9px' }}>
-                Full Omniscient
-              </span>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => handleDemoLogin('priya.sharma@apexeducare.in', 'Agent@123')}
-              className="btn btn-secondary"
-              style={{ justifyContent: 'space-between', padding: '8px 12px', fontSize: '12px' }}
-            >
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <User size={14} style={{ color: '#34d399' }} />
-                <span>Priya Sharma (Staff Agent)</span>
-              </div>
-              <span className="badge badge-open" style={{ fontSize: '9px' }}>
-                Mine + Unassigned
-              </span>
-            </button>
-          </div>
-        </div>
       </div>
     </div>
   );

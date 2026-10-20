@@ -3,7 +3,7 @@ import { Users, Plus, X, Shield, Clock, MessageSquare, CheckCircle2, UserCheck }
 import { useAuth } from '../../context/AuthContext';
 
 export default function AgentManagementModal({ isOpen, onClose }) {
-  const { token, isAdmin } = useAuth();
+  const { token, agent, isAdmin } = useAuth();
   const [agents, setAgents] = useState([]);
   const [analytics, setAnalytics] = useState(null);
   const [loading, setLoading] = useState(false);
@@ -18,7 +18,7 @@ export default function AgentManagementModal({ isOpen, onClose }) {
   });
 
   const loadData = async () => {
-    if (!token) return;
+    if (!agent) return;
     setLoading(true);
     try {
       const [agentsRes, metricsRes] = await Promise.all([
@@ -41,7 +41,7 @@ export default function AgentManagementModal({ isOpen, onClose }) {
     if (isOpen) {
       loadData();
     }
-  }, [isOpen, token]);
+  }, [isOpen, agent, token]);
 
   const handleCreateAgent = async (e) => {
     e.preventDefault();
@@ -165,7 +165,7 @@ export default function AgentManagementModal({ isOpen, onClose }) {
               >
                 <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>AVG RESPONSE SLA</div>
                 <div style={{ fontSize: '20px', fontWeight: '700', color: '#38bdf8', marginTop: '2px' }}>
-                  {analytics.avgResponseTimeSec}s
+                  {analytics.avgResponseTimeSec == null ? '—' : `${analytics.avgResponseTimeSec}s`}
                 </div>
               </div>
               <div

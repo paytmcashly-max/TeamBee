@@ -1,7 +1,25 @@
 const bcrypt = require('bcryptjs');
+const crypto = require('crypto');
+const { hashSecret } = require('../services/credentialCrypto');
 const prisma = require('./prisma');
 
+function runtimeSecret(name, developmentFallback) {
+  if (process.env[name]) return process.env[name];
+  if (process.env.NODE_ENV === 'production') {
+    throw new Error(`${name} must be configured before seeding`);
+  }
+  return developmentFallback || crypto.randomBytes(24).toString('hex');
+}
+
+function requiredSecret(name) {
+  if (!process.env[name]) throw new Error(`${name} must be configured before seeding`);
+  return process.env[name];
+}
+
 async function seed() {
+  if (process.env.NODE_ENV === 'production') {
+    throw new Error('The destructive demo seed is disabled in production');
+  }
   console.log('🌱 Starting database seeding for ChatFlow WhatsApp Shared Inbox...');
 
   // 1. Clean existing records
@@ -14,8 +32,8 @@ async function seed() {
   await prisma.agent.deleteMany({});
   await prisma.tenant.deleteMany({});
 
-  const defaultPassword = await bcrypt.hash('Admin@123', 10);
-  const agentPassword = await bcrypt.hash('Agent@123', 10);
+  const defaultPassword = await bcrypt.hash(requiredSecret('SEED_ADMIN_PASSWORD'), 10);
+  const agentPassword = await bcrypt.hash(requiredSecret('SEED_AGENT_PASSWORD'), 10);
 
   // 2. Create Tenant: Apex EduCare Academy
   const tenant1 = await prisma.tenant.create({
@@ -25,9 +43,9 @@ async function seed() {
       wabaId: 'WABA_1092837465001',
       phoneNumberId: 'PHONE_ID_919876500001',
       displayPhoneNumber: '+91 98765 00001',
-      accessToken: 'EAAG_PERMANENT_META_SYSTEM_USER_TOKEN_APEX',
-      webhookVerifyToken: 'apex_secret_verify_token_2026',
-      appSecret: 'apex_app_secret_hash_2026',
+       accessToken: process.env.APEX_META_ACCESS_TOKEN || 'MOCK_TOKEN',
+       webhookVerifyTokenHash: hashSecret(runtimeSecret('APEX_WEBHOOK_VERIFY_TOKEN')),
+       appSecret: runtimeSecret('APEX_META_APP_SECRET'),
       plan: 'ENTERPRISE',
     },
   });
@@ -40,9 +58,9 @@ async function seed() {
       wabaId: 'WABA_1092837465002',
       phoneNumberId: 'PHONE_ID_919876500002',
       displayPhoneNumber: '+91 98765 00002',
-      accessToken: 'EAAG_PERMANENT_META_SYSTEM_USER_TOKEN_URBAN',
-      webhookVerifyToken: 'urbanglam_verify_token_2026',
-      appSecret: 'urbanglam_app_secret_hash_2026',
+       accessToken: process.env.URBANGLAM_META_ACCESS_TOKEN || 'MOCK_TOKEN',
+       webhookVerifyTokenHash: hashSecret(runtimeSecret('URBANGLAM_WEBHOOK_VERIFY_TOKEN')),
+       appSecret: runtimeSecret('URBANGLAM_META_APP_SECRET'),
       plan: 'PRO',
     },
   });
@@ -388,9 +406,7 @@ async function seed() {
 
   console.log('✅ Seeding completed successfully!');
   console.log('----------------------------------------------------');
-  console.log('Admin Login: rahul.verma@apexeducare.in / Admin@123');
-  console.log('Agent Login: priya.sharma@apexeducare.in / Agent@123');
-  console.log('Agent Login: amit.singh@apexeducare.in / Agent@123');
+  console.log('Admin and agent login passwords are supplied via SEED_ADMIN_PASSWORD and SEED_AGENT_PASSWORD.');
   console.log('----------------------------------------------------');
 }
 

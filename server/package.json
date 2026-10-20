@@ -8,6 +8,7 @@
     "dev": "node --watch src/server.js",
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev",
+    "prisma:migrate:deploy": "prisma migrate deploy",
     "prisma:push": "prisma db push",
     "seed": "node src/db/seed.js",
     "test": "node tests/test-webhook-parser.js",
@@ -15,14 +16,18 @@
   },
   "dependencies": {
     "@prisma/client": "^6.3.1",
+    "@socket.io/redis-adapter": "^8.3.0",
     "axios": "^1.7.9",
     "bcryptjs": "^2.4.3",
     "cors": "^2.8.5",
     "dotenv": "^16.4.7",
     "express": "^4.21.2",
+    "express-rate-limit": "^8.7.1",
+    "helmet": "^8.3.0",
     "jsonwebtoken": "^9.0.2",
     "localtunnel": "^2.0.2",
     "prisma": "^6.3.1",
+    "redis": "^6.3.0",
     "socket.io": "^4.8.1",
     "uuid": "^11.0.5"
   }

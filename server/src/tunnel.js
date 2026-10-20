@@ -11,9 +11,9 @@ async function startTunnel() {
       subdomain: SUBDOMAIN,
     });
 
-    console.log('================================================================');
-    console.log(`✅ PUBLIC META WEBHOOK URL: ${tunnel.url}/webhook`);
-    console.log(`🔑 WEBHOOK VERIFY TOKEN:    chatflow_verify_token_2026`);
+     console.log('================================================================');
+     console.log(`✅ PUBLIC META WEBHOOK URL: ${tunnel.url}/webhook`);
+     console.log('Configure the tenant webhook verification token in the database or META_WEBHOOK_VERIFY_TOKEN.');
     console.log('================================================================');
 
     tunnel.on('close', () => {

@@ -1,6 +1,8 @@
 const prisma = require('../db/prisma');
 const MetaApiService = require('../services/metaApiService');
 const { broadcastNewMessage } = require('../services/socketService');
+const { canAccessChat } = require('../middleware/authMiddleware');
+const { prepareTemplateMessage } = require('../services/templateService');
 
 class TemplateController {
   /**
@@ -25,6 +27,9 @@ class TemplateController {
   static async syncTemplates(req, res) {
     try {
       const tenant = await prisma.tenant.findUnique({ where: { id: req.tenantId } });
+      if (!tenant) {
+        return res.status(404).json({ success: false, error: 'Tenant not found' });
+      }
 
       const metaRes = await MetaApiService.fetchMetaTemplates(tenant);
       if (!metaRes.success) {
@@ -90,14 +95,22 @@ class TemplateController {
       const { chatId, templateId, variables = {} } = req.body;
       const { id: agentId, tenantId } = req.agent;
 
+      if (typeof chatId !== 'string' || typeof templateId !== 'string' ||
+        !variables || typeof variables !== 'object' || Array.isArray(variables)) {
+        return res.status(400).json({ success: false, error: 'chatId, templateId, and variables are required' });
+      }
+
       const chat = await prisma.chat.findUnique({
         where: { id: chatId },
         include: { contact: true, tenant: true },
       });
 
-      if (!chat || chat.tenantId !== tenantId) {
-        return res.status(404).json({ success: false, error: 'Chat not found' });
-      }
+       if (!chat || chat.tenantId !== tenantId || chat.contact?.tenantId !== tenantId || chat.tenant?.id !== tenantId) {
+         return res.status(404).json({ success: false, error: 'Chat not found' });
+       }
+       if (!canAccessChat(req.agent, chat)) {
+         return res.status(403).json({ success: false, error: 'Access denied' });
+       }
 
       const template = await prisma.template.findUnique({
         where: { id: templateId },
@@ -107,55 +120,81 @@ class TemplateController {
         return res.status(404).json({ success: false, error: 'Template not found' });
       }
 
-      // Check if template body actually expects parameters (e.g. {{1}}, {{2}})
-      const matches = template.bodyText.match(/\{\{(\d+)\}\}/g) || [];
-      const expectedParamsCount = matches.length;
-
-      let renderedBody = template.bodyText;
-      let components = [];
-
-      if (expectedParamsCount > 0) {
-        const parameters = [];
-        for (let i = 1; i <= expectedParamsCount; i++) {
-          const val = String(variables[i] || `Sample ${i}`);
-          renderedBody = renderedBody.replace(new RegExp(`\\{\\{${i}\\}\\}`, 'g'), val);
-          parameters.push({ type: 'text', text: val });
+      const variableValues = {};
+      for (const [key, rawValue] of Object.entries(variables)) {
+        if (rawValue !== undefined && rawValue !== null && typeof rawValue !== 'string' && typeof rawValue !== 'number') {
+          return res.status(400).json({ success: false, error: 'Template variables must be strings or numbers' });
         }
-        components.push({
-          type: 'body',
-          parameters,
-        });
+        variableValues[key] = rawValue === undefined || rawValue === null ? rawValue : String(rawValue).slice(0, 1024);
       }
-
-      // Send via Meta Cloud API
-      const apiResult = await MetaApiService.sendTemplateMessage(
-        chat.tenant,
-        chat.contact.waId,
-        template.name,
-        template.language,
-        components
-      );
-
-      if (!apiResult.success) {
-        return res.status(502).json({ success: false, error: `Delivery failed: ${apiResult.error}` });
-      }
+      const { renderedBody, components } = prepareTemplateMessage(template.bodyText, variableValues);
 
       const now = new Date();
 
-      // Persist as outbound message
-      const message = await prisma.message.create({
+      // Persist before dispatch so provider failures remain visible in the
+      // transcript instead of disappearing from the outbound history.
+      const pendingMessage = await prisma.message.create({
         data: {
           chatId: chat.id,
           tenantId: chat.tenantId,
           senderType: 'AGENT',
           senderId: agentId,
-          waMessageId: apiResult.wamid,
           messageType: 'TEMPLATE',
           content: renderedBody,
           rawPayload: JSON.stringify({ template: template.name, variables }),
           direction: 'OUTBOUND',
-          status: 'SENT',
+          status: 'PENDING',
           createdAt: now,
+        },
+        include: {
+          senderAgent: {
+            select: { id: true, name: true, avatarUrl: true },
+          },
+        },
+      });
+
+      let apiResult;
+      try {
+        apiResult = await MetaApiService.sendTemplateMessage(
+          chat.tenant,
+          chat.contact.waId,
+          template.name,
+          template.language,
+          components
+        );
+      } catch (dispatchError) {
+        apiResult = { success: false, error: dispatchError.message, code: 'META_API_ERROR' };
+      }
+
+      if (!apiResult || !apiResult.success) {
+        const failedMessage = await prisma.message.update({
+          where: { id: pendingMessage.id },
+          data: {
+            status: 'FAILED',
+            errorCode: apiResult?.code || 'META_API_ERROR',
+            errorMessage: apiResult?.error || 'Template delivery failed',
+          },
+          include: {
+            senderAgent: {
+              select: { id: true, name: true, avatarUrl: true },
+            },
+          },
+        });
+        broadcastNewMessage(tenantId, chat.id, failedMessage, chat.assignedAgentId || agentId);
+        return res.status(502).json({
+          success: false,
+          error: `Delivery failed: ${apiResult?.error || 'Unknown provider error'}`,
+          message: failedMessage,
+        });
+      }
+
+      const message = await prisma.message.update({
+        where: { id: pendingMessage.id },
+        data: {
+          waMessageId: apiResult.wamid,
+          status: 'SENT',
+          errorCode: null,
+          errorMessage: null,
         },
         include: {
           senderAgent: {
@@ -185,104 +224,6 @@ class TemplateController {
     }
   }
 
-  /**
-   * GET /api/broadcasts: List bulk campaigns
-   */
-  static async listBroadcasts(req, res) {
-    try {
-      const broadcasts = await prisma.broadcast.findMany({
-        where: { tenantId: req.tenantId },
-        include: {
-          template: true,
-          _count: { select: { recipients: true } },
-        },
-        orderBy: { createdAt: 'desc' },
-      });
-      return res.json({ success: true, broadcasts });
-    } catch (error) {
-      console.error('[List Broadcasts Error]:', error);
-      return res.status(500).json({ success: false, error: 'Failed to load broadcasts' });
-    }
-  }
-
-  /**
-   * POST /api/broadcasts: Trigger bulk campaign to opt-in customer list
-   */
-  static async createBroadcast(req, res) {
-    try {
-      const { name, templateId, recipients } = req.body; // recipients: [{ phone, name }]
-      const tenantId = req.tenantId;
-
-      if (!name || !templateId || !Array.isArray(recipients) || recipients.length === 0) {
-        return res.status(400).json({ success: false, error: 'Broadcast name, template, and recipients are required' });
-      }
-
-      const template = await prisma.template.findUnique({ where: { id: templateId } });
-      if (!template || template.tenantId !== tenantId) {
-        return res.status(404).json({ success: false, error: 'Template not found' });
-      }
-
-      const tenant = await prisma.tenant.findUnique({ where: { id: tenantId } });
-
-      const broadcast = await prisma.broadcast.create({
-        data: {
-          tenantId,
-          templateId,
-          name,
-          totalCount: recipients.length,
-          status: 'RUNNING',
-        },
-      });
-
-      // Asynchronously dispatch messages
-      (async () => {
-        let sent = 0;
-        let failed = 0;
-
-        for (const r of recipients) {
-          const apiResult = await MetaApiService.sendTemplateMessage(
-            tenant,
-            r.phone,
-            template.name,
-            template.language
-          );
-
-          await prisma.broadcastRecipient.create({
-            data: {
-              broadcastId: broadcast.id,
-              phone: r.phone,
-              name: r.name || null,
-              waMessageId: apiResult.wamid || null,
-              status: apiResult.success ? 'SENT' : 'FAILED',
-              errorMessage: apiResult.error || null,
-              sentAt: apiResult.success ? new Date() : null,
-            },
-          });
-
-          if (apiResult.success) sent++;
-          else failed++;
-        }
-
-        await prisma.broadcast.update({
-          where: { id: broadcast.id },
-          data: {
-            sentCount: sent,
-            failedCount: failed,
-            status: 'COMPLETED',
-          },
-        });
-      })().catch((e) => console.error('Broadcast runner error:', e));
-
-      return res.status(201).json({
-        success: true,
-        broadcast,
-        message: `Campaign initiated for ${recipients.length} recipients`,
-      });
-    } catch (error) {
-      console.error('[Create Broadcast Error]:', error);
-      return res.status(500).json({ success: false, error: 'Failed to create broadcast campaign' });
-    }
-  }
 }
 
 module.exports = TemplateController;

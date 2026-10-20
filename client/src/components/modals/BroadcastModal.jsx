@@ -14,7 +14,7 @@ import {
 import { useAuth } from '../../context/AuthContext';
 
 export default function BroadcastModal({ isOpen, onClose }) {
-  const { token } = useAuth();
+  const { token, agent } = useAuth();
   const [broadcasts, setBroadcasts] = useState([]);
   const [templates, setTemplates] = useState([]);
   const [contacts, setContacts] = useState([]);
@@ -30,9 +30,9 @@ export default function BroadcastModal({ isOpen, onClose }) {
   const [feedback, setFeedback] = useState(null);
 
   useEffect(() => {
-    if (!isOpen || !token) return;
+    if (!isOpen || !agent) return;
     loadData();
-  }, [isOpen, token]);
+  }, [isOpen, agent, token]);
 
   const loadData = async () => {
     setLoading(true);
@@ -104,7 +104,7 @@ export default function BroadcastModal({ isOpen, onClose }) {
       if (data.success) {
         setFeedback({
           type: 'success',
-          text: `🎉 Broadcast launched! ${data.stats.sent} messages dispatched via Meta Cloud API.`,
+          text: `🎉 Broadcast queued! ${data.broadcast?.totalCount || selectedContactIds.length} messages will be dispatched in the background.`,
         });
         setCampaignName('');
         await loadData();

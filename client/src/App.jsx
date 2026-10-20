@@ -12,7 +12,7 @@ import SimulatorModal from './components/modals/SimulatorModal';
 import BroadcastModal from './components/modals/BroadcastModal';
 
 export default function App() {
-  const { token, loading } = useAuth();
+  const { agent, loading } = useAuth();
   const { activeChat, activeChatId, selectChat } = useChat();
 
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
@@ -41,7 +41,7 @@ export default function App() {
     );
   }
 
-  if (!token) {
+  if (!agent) {
     return <LoginView />;
   }
 

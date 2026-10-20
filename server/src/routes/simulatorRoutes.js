@@ -3,13 +3,13 @@ const router = express.Router();
 const { v4: uuidv4 } = require('uuid');
 const WebhookParserService = require('../services/webhookParserService');
 const prisma = require('../db/prisma');
-const { authenticateToken } = require('../middleware/authMiddleware');
+const { authenticateToken, requireRole } = require('../middleware/authMiddleware');
 
 /**
  * POST /api/simulator/simulate-inbound:
  * Generates an authentic Meta Cloud API webhook payload and pipes it through the WebhookParserService
  */
-router.post('/simulate-inbound', authenticateToken, async (req, res) => {
+router.post('/simulate-inbound', authenticateToken, requireRole('ADMIN', 'SUPERVISOR'), async (req, res) => {
   try {
     const {
       senderPhone = '919876543210',
@@ -20,8 +20,19 @@ router.post('/simulate-inbound', authenticateToken, async (req, res) => {
       caption = 'Prescription / Report copy',
     } = req.body;
 
-    const tenant = await prisma.tenant.findUnique({ where: { id: req.tenantId } });
-    const cleanPhone = senderPhone.replace(/\D/g, '');
+     const tenant = await prisma.tenant.findUnique({ where: { id: req.tenantId } });
+     if (!tenant) return res.status(404).json({ success: false, error: 'Tenant not found' });
+     if (typeof senderPhone !== 'string' || typeof senderName !== 'string' || typeof messageType !== 'string' ||
+       typeof text !== 'string' || typeof caption !== 'string' || typeof mediaUrl !== 'string') {
+       return res.status(400).json({ success: false, error: 'Invalid simulator payload' });
+     }
+     const cleanPhone = senderPhone.replace(/\D/g, '');
+     if (!cleanPhone || cleanPhone.length > 32 || senderName.length > 120 || text.length > 4096 || caption.length > 1024) {
+       return res.status(400).json({ success: false, error: 'Invalid simulator input length' });
+     }
+     if (!['text', 'image', 'document', 'interactive'].includes(messageType)) {
+       return res.status(400).json({ success: false, error: 'Invalid simulator message type' });
+     }
     const wamid = `wamid.HBgL${uuidv4().replace(/-/g, '').slice(0, 20)}INBOUND`;
     const timestamp = Math.floor(Date.now() / 1000).toString();
 
@@ -110,7 +121,7 @@ router.post('/simulate-inbound', authenticateToken, async (req, res) => {
     });
   } catch (error) {
     console.error('[Simulator Inbound Error]:', error);
-    return res.status(500).json({ success: false, error: error.message });
+    return res.status(500).json({ success: false, error: 'Failed to simulate inbound webhook' });
   }
 });
 
@@ -118,17 +129,44 @@ router.post('/simulate-inbound', authenticateToken, async (req, res) => {
  * POST /api/simulator/simulate-status:
  * Simulates Meta delivery receipt (SENT -> DELIVERED -> READ)
  */
-router.post('/simulate-status', authenticateToken, async (req, res) => {
+router.post('/simulate-status', authenticateToken, requireRole('ADMIN', 'SUPERVISOR'), async (req, res) => {
   try {
     const { waMessageId, status = 'READ' } = req.body;
+    const normalizedStatus = String(status).toUpperCase();
 
-    if (!waMessageId) {
-      return res.status(400).json({ success: false, error: 'waMessageId is required' });
-    }
+     if (typeof status !== 'string' || typeof waMessageId !== 'string' || !waMessageId || waMessageId.length > 255 ||
+       !['SENT', 'DELIVERED', 'READ', 'FAILED'].includes(normalizedStatus)) {
+       return res.status(400).json({ success: false, error: 'waMessageId is required' });
+     }
 
-    const tenant = await prisma.tenant.findUnique({ where: { id: req.tenantId } });
+     const tenant = await prisma.tenant.findUnique({ where: { id: req.tenantId } });
+     if (!tenant) return res.status(404).json({ success: false, error: 'Tenant not found' });
 
-    const payload = {
+     // Never use a hard-coded recipient or accept a WAMID from another
+     // tenant. Resolve the actual persisted outbound target before creating
+     // the simulated Meta callback.
+     const outboundMessage = await prisma.message.findFirst({
+       where: {
+         waMessageId,
+         tenantId: req.tenantId,
+         direction: 'OUTBOUND',
+       },
+       include: { chat: { include: { contact: true } } },
+     });
+     const broadcastRecipient = outboundMessage
+       ? null
+       : await prisma.broadcastRecipient.findFirst({
+         where: {
+           waMessageId,
+           broadcast: { tenantId: req.tenantId },
+         },
+       });
+     const recipientId = outboundMessage?.chat?.contact?.waId || broadcastRecipient?.phone;
+     if (!recipientId) {
+       return res.status(404).json({ success: false, error: 'Outbound message not found for this tenant' });
+     }
+
+     const payload = {
       object: 'whatsapp_business_account',
       entry: [
         {
@@ -143,10 +181,10 @@ router.post('/simulate-status', authenticateToken, async (req, res) => {
                 },
                 statuses: [
                   {
-                    id: waMessageId,
-                    status: status.toLowerCase(),
+                   id: waMessageId,
+                    status: normalizedStatus.toLowerCase(),
                     timestamp: Math.floor(Date.now() / 1000).toString(),
-                    recipient_id: '919876543210',
+                    recipient_id: recipientId,
                   },
                 ],
               },
@@ -160,12 +198,12 @@ router.post('/simulate-status', authenticateToken, async (req, res) => {
 
     return res.json({
       success: true,
-      message: `Status transitioned to ${status}`,
+      message: `Status transitioned to ${normalizedStatus}`,
       result,
     });
   } catch (error) {
     console.error('[Simulator Status Error]:', error);
-    return res.status(500).json({ success: false, error: error.message });
+    return res.status(500).json({ success: false, error: 'Failed to simulate delivery status' });
   }
 });
 

@@ -1,8 +1,11 @@
 const { Server } = require('socket.io');
-const jwt = require('jsonwebtoken');
+const { createAdapter } = require('@socket.io/redis-adapter');
+const { createClient } = require('redis');
 const prisma = require('../db/prisma');
+const { verifyAccessToken, canAccessChat, readCookie } = require('../middleware/authMiddleware');
 
 let io = null;
+let redisClients = [];
 // Track online socket count per agent: agentId -> Set of socketIds
 const onlineAgents = new Map();
 
@@ -12,7 +15,7 @@ const onlineAgents = new Map();
 function initSocket(server) {
   io = new Server(server, {
     cors: {
-      origin: '*', // Allow frontend origins
+      origin: (process.env.CORS_ORIGINS || process.env.CLIENT_URL || 'http://localhost:3000').split(',').map((origin) => origin.trim()),
       methods: ['GET', 'POST'],
       credentials: true,
     },
@@ -26,23 +29,21 @@ function initSocket(server) {
   io.use(async (socket, next) => {
     try {
       // 1. Extract Bearer token from auth payload or query/headers
-      let token =
-        socket.handshake.auth?.token ||
-        socket.handshake.headers?.authorization;
+      let token = socket.handshake.auth?.token || socket.handshake.headers?.authorization;
 
-      if (!token) {
-        return next(new Error('AUTHENTICATION_ERROR: Token missing from handshake'));
+      if (typeof token !== 'string' || token === 'null' || token === 'undefined') {
+        token = readCookie(socket.handshake.headers?.cookie, 'chatflow_session');
       }
+      if (!token) return next(new Error('AUTHENTICATION_ERROR: Token missing from handshake'));
 
       if (token.startsWith('Bearer ')) {
         token = token.slice(7).trim();
       }
 
       // 2. Cryptographic signature and expiration verification
-      const jwtSecret = process.env.JWT_SECRET || 'chatflow_super_secret_jwt_key_2026_indian_smb';
       let decoded;
       try {
-        decoded = jwt.verify(token, jwtSecret);
+        decoded = verifyAccessToken(token);
       } catch (err) {
         if (err.name === 'TokenExpiredError') {
           return next(new Error('AUTHENTICATION_ERROR: Session expired. Please login again.'));
@@ -51,8 +52,12 @@ function initSocket(server) {
       }
 
       // 3. Database lookup for agent status & tenant binding
+      const tokenAgentId = decoded && (decoded.agentId || decoded.id);
+      if (typeof tokenAgentId !== 'string' || tokenAgentId.length > 100) {
+        return next(new Error('AUTHENTICATION_ERROR: Invalid session claims'));
+      }
       const agent = await prisma.agent.findUnique({
-        where: { id: decoded.agentId || decoded.id },
+        where: { id: tokenAgentId },
         include: { tenant: true },
       });
 
@@ -92,6 +97,17 @@ function initSocket(server) {
     const tenantRoom = `tenant:${tenantId}`;
     socket.join(tenantRoom);
 
+    // Keep operational events scoped to the roles that can see the affected
+    // conversation. The legacy tenant room remains useful for presence, but
+    // must not carry message content for every chat in the tenant.
+    const tenantAdminsRoom = `tenant:${tenantId}:admins`;
+    const tenantAgentsRoom = `tenant:${tenantId}:agents`;
+    if (role === 'ADMIN' || role === 'SUPERVISOR') {
+      socket.join(tenantAdminsRoom);
+    } else {
+      socket.join(tenantAgentsRoom);
+    }
+
     // Join agent-specific private messaging room
     const agentRoom = `agent:${agentId}`;
     socket.join(agentRoom);
@@ -119,7 +135,7 @@ function initSocket(server) {
     socket.on('join_chat', async (data, ack) => {
       try {
         const { chatId } = data || {};
-        if (!chatId) {
+        if (typeof chatId !== 'string' || !chatId || chatId.length > 100) {
           if (ack) ack({ success: false, error: 'Chat ID is required' });
           return;
         }
@@ -137,11 +153,7 @@ function initSocket(server) {
         // AGENT ROLE RESTRICTION:
         // Admin & Supervisor have omniscient visibility.
         // Standard Agents can ONLY join chats assigned to them OR unassigned queue.
-        if (role === 'AGENT') {
-          const isAssignedToMe = chat.assignedAgentId === agentId;
-          const isUnassigned = chat.status === 'UNASSIGNED';
-
-          if (!isAssignedToMe && !isUnassigned) {
+        if (!canAccessChat(socket.agent, chat)) {
             console.warn(`[RBAC Violation]: Agent ${agentName} denied joining chat ${chatId} (assigned to ${chat.assignedAgentId})`);
             if (ack) {
               ack({
@@ -151,7 +163,6 @@ function initSocket(server) {
             }
             return;
           }
-        }
 
         // Leave any currently active individual chat rooms
         for (const room of socket.rooms) {
@@ -176,8 +187,9 @@ function initSocket(server) {
     // -----------------------------------------------------------------------
     // EVENT: leave_chat
     // -----------------------------------------------------------------------
-    socket.on('leave_chat', ({ chatId }, ack) => {
-      if (chatId) {
+    socket.on('leave_chat', (data, ack) => {
+      const chatId = data && data.chatId;
+      if (chatId && socket.rooms.has(`chat:${chatId}`)) {
         socket.leave(`chat:${chatId}`);
       }
       if (ack) ack({ success: true });
@@ -186,14 +198,22 @@ function initSocket(server) {
     // -----------------------------------------------------------------------
     // EVENT: typing_indicator (Agent is typing)
     // -----------------------------------------------------------------------
-    socket.on('typing_indicator', ({ chatId, isTyping }) => {
-      if (chatId) {
+    socket.on('typing_indicator', async ({ chatId, isTyping } = {}) => {
+      // A client may only publish typing events after the server has granted
+      // membership in the chat room. This prevents cross-tenant/cross-agent
+      // room probing through forged chat IDs.
+      if (typeof chatId !== 'string' || chatId.length > 100 || !socket.rooms.has(`chat:${chatId}`) || typeof isTyping !== 'boolean') return;
+      try {
+        const chat = await prisma.chat.findUnique({ where: { id: chatId } });
+        if (!canAccessChat(socket.agent, chat)) return;
         socket.to(`chat:${chatId}`).emit('agent_typing', {
           chatId,
           agentId,
           agentName,
           isTyping,
         });
+      } catch (error) {
+        console.error('[Socket Typing Authorization Error]:', error.message);
       }
     });
 
@@ -226,6 +246,23 @@ function initSocket(server) {
   return io;
 }
 
+async function configureRedisAdapter() {
+  if (!io || redisClients.length > 0) return;
+  const pubClient = createClient({ url: process.env.REDIS_URL });
+  const subClient = pubClient.duplicate();
+  pubClient.on('error', (error) => console.error('[Socket Redis Publisher Error]:', error.message));
+  subClient.on('error', (error) => console.error('[Socket Redis Subscriber Error]:', error.message));
+  await Promise.all([pubClient.connect(), subClient.connect()]);
+  io.adapter(createAdapter(pubClient, subClient));
+  redisClients = [pubClient, subClient];
+  console.log('[Socket.io]: Redis adapter enabled for multi-instance fanout');
+}
+
+async function closeSocketResources() {
+  await Promise.all(redisClients.map((client) => client.quit().catch(() => undefined)));
+  redisClients = [];
+}
+
 /**
  * Access the initialized Socket.io instance
  */
@@ -244,14 +281,23 @@ function broadcastNewMessage(tenantId, chatId, message, assignedAgentId = null) 
   // 1. Send to the active chat room (anyone viewing the chat)
   io.to(`chat:${chatId}`).emit('new_message', { chatId, message });
 
-  // 2. Send to tenant room for updating conversation list preview / unread counter
-  io.to(`tenant:${tenantId}`).emit('chat_preview_updated', {
+  const preview = {
     chatId,
     lastMessage: message.content || `[${message.messageType}]`,
     lastMessageAt: message.createdAt,
     senderType: message.senderType,
     direction: message.direction,
-  });
+  };
+
+  // 2. Send only the preview to agents authorized to see this queue. Admins
+  // and supervisors can see every tenant chat; standard agents receive their
+  // assigned chats or the unassigned queue.
+  io.to(`tenant:${tenantId}:admins`).emit('chat_preview_updated', preview);
+  if (assignedAgentId) {
+    io.to(`agent:${assignedAgentId}`).emit('chat_preview_updated', preview);
+  } else {
+    io.to(`tenant:${tenantId}:agents`).emit('chat_preview_updated', preview);
+  }
 
   // 3. If chat has an assigned agent, notify their personal room
   if (assignedAgentId) {
@@ -275,27 +321,33 @@ function broadcastMessageStatus(tenantId, chatId, { messageId, waMessageId, stat
     recipientId,
     timestamp,
   });
-  io.to(`tenant:${tenantId}`).emit('message_status_updated', {
-    chatId,
-    messageId,
-    waMessageId,
-    status,
-    recipientId,
-    timestamp,
-  });
 }
 
 /**
  * Helper to emit chat assignment changes
  */
-function broadcastChatAssignment(tenantId, chatId, { assignedAgentId, assignedAgentName, status }) {
+function broadcastChatAssignment(tenantId, chatId, {
+  assignedAgentId,
+  previousAssignedAgentId,
+  assignedAgentName,
+  status,
+}) {
   if (!io) return;
-  io.to(`tenant:${tenantId}`).emit('chat_assigned', {
+  const payload = {
     chatId,
     assignedAgentId,
     assignedAgentName,
     status,
-  });
+  };
+  io.to(`tenant:${tenantId}:admins`).emit('chat_assigned', payload);
+  if (assignedAgentId) {
+    io.to(`agent:${assignedAgentId}`).emit('chat_assigned', payload);
+  } else {
+    io.to(`tenant:${tenantId}:agents`).emit('chat_assigned', payload);
+  }
+  if (previousAssignedAgentId && previousAssignedAgentId !== assignedAgentId) {
+    io.to(`agent:${previousAssignedAgentId}`).emit('chat_assigned', payload);
+  }
   io.to(`chat:${chatId}`).emit('chat_assigned', {
     chatId,
     assignedAgentId,
@@ -307,13 +359,19 @@ function broadcastChatAssignment(tenantId, chatId, { assignedAgentId, assignedAg
 /**
  * Helper to emit chat status transition (UNASSIGNED -> OPEN -> RESOLVED)
  */
-function broadcastChatStatusTransition(tenantId, chatId, { status, updatedBy }) {
+function broadcastChatStatusTransition(tenantId, chatId, { status, updatedBy, assignedAgentId }) {
   if (!io) return;
-  io.to(`tenant:${tenantId}`).emit('chat_status_changed', {
+  const payload = {
     chatId,
     status,
     updatedBy,
-  });
+  };
+  io.to(`tenant:${tenantId}:admins`).emit('chat_status_changed', payload);
+  if (assignedAgentId) {
+    io.to(`agent:${assignedAgentId}`).emit('chat_status_changed', payload);
+  } else {
+    io.to(`tenant:${tenantId}:agents`).emit('chat_status_changed', payload);
+  }
   io.to(`chat:${chatId}`).emit('chat_status_changed', {
     chatId,
     status,
@@ -323,6 +381,8 @@ function broadcastChatStatusTransition(tenantId, chatId, { status, updatedBy }) 
 
 module.exports = {
   initSocket,
+  configureRedisAdapter,
+  closeSocketResources,
   getIO,
   broadcastNewMessage,
   broadcastMessageStatus,

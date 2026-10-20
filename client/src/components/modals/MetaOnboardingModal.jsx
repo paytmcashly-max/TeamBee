@@ -3,7 +3,7 @@ import { Shield, Key, Phone, CheckCircle, Copy, AlertCircle, RefreshCw, X } from
 import { useAuth } from '../../context/AuthContext';
 
 export default function MetaOnboardingModal({ isOpen, onClose }) {
-  const { token, updateTenantInfo } = useAuth();
+  const { token, agent, updateTenantInfo } = useAuth();
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [copied, setCopied] = useState(false);
@@ -20,7 +20,7 @@ export default function MetaOnboardingModal({ isOpen, onClose }) {
   });
 
   useEffect(() => {
-    if (!isOpen || !token) return;
+    if (!isOpen || !agent) return;
     async function fetchSettings() {
       setLoading(true);
       try {
@@ -46,7 +46,7 @@ export default function MetaOnboardingModal({ isOpen, onClose }) {
       }
     }
     fetchSettings();
-  }, [isOpen, token]);
+  }, [isOpen, agent, token]);
 
   const handleSave = async (e) => {
     e.preventDefault();
