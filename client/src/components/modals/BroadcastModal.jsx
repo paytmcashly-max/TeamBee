@@ -34,43 +34,77 @@ export default function BroadcastModal({ isOpen, onClose }) {
     loadData();
   }, [isOpen, agent, token]);
 
+  // Escape closes the dialog (with the other modals' overlay-click rule).
+  useEffect(() => {
+    if (!isOpen) return;
+    const onKey = (e) => {
+      if (e.key === 'Escape') onClose();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [isOpen, onClose]);
+
   const loadData = async () => {
     setLoading(true);
     try {
-      const [bcRes, tplRes, chatRes] = await Promise.all([
+      const [bcRes, tplRes] = await Promise.all([
         fetch('/api/broadcasts', { headers: { Authorization: `Bearer ${token}` } }),
         fetch('/api/templates', { headers: { Authorization: `Bearer ${token}` } }),
-        fetch('/api/chats?filter=all', { headers: { Authorization: `Bearer ${token}` } }),
       ]);
 
-      const [bcData, tplData, chatData] = await Promise.all([
-        bcRes.json(),
-        tplRes.json(),
-        chatRes.json(),
-      ]);
+      const [bcData, tplData] = await Promise.all([bcRes.json(), tplRes.json()]);
 
       if (bcData.success) setBroadcasts(bcData.broadcasts);
-      if (tplData.success && tplData.templates.length > 0) {
-        setTemplates(tplData.templates);
-        if (!selectedTemplateId) {
-          setSelectedTemplateId(tplData.templates[0].id);
+      if (!tplData.success) {
+        setFeedback({ type: 'error', text: tplData.error || 'Failed to load templates' });
+      } else {
+        // Only APPROVED templates can legally be broadcast; offering the
+        // rest produced campaigns that failed at send time.
+        const approved = (tplData.templates || []).filter((t) => t.status === 'APPROVED');
+        setTemplates(approved);
+        if (!approved.some((t) => t.id === selectedTemplateId)) {
+          setSelectedTemplateId(approved[0]?.id || '');
         }
       }
-      if (chatData.success) {
-        const uniqueContacts = [];
-        const seen = new Set();
+
+      // Audience: page through the conversation list (it is capped at 100
+      // per request) instead of silently truncating at the first page, and
+      // surface failures instead of showing an empty, error-free picker.
+      const uniqueContacts = [];
+      const seen = new Set();
+      let cursor = null;
+      let pages = 0;
+      let audienceFailed = false;
+      do {
+        const params = new URLSearchParams({ filter: 'all', status: 'ALL', limit: '100' });
+        if (cursor) params.set('cursor', cursor);
+        const chatRes = await fetch(`/api/chats?${params.toString()}`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        const chatData = await chatRes.json();
+        if (!chatData.success) {
+          audienceFailed = true;
+          break;
+        }
         (chatData.chats || []).forEach((c) => {
           if (c.contact && !seen.has(c.contact.id)) {
             seen.add(c.contact.id);
             uniqueContacts.push(c.contact);
           }
         });
-        setContacts(uniqueContacts);
-        // Default select all contacts
-        setSelectedContactIds(uniqueContacts.map((c) => c.id));
+        cursor = chatData.pagination?.hasMore ? chatData.pagination.nextCursor : null;
+        pages += 1;
+      } while (cursor && pages < 20);
+      if (audienceFailed) {
+        setFeedback({ type: 'error', text: 'Failed to load the contact list — the audience may be incomplete. Close and retry.' });
       }
+      setContacts(uniqueContacts);
+      // Deliberate selection only: a bulk send must never default to
+      // "everyone" — one wrong click used to broadcast to all customers.
+      setSelectedContactIds((prev) => prev.filter((id) => seen.has(id)));
     } catch (err) {
       console.error('Failed to load broadcast data:', err);
+      setFeedback({ type: 'error', text: `Failed to load broadcast data: ${err.message}` });
     } finally {
       setLoading(false);
     }
@@ -78,9 +112,32 @@ export default function BroadcastModal({ isOpen, onClose }) {
 
   const selectedTemplate = templates.find((t) => t.id === selectedTemplateId);
 
+  // Template placeholders ({{1}}, {{2}}, ...) collected per campaign — the
+  // worker used to substitute literal "Sample N" text because this form
+  // never asked for values.
+  const placeholderIndexes = selectedTemplate
+    ? [...new Set([...String(selectedTemplate.bodyText || '').matchAll(/\{\{(\d+)\}\}/g)].map((m) => m[1]))]
+    : [];
+  const missingVariables = placeholderIndexes.filter(
+    (index) => index !== '1' && !(variables[index] || '').trim()
+  );
+  const renderTemplatePreview = (bodyText) =>
+    String(bodyText || '').replace(/\{\{(\d+)\}\}/g, (_, index) => {
+      const value = (variables[index] || '').trim();
+      if (value) return value;
+      return index === '1' ? '<customer name>' : `{{${index}}}`;
+    });
+
   const handleLaunch = async (e) => {
     e.preventDefault();
     if (!campaignName.trim() || !selectedTemplateId) return;
+    if (missingVariables.length > 0) {
+      setFeedback({
+        type: 'error',
+        text: `Fill in the template variable${missingVariables.length > 1 ? 's' : ''} ${missingVariables.map((i) => `{{${i}}}`).join(', ')} before launching.`,
+      });
+      return;
+    }
 
     setLaunching(true);
     setFeedback(null);
@@ -129,6 +186,9 @@ export default function BroadcastModal({ isOpen, onClose }) {
 
   return (
     <div
+      onClick={(e) => {
+        if (e.target === e.currentTarget) onClose();
+      }}
       style={{
         position: 'fixed',
         inset: 0,
@@ -142,6 +202,9 @@ export default function BroadcastModal({ isOpen, onClose }) {
       }}
     >
       <div
+        role="dialog"
+        aria-modal="true"
+        aria-label="Broadcast campaigns"
         style={{
           background: 'var(--bg-sidebar)',
           border: '1px solid var(--border-medium)',
@@ -198,7 +261,7 @@ export default function BroadcastModal({ isOpen, onClose }) {
             >
               {activeView === 'list' ? '+ New Campaign' : 'View Campaigns'}
             </button>
-            <button onClick={onClose} className="btn btn-ghost" style={{ padding: '6px' }}>
+            <button onClick={onClose} className="btn btn-ghost" style={{ padding: '6px' }} aria-label="Close broadcasts">
               <X size={18} />
             </button>
           </div>
@@ -369,7 +432,39 @@ export default function BroadcastModal({ isOpen, onClose }) {
                     <div style={{ fontSize: '11px', color: '#25D366', fontWeight: '600', marginBottom: '4px' }}>
                       Template Message Body Preview:
                     </div>
-                    {selectedTemplate.bodyText}
+                    {renderTemplatePreview(selectedTemplate.bodyText)}
+                  </div>
+                )}
+
+                {placeholderIndexes.length > 0 && (
+                  <div style={{ marginTop: '10px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                    {placeholderIndexes.map((index) => (
+                      <div key={index}>
+                        <label style={{ display: 'block', fontSize: '11.5px', fontWeight: '600', color: '#fff', marginBottom: '4px' }}>
+                          Variable {`{{${index}}}`}
+                          {index === '1' ? ' — defaults to each customer’s name when left blank' : ''}
+                        </label>
+                        <input
+                          type="text"
+                          value={variables[index] || ''}
+                          maxLength={1000}
+                          onChange={(e) =>
+                            setVariables((prev) => ({ ...prev, [index]: e.target.value }))
+                          }
+                          placeholder={index === '1' ? "e.g. the customer's name" : `Value for {{${index}}}`}
+                          style={{
+                            width: '100%',
+                            background: 'var(--bg-surface)',
+                            border: '1px solid var(--border-medium)',
+                            borderRadius: 'var(--radius-md)',
+                            padding: '8px 12px',
+                            color: '#fff',
+                            fontSize: '13px',
+                            outline: 'none',
+                          }}
+                        />
+                      </div>
+                    ))}
                   </div>
                 )}
               </div>
@@ -452,7 +547,7 @@ export default function BroadcastModal({ isOpen, onClose }) {
                 </button>
                 <button
                   type="submit"
-                  disabled={launching || selectedContactIds.length === 0}
+                  disabled={launching || selectedContactIds.length === 0 || missingVariables.length > 0}
                   className="btn btn-primary"
                   style={{ padding: '8px 20px', fontSize: '12.5px', gap: '6px' }}
                 >

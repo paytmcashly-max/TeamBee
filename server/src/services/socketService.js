@@ -69,6 +69,12 @@ function initSocket(server) {
         return next(new Error('AUTHENTICATION_ERROR: Agent account is deactivated'));
       }
 
+      // Revoked sessions (password change / logout / admin reset bump
+      // tokenVersion) cannot open new socket connections either.
+      if ((decoded.tv ?? 0) !== (agent.tokenVersion ?? 0)) {
+        return next(new Error('AUTHENTICATION_ERROR: Session has been revoked. Please login again.'));
+      }
+
       // 4. Attach verified tenant & agent security context to socket instance
       socket.agent = {
         id: agent.id,
@@ -115,17 +121,23 @@ function initSocket(server) {
     // Track active connection count
     if (!onlineAgents.has(agentId)) {
       onlineAgents.set(agentId, new Set());
-      // First connection for this agent -> update DB status to ONLINE
-      await prisma.agent.update({
-        where: { id: agentId },
-        data: { status: 'ONLINE' },
-      }).catch((e) => console.error('Agent presence update error:', e));
+      // First connection marks the agent ONLINE — but only from OFFLINE.
+      // A manually chosen BUSY must survive reconnects and new tabs.
+      const currentAgent = await prisma.agent
+        .findUnique({ where: { id: agentId }, select: { status: true } })
+        .catch(() => null);
+      if (currentAgent && currentAgent.status === 'OFFLINE') {
+        await prisma.agent.update({
+          where: { id: agentId },
+          data: { status: 'ONLINE' },
+        }).catch((e) => console.error('Agent presence update error:', e));
 
-      io.to(tenantRoom).emit('agent_presence_changed', {
-        agentId,
-        status: 'ONLINE',
-        timestamp: new Date().toISOString(),
-      });
+        io.to(tenantRoom).emit('agent_presence_changed', {
+          agentId,
+          status: 'ONLINE',
+          timestamp: new Date().toISOString(),
+        });
+      }
     }
     onlineAgents.get(agentId).add(socket.id);
 
@@ -281,9 +293,12 @@ function broadcastNewMessage(tenantId, chatId, message, assignedAgentId = null) 
   // 1. Send to the active chat room (anyone viewing the chat)
   io.to(`chat:${chatId}`).emit('new_message', { chatId, message });
 
+  const isInternalNote = message.messageType === 'NOTE' || message.senderType === 'NOTE';
   const preview = {
     chatId,
-    lastMessage: message.content || `[${message.messageType}]`,
+    // Queue previews go to room subscribers who may not have this chat
+    // open; an internal note's TEXT must never ride along — label only.
+    lastMessage: isInternalNote ? '🔒 Internal note' : message.content || `[${message.messageType}]`,
     lastMessageAt: message.createdAt,
     senderType: message.senderType,
     direction: message.direction,

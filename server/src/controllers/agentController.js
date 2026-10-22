@@ -29,8 +29,10 @@ class AgentController {
         orderBy: { name: 'asc' },
       });
 
+      const includeEmail = req.agent.role !== 'AGENT';
       const formatted = agents.map((a) => ({
         ...a,
+        ...(includeEmail ? {} : { email: undefined }),
         activeChatCount: a._count.assignedChats,
       }));
 
@@ -56,6 +58,9 @@ class AgentController {
       }
       if (!['AGENT', 'SUPERVISOR'].includes(role)) {
         return res.status(400).json({ success: false, error: 'Invalid agent role' });
+      }
+      if (Buffer.byteLength(password, 'utf8') > 72) {
+        return res.status(400).json({ success: false, error: 'Password is too long (maximum 72 bytes)' });
       }
 
       // Check duplicate
@@ -139,13 +144,48 @@ class AgentController {
 
       const target = await prisma.agent.findFirst({
         where: { id, tenantId: req.tenantId },
-        select: { id: true, role: true },
+        select: { id: true, role: true, isActive: true },
       });
       if (!target) {
         return res.status(404).json({ success: false, error: 'Agent not found' });
       }
       if (req.agent.role === 'SUPERVISOR' && target.role === 'ADMIN') {
         return res.status(403).json({ success: false, error: 'Supervisors cannot update tenant administrators' });
+      }
+
+      // Last-admin guard: a tenant must always keep at least one active
+      // ADMIN, or tenant settings/credentials become unchangeable forever.
+      const demotesAdmin = target.role === 'ADMIN' && updateData.role && updateData.role !== 'ADMIN';
+      const deactivatesAdmin = target.role === 'ADMIN' && updateData.isActive === false;
+      if (demotesAdmin || deactivatesAdmin) {
+        const otherAdmins = await prisma.agent.count({
+          where: { tenantId: req.tenantId, role: 'ADMIN', isActive: true, id: { not: target.id } },
+        });
+        if (otherAdmins === 0) {
+          return res.status(400).json({
+            success: false,
+            error: 'This is the last active admin of the workspace. Promote another admin first.',
+          });
+        }
+      }
+
+      // Admin password reset (the recovery path for a locked-out agent):
+      // sets a new password and revokes every outstanding session.
+      const newPassword = typeof req.body?.password === 'string' ? req.body.password : undefined;
+      if (newPassword !== undefined) {
+        if (req.agent.role !== 'ADMIN') {
+          return res.status(403).json({ success: false, error: 'Only an admin can reset passwords' });
+        }
+        if (newPassword.length < 10 || newPassword.length > 256 || Buffer.byteLength(newPassword, 'utf8') > 72) {
+          return res.status(400).json({ success: false, error: 'Password must be 10-256 characters (maximum 72 bytes)' });
+        }
+        updateData.passwordHash = await bcrypt.hash(newPassword, 10);
+        updateData.tokenVersion = { increment: 1 };
+      }
+
+      // Deactivation kills live sessions immediately via token revocation.
+      if (updateData.isActive === false) {
+        updateData.tokenVersion = { increment: 1 };
       }
 
       const updated = await prisma.agent.update({
@@ -179,12 +219,15 @@ class AgentController {
       const resolvedChats = await prisma.chat.count({ where: { tenantId: req.tenantId, status: 'RESOLVED' } });
       const totalMessages = await prisma.message.count({ where: { tenantId: req.tenantId } });
 
-      const recentMessages = await prisma.message.findMany({
-        where: { tenantId: req.tenantId },
-        orderBy: { createdAt: 'asc' },
+      // Bounded recent window (newest first, then re-sorted in JS): the old
+      // query silently measured only the OLDEST 10,000 messages forever.
+      const windowStart = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+      const recentMessages = (await prisma.message.findMany({
+        where: { tenantId: req.tenantId, createdAt: { gte: windowStart } },
+        orderBy: { createdAt: 'desc' },
         take: 10000,
         select: { chatId: true, direction: true, createdAt: true },
-      });
+      })).reverse();
       const waitingSince = new Map();
       const responseTimes = [];
       for (const message of recentMessages) {

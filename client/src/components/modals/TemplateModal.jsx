@@ -117,12 +117,25 @@ export default function TemplateModal({ isOpen, onClose }) {
   // Render preview with interpolated variables
   const getRenderedPreview = () => {
     if (!selectedTemplate) return '';
-    let text = selectedTemplate.bodyText;
+    // bodyText can be NULL (Meta returns no body for some templates) — the
+    // old code crashed the whole app on .replace. A function replacer also
+    // stops "$&"/"$1" sequences in values from garbling the preview.
+    let text = selectedTemplate.bodyText || '';
     Object.keys(variables).forEach((key) => {
-      text = text.replace(new RegExp(`\\{\\{${key}\\}\\}`, 'g'), variables[key] || `{{${key}}}`);
+      text = text.replace(new RegExp(`\\{\\{${key}\\}\\}`, 'g'), () => variables[key] || `{{${key}}}`);
     });
     return text;
   };
+
+  // Escape closes the dialog.
+  useEffect(() => {
+    if (!isOpen) return;
+    const onKey = (e) => {
+      if (e.key === 'Escape') onClose();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [isOpen, onClose]);
 
   const handleSend = async () => {
     if (!activeChat || !selectedTemplate) return;
@@ -162,8 +175,13 @@ export default function TemplateModal({ isOpen, onClose }) {
   if (!isOpen) return null;
 
   return (
-    <div className="modal-overlay">
-      <div className="modal-content" style={{ maxWidth: '780px' }}>
+    <div
+      className="modal-overlay"
+      onClick={(e) => {
+        if (e.target === e.currentTarget) onClose();
+      }}
+    >
+      <div className="modal-content" role="dialog" aria-modal="true" aria-label="WhatsApp templates" style={{ maxWidth: '780px' }}>
         {/* Header */}
         <div
           style={{
@@ -273,7 +291,7 @@ export default function TemplateModal({ isOpen, onClose }) {
                       whiteSpace: 'nowrap',
                     }}
                   >
-                    {tpl.bodyText}
+                    {tpl.bodyText || '(no body text)'}
                   </div>
                 </button>
               ))}
@@ -293,6 +311,7 @@ export default function TemplateModal({ isOpen, onClose }) {
                         <input
                           type="text"
                           value={variables[key]}
+                          maxLength={1000}
                           onChange={(e) => handleVariableChange(key, e.target.value)}
                           placeholder={`Value for {{${key}}}`}
                           style={{

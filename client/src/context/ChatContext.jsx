@@ -25,6 +25,30 @@ function mergeMessageLists(left, right) {
   return merged.sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt));
 }
 
+// One shared AudioContext for the notification chime (creating one per
+// message leaks contexts — browsers cap them at about six).
+let sharedAudioContext = null;
+function playNotificationChime() {
+  try {
+    const AudioCtor = window.AudioContext || window.webkitAudioContext;
+    if (!AudioCtor) return;
+    if (!sharedAudioContext) sharedAudioContext = new AudioCtor();
+    const ctx = sharedAudioContext;
+    if (ctx.state === 'suspended') ctx.resume();
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(587.33, ctx.currentTime); // D5
+    osc.frequency.exponentialRampToValueAtTime(880, ctx.currentTime + 0.12); // A5
+    gain.gain.setValueAtTime(0.15, ctx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.35);
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.start();
+    osc.stop(ctx.currentTime + 0.35);
+  } catch (e) {}
+}
+
 export function ChatProvider({ children }) {
   const { token, agent, isAdmin } = useAuth();
   const { socket, connected, joinChat, leaveChat } = useSocket();
@@ -41,6 +65,25 @@ export function ChatProvider({ children }) {
 
   // ⚡ Memory cache for 0ms instant chat switching across conversations
   const messagesCacheRef = useRef({});
+
+  // Logout / account switch must wipe the previous workspace completely —
+  // chats, messages and the cache — or the next user briefly sees (and can
+  // act on) someone else's customers.
+  const previousAgentIdRef = useRef(null);
+  useEffect(() => {
+    const currentAgentId = agent?.id || null;
+    if (previousAgentIdRef.current && previousAgentIdRef.current !== currentAgentId) {
+      setChats([]);
+      setActiveChatId(null);
+      activeChatIdRef.current = null;
+      setActiveChat(null);
+      setMessages([]);
+      messagesCacheRef.current = {};
+      setChatPagination({ hasMore: false, nextCursor: null });
+      setMessagePagination({ hasMore: false, nextBefore: null });
+    }
+    previousAgentIdRef.current = currentAgentId;
+  }, [agent?.id]);
   const activeChatIdRef = useRef(null);
   activeChatIdRef.current = activeChatId;
 
@@ -62,8 +105,10 @@ export function ChatProvider({ children }) {
   /**
    * Fetch chats from backend
    */
+  const fetchChatsSeqRef = useRef(0);
   const fetchChats = useCallback(async (silent = false, cursor = null) => {
     if (!agent) return;
+    const requestSeq = ++fetchChatsSeqRef.current;
     if (!silent) setLoadingChats(true);
     try {
       const params = new URLSearchParams({
@@ -78,14 +123,20 @@ export function ChatProvider({ children }) {
         headers: { Authorization: `Bearer ${token}` },
       });
       const data = await res.json();
-      if (data.success) {
-        setChats((previous) => cursor ? [...previous, ...(data.chats || [])] : data.chats || []);
+      // A slower earlier request (old filter/search) must never overwrite a
+      // newer one — that race resurrected stale lists and lost live updates.
+      if (data.success && requestSeq === fetchChatsSeqRef.current) {
+        setChats((previous) => {
+          if (!cursor) return data.chats || [];
+          const knownIds = new Set(previous.map((chat) => chat.id));
+          return [...previous, ...(data.chats || []).filter((chat) => !knownIds.has(chat.id))];
+        });
         setChatPagination(data.pagination || { hasMore: false, nextCursor: null });
       }
     } catch (err) {
       console.error('Fetch chats error:', err);
     } finally {
-      if (!silent) setLoadingChats(false);
+      if (!silent && requestSeq === fetchChatsSeqRef.current) setLoadingChats(false);
     }
   }, [agent, token, tabFilter, statusFilter, debouncedSearch]);
 
@@ -164,23 +215,38 @@ export function ChatProvider({ children }) {
     if (activeChatIdRef.current) loadChat(activeChatIdRef.current);
   }, [connected, agent, token, fetchChats, loadChat]);
 
+  const loadingOlderRef = useRef(false);
   const loadOlderMessages = useCallback(async () => {
     const chatId = activeChatIdRef.current;
     const before = messagePagination.nextBefore;
-    if (!chatId || !agent || !messagePagination.hasMore || !before) return;
-
+    if (!chatId || !agent || !messagePagination.hasMore || !before || loadingOlderRef.current) return;
+    loadingOlderRef.current = true;
+    try {
     const res = await fetch(`/api/messages/${chatId}?limit=100&before=${encodeURIComponent(before)}`, {
       headers: { Authorization: `Bearer ${token}` },
     });
     const data = await res.json();
     if (!data.success) throw new Error(data.error || 'Failed to load older messages');
-    setMessages((previous) => mergeMessageLists(data.messages || [], previous));
+    if (activeChatIdRef.current !== chatId) return;
+    setMessages((previous) => {
+      const merged = mergeMessageLists(data.messages || [], previous);
+      const seenIds = new Set();
+      return merged.filter((message) => {
+        if (!message.id) return true;
+        if (seenIds.has(message.id)) return false;
+        seenIds.add(message.id);
+        return true;
+      });
+    });
     messagesCacheRef.current[chatId] = {
       ...(messagesCacheRef.current[chatId] || {}),
       messages: mergeMessageLists(data.messages || [], messagesCacheRef.current[chatId]?.messages || []),
       pagination: data.pagination || { hasMore: false, nextBefore: null },
     };
     setMessagePagination(data.pagination || { hasMore: false, nextBefore: null });
+    } finally {
+      loadingOlderRef.current = false;
+    }
   }, [messagePagination, agent, token]);
 
   /**
@@ -244,23 +310,7 @@ export function ChatProvider({ children }) {
     const handleNewMessage = ({ chatId, message }) => {
       // Play pleasant sound chime for customer messages
       if (message.senderType === 'CUSTOMER' || message.direction === 'INBOUND') {
-        try {
-          const AudioContext = window.AudioContext || window.webkitAudioContext;
-          if (AudioContext) {
-            const ctx = new AudioContext();
-            const osc = ctx.createOscillator();
-            const gain = ctx.createGain();
-            osc.type = 'sine';
-            osc.frequency.setValueAtTime(587.33, ctx.currentTime); // D5
-            osc.frequency.exponentialRampToValueAtTime(880, ctx.currentTime + 0.12); // A5
-            gain.gain.setValueAtTime(0.15, ctx.currentTime);
-            gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.35);
-            osc.connect(gain);
-            gain.connect(ctx.destination);
-            osc.start();
-            osc.stop(ctx.currentTime + 0.35);
-          }
-        } catch (e) {}
+        playNotificationChime();
       }
 
       // Update in-memory cache
@@ -452,14 +502,27 @@ export function ChatProvider({ children }) {
       updatedAt: nowIso,
     };
 
-    // Instant append in active chat
-    setMessages((prev) => {
-      const next = [...prev, optimisticMessage];
-      if (messagesCacheRef.current[targetChatId]) {
-        messagesCacheRef.current[targetChatId].messages = next;
+    // Every state write for this send goes through here: if the agent has
+    // switched to another conversation while the request is in flight, the
+    // result updates ONLY the target chat's cache — a confirmed message
+    // must never materialize inside the wrong conversation.
+    const applySendUpdate = (updateList) => {
+      if (activeChatIdRef.current === targetChatId) {
+        setMessages((prev) => {
+          const next = updateList(prev);
+          if (messagesCacheRef.current[targetChatId]) {
+            messagesCacheRef.current[targetChatId].messages = next;
+          }
+          return next;
+        });
+      } else if (messagesCacheRef.current[targetChatId]) {
+        const cached = messagesCacheRef.current[targetChatId];
+        cached.messages = updateList(cached.messages || []);
       }
-      return next;
-    });
+    };
+
+    // Instant append in active chat
+    applySendUpdate((prev) => [...prev, optimisticMessage]);
 
     // Instant update in left conversation list
     setChats((prev) => {
@@ -486,35 +549,21 @@ export function ChatProvider({ children }) {
 
       const data = await res.json();
       if (!data.success) {
-        setMessages((prev) => {
-          const next = data.message
+        applySendUpdate((prev) =>
+          data.message
             ? mergeMessage(prev, { ...data.message, clientMessageId })
-            : prev.map((m) => (m.id === tempId ? { ...m, status: 'FAILED', errorMessage: data.error } : m));
-          if (messagesCacheRef.current[targetChatId]) {
-            messagesCacheRef.current[targetChatId].messages = next;
-          }
-          return next;
-        });
+            : prev.map((m) => (m.id === tempId ? { ...m, status: 'FAILED', errorMessage: data.error } : m))
+        );
         throw new Error(data.error || 'Failed to send message');
       }
 
       // Replace optimistic message with confirmed database record
-      setMessages((prev) => {
-        const next = mergeMessage(prev, { ...data.message, clientMessageId });
-        if (messagesCacheRef.current[targetChatId]) {
-          messagesCacheRef.current[targetChatId].messages = next;
-        }
-        return next;
-      });
+      applySendUpdate((prev) => mergeMessage(prev, { ...data.message, clientMessageId }));
       return data;
     } catch (err) {
-      setMessages((prev) => {
-        const next = prev.map((m) => (m.id === tempId ? { ...m, status: 'FAILED', errorMessage: err.message } : m));
-        if (messagesCacheRef.current[targetChatId]) {
-          messagesCacheRef.current[targetChatId].messages = next;
-        }
-        return next;
-      });
+      applySendUpdate((prev) =>
+        prev.map((m) => (m.id === tempId ? { ...m, status: 'FAILED', errorMessage: err.message } : m))
+      );
       throw err;
     }
   };
@@ -563,10 +612,18 @@ export function ChatProvider({ children }) {
         if (activeChatId === chatId) {
           setActiveChat(data.chat);
         }
+      } else {
+        // Roll the optimistic assignment back to server truth and surface
+        // the failure (e.g. a 409 because a teammate claimed it first).
+        fetchChats(true);
+        if (activeChatId === chatId) loadChat(chatId);
+        throw new Error(data.error || 'Failed to assign conversation');
       }
       return data;
     } catch (err) {
       fetchChats(true);
+      if (activeChatId === chatId) loadChat(chatId);
+      throw err;
     }
   };
 
@@ -598,10 +655,16 @@ export function ChatProvider({ children }) {
         if (activeChatId === chatId) {
           setActiveChat(data.chat);
         }
+      } else {
+        fetchChats(true);
+        if (activeChatId === chatId) loadChat(chatId);
+        throw new Error(data.error || 'Failed to update conversation status');
       }
       return data;
     } catch (err) {
       fetchChats(true);
+      if (activeChatId === chatId) loadChat(chatId);
+      throw err;
     }
   };
 

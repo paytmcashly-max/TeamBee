@@ -33,8 +33,12 @@ export function SocketProvider({ children }) {
       auth: { token },
       withCredentials: true,
       transports: ['websocket', 'polling'],
-      reconnectionAttempts: 10,
-      reconnectionDelay: 2000,
+      // Never give up: a capped attempt count left agents silently offline
+      // (stale inbox, no error) after long network drops. Backoff is capped
+      // by reconnectionDelayMax instead.
+      reconnectionAttempts: Infinity,
+      reconnectionDelay: 1000,
+      reconnectionDelayMax: 30000,
     });
 
     socketRef.current = socket;

@@ -39,8 +39,10 @@ app.use(
   cors({
     origin: (origin, callback) => {
       // Non-browser clients do not send Origin and remain supported.
+      // A disallowed origin simply gets no CORS headers (callback(null,
+      // false)); throwing here turned it into a misleading 500.
       if (!origin || allowedOrigins.has(origin)) return callback(null, true);
-      return callback(new Error('Origin is not allowed'));
+      return callback(null, false);
     },
     credentials: true,
   })
@@ -244,6 +246,14 @@ async function start() {
           'Broadcast',
           () => drainPendingBroadcasts()
         ));
+        // Scheduled retries (broadcast backoff, webhook dead-letters) need a
+        // periodic driver — a boot-time pass alone would leave them parked
+        // until the next deploy.
+        const recoveryInterval = setInterval(() => {
+          scheduleBackgroundRecovery('Webhook', () => WebhookParserService.drainPendingWebhookEvents());
+          scheduleBackgroundRecovery('Broadcast', () => drainPendingBroadcasts());
+        }, 60_000);
+        if (typeof recoveryInterval.unref === 'function') recoveryInterval.unref();
         resolve(server);
       });
     });

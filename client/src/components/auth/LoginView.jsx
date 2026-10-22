@@ -134,6 +134,27 @@ export default function LoginView() {
             />
           </div>
 
+          <div>
+            <label style={{ display: 'block', fontSize: '12px', fontWeight: '600', color: '#cbd5e1', marginBottom: '4px' }}>
+              Workspace Slug <span style={{ fontWeight: '400', color: '#64748b' }}>(only if your email is used in multiple workspaces)</span>
+            </label>
+            <input
+              type="text"
+              value={tenantSlug}
+              onChange={(e) => setTenantSlug(e.target.value)}
+              placeholder="e.g. your-business-name"
+              style={{
+                width: '100%',
+                background: '#0b1120',
+                border: '1px solid rgba(255, 255, 255, 0.12)',
+                borderRadius: '8px',
+                padding: '12px 14px',
+                color: '#fff',
+                outline: 'none',
+              }}
+            />
+          </div>
+
           <button
             type="submit"
             disabled={loading}

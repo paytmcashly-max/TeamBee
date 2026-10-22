@@ -53,16 +53,32 @@ export default function ContactSidebar({ onOpenTemplatePicker, onClose }) {
 
   const handleSaveName = async () => {
     if (!nameInput.trim()) return;
-    await updateContact(activeChat.id, { name: nameInput.trim() });
-    setIsEditingName(false);
+    try {
+      const result = await updateContact(activeChat.id, { name: nameInput.trim() });
+      if (!result?.success) {
+        alert(result?.error || 'Failed to save the contact name');
+        return;
+      }
+      setIsEditingName(false);
+    } catch (err) {
+      alert(err.message || 'Failed to save the contact name');
+    }
   };
 
   const handleAddTag = async () => {
     if (!newTagInput.trim()) return;
     const tag = newTagInput.trim();
     if (!tags.includes(tag)) {
-      const updated = [...tags, tag];
-      await updateChatTags(activeChat.id, updated);
+      try {
+        const result = await updateChatTags(activeChat.id, [...tags, tag]);
+        if (!result?.success) {
+          alert(result?.error || 'Failed to add the tag');
+          return;
+        }
+      } catch (err) {
+        alert(err.message || 'Failed to add the tag');
+        return;
+      }
     }
     setNewTagInput('');
     setIsAddingTag(false);
@@ -70,7 +86,12 @@ export default function ContactSidebar({ onOpenTemplatePicker, onClose }) {
 
   const handleRemoveTag = async (tagToRemove) => {
     const updated = tags.filter((t) => t !== tagToRemove);
-    await updateChatTags(activeChat.id, updated);
+    try {
+      const result = await updateChatTags(activeChat.id, updated);
+      if (!result?.success) alert(result?.error || 'Failed to remove the tag');
+    } catch (err) {
+      alert(err.message || 'Failed to remove the tag');
+    }
   };
 
   const handleSaveCustomField = async () => {
@@ -79,7 +100,16 @@ export default function ContactSidebar({ onOpenTemplatePicker, onClose }) {
       ...customAttrs,
       [fieldKey.trim()]: fieldVal.trim(),
     };
-    await updateContact(activeChat.id, { customAttributes: updatedAttrs });
+    try {
+      const result = await updateContact(activeChat.id, { customAttributes: updatedAttrs });
+      if (!result?.success) {
+        alert(result?.error || 'Failed to save the field');
+        return;
+      }
+    } catch (err) {
+      alert(err.message || 'Failed to save the field');
+      return;
+    }
     setFieldKey('');
     setFieldVal('');
     setIsAddingField(false);
@@ -88,7 +118,12 @@ export default function ContactSidebar({ onOpenTemplatePicker, onClose }) {
   const handleRemoveCustomField = async (keyToRemove) => {
     const updatedAttrs = { ...customAttrs };
     delete updatedAttrs[keyToRemove];
-    await updateContact(activeChat.id, { customAttributes: updatedAttrs });
+    try {
+      const result = await updateContact(activeChat.id, { customAttributes: updatedAttrs });
+      if (!result?.success) alert(result?.error || 'Failed to remove the field');
+    } catch (err) {
+      alert(err.message || 'Failed to remove the field');
+    }
   };
 
   const hoursRemaining = parseFloat(messagingWindow?.hoursRemaining || 0);
@@ -390,11 +425,13 @@ export default function ContactSidebar({ onOpenTemplatePicker, onClose }) {
           <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '4px' }}>
             <span style={{ color: 'var(--text-muted)' }}>First Contact:</span>
             <span style={{ color: 'var(--text-secondary)' }}>
-              {new Date(contact?.createdAt || Date.now()).toLocaleDateString('en-IN', {
-                month: 'short',
-                day: 'numeric',
-                year: 'numeric',
-              })}
+              {contact?.createdAt
+                ? new Date(contact.createdAt).toLocaleDateString('en-IN', {
+                    month: 'short',
+                    day: 'numeric',
+                    year: 'numeric',
+                  })
+                : '—'}
             </span>
           </div>
         </div>

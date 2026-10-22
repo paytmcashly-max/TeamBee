@@ -581,3 +581,35 @@ h1, h2, h3, h4, h5, h6 {
     font-size: 14px;
   }
 }
+
+/* WhatsApp-style day separator in the message stream */
+.msg-date-separator {
+  align-self: center;
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--text-secondary);
+  font-size: 10.5px;
+  font-weight: 600;
+  padding: 3px 10px;
+  border-radius: 999px;
+  margin: 6px 0 2px;
+}
+
+/* Generic spinner (the template sync button referenced a `spin` class that
+   was never defined, so the icon never animated) */
+@keyframes teambee-spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+.spin {
+  animation: teambee-spin 0.9s linear infinite;
+}
+
+/* Offline / reconnecting banner (socket status) */
+.connection-banner {
+  background: rgba(239, 68, 68, 0.92);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 600;
+  text-align: center;
+  padding: 6px 12px;
+}

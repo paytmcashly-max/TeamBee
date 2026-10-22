@@ -17,8 +17,8 @@ model Tenant {
   id                 String   @id @default(uuid())
   name               String
   slug               String   @unique
-  wabaId             String?  @map("waba_id")
-  phoneNumberId      String?  @map("phone_number_id")
+  wabaId             String?  @unique @map("waba_id")
+  phoneNumberId      String?  @unique @map("phone_number_id")
   accessToken        String?  @map("access_token")
   webhookVerifyToken String?  @map("webhook_verify_token")
   webhookVerifyTokenHash String? @map("webhook_verify_token_hash")
@@ -53,6 +53,7 @@ model Agent {
   role         String   @default("AGENT") // "ADMIN", "AGENT", "SUPERVISOR"
   status       String   @default("OFFLINE") // "ONLINE", "BUSY", "OFFLINE"
   isActive     Boolean  @default(true) @map("is_active")
+  tokenVersion Int      @default(0) @map("token_version")
   createdAt    DateTime @default(now()) @map("created_at")
   updatedAt    DateTime @updatedAt @map("updated_at")
 
@@ -111,6 +112,7 @@ model Chat {
   assignedAgent Agent?    @relation("AssignedAgent", fields: [assignedAgentId], references: [id], onDelete: SetNull)
   messages      Message[]
 
+  @@unique([tenantId, contactId])
   @@index([tenantId, status])
   @@index([tenantId, assignedAgentId])
   @@index([tenantId, lastMessageAt])
@@ -220,6 +222,7 @@ model BroadcastRecipient {
   deliveredAt  DateTime? @map("delivered_at")
   readAt       DateTime? @map("read_at")
   lastError    String?   @map("last_error")
+  nextAttemptAt DateTime? @map("next_attempt_at")
   updatedAt    DateTime  @updatedAt @map("updated_at")
 
   broadcast Broadcast @relation(fields: [broadcastId], references: [id], onDelete: Cascade)

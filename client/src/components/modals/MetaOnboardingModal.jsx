@@ -32,10 +32,16 @@ export default function MetaOnboardingModal({ isOpen, onClose }) {
           setFormData({
             wabaId: data.settings.wabaId || '',
             phoneNumberId: data.settings.phoneNumberId || '',
-            accessToken: data.settings.accessToken || '',
             displayPhoneNumber: data.settings.displayPhoneNumber || '',
             webhookVerifyToken: data.settings.webhookVerifyToken || '',
-            webhookUrl: data.settings.webhookUrl || `${window.location.origin}/webhook`,
+            // Never derive the webhook URL from the page origin (that is
+            // the FRONTEND's address); fall back to the API base instead.
+            webhookUrl:
+              data.settings.webhookUrl ||
+              `${(import.meta.env.VITE_API_URL || '').replace(/\/+$/, '')}/webhook`,
+            // The stored token is never prefilled into the form (the API
+            // returns only a mask); blank means "keep the existing token".
+            accessToken: '',
             isConfigured: data.settings.isConfigured || false,
           });
         }
@@ -83,11 +89,26 @@ export default function MetaOnboardingModal({ isOpen, onClose }) {
     setTimeout(() => setCopied(false), 2000);
   };
 
+  // Escape closes the dialog.
+  useEffect(() => {
+    if (!isOpen) return;
+    const onKey = (e) => {
+      if (e.key === 'Escape') onClose();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [isOpen, onClose]);
+
   if (!isOpen) return null;
 
   return (
-    <div className="modal-overlay">
-      <div className="modal-content" style={{ maxWidth: '640px' }}>
+    <div
+      className="modal-overlay"
+      onClick={(e) => {
+        if (e.target === e.currentTarget) onClose();
+      }}
+    >
+      <div className="modal-content" role="dialog" aria-modal="true" aria-label="Meta WhatsApp settings" style={{ maxWidth: '640px' }}>
         {/* Header */}
         <div
           style={{
@@ -120,7 +141,7 @@ export default function MetaOnboardingModal({ isOpen, onClose }) {
               </p>
             </div>
           </div>
-          <button onClick={onClose} className="btn btn-ghost" style={{ padding: '6px' }}>
+          <button onClick={onClose} className="btn btn-ghost" style={{ padding: '6px' }} aria-label="Close settings">
             <X size={18} />
           </button>
         </div>
@@ -186,8 +207,13 @@ export default function MetaOnboardingModal({ isOpen, onClose }) {
                 Permanent System User Access Token (with whatsapp_business_messaging permissions)
               </label>
               <input
-                type="text"
-                placeholder="EAAG... (Leave unchanged to keep existing)"
+                type="password"
+                autoComplete="off"
+                placeholder={
+                  formData.isConfigured
+                    ? 'Token already configured — paste a new one only to replace it'
+                    : 'EAAG... paste your permanent system-user token'
+                }
                 value={formData.accessToken}
                 onChange={(e) => setFormData({ ...formData, accessToken: e.target.value })}
                 style={{
@@ -260,7 +286,7 @@ export default function MetaOnboardingModal({ isOpen, onClose }) {
                 </label>
                 <input
                   type="text"
-                  placeholder="e.g. +91 98765 43210"
+                  placeholder="Your WhatsApp display number"
                   value={formData.displayPhoneNumber}
                   onChange={(e) => setFormData({ ...formData, displayPhoneNumber: e.target.value })}
                   style={{
@@ -283,7 +309,7 @@ export default function MetaOnboardingModal({ isOpen, onClose }) {
                 </label>
                 <input
                   type="text"
-                  placeholder="e.g. apex_secret_verify_token_2026"
+                  placeholder="Your webhook verify token"
                   value={formData.webhookVerifyToken}
                   onChange={(e) => setFormData({ ...formData, webhookVerifyToken: e.target.value })}
                   style={{

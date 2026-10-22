@@ -3,7 +3,11 @@ import { Users, Plus, X, Shield, Clock, MessageSquare, CheckCircle2, UserCheck }
 import { useAuth } from '../../context/AuthContext';
 
 export default function AgentManagementModal({ isOpen, onClose }) {
-  const { token, agent, isAdmin } = useAuth();
+  const { token, agent, isAdmin, changePassword } = useAuth();
+  const [creating, setCreating] = useState(false);
+  const [resetTargetId, setResetTargetId] = useState(null);
+  const [resetPasswordValue, setResetPasswordValue] = useState('');
+  const [ownPasswords, setOwnPasswords] = useState({ current: '', next: '' });
   const [agents, setAgents] = useState([]);
   const [analytics, setAnalytics] = useState(null);
   const [loading, setLoading] = useState(false);
@@ -43,8 +47,20 @@ export default function AgentManagementModal({ isOpen, onClose }) {
     }
   }, [isOpen, agent, token]);
 
+  // Escape closes the dialog.
+  useEffect(() => {
+    if (!isOpen) return;
+    const onKey = (e) => {
+      if (e.key === 'Escape') onClose();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [isOpen, onClose]);
+
   const handleCreateAgent = async (e) => {
     e.preventDefault();
+    if (creating) return;
+    setCreating(true);
     try {
       const res = await fetch('/api/agents', {
         method: 'POST',
@@ -65,14 +81,59 @@ export default function AgentManagementModal({ isOpen, onClose }) {
       }
     } catch (err) {
       setMessage({ type: 'error', text: err.message });
+    } finally {
+      setCreating(false);
+    }
+  };
+
+  const handleResetPassword = async (targetAgent) => {
+    if (!resetPasswordValue || resetPasswordValue.length < 10) {
+      setMessage({ type: 'error', text: 'New password must be at least 10 characters' });
+      return;
+    }
+    try {
+      const res = await fetch(`/api/agents/${targetAgent.id}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ password: resetPasswordValue }),
+      });
+      const data = await res.json();
+      if (!data.success) throw new Error(data.error || 'Failed to reset password');
+      setMessage({
+        type: 'success',
+        text: `Password reset for ${targetAgent.name}. Their existing sessions have been signed out.`,
+      });
+      setResetTargetId(null);
+      setResetPasswordValue('');
+    } catch (err) {
+      setMessage({ type: 'error', text: err.message });
+    }
+  };
+
+  const handleChangeOwnPassword = async (e) => {
+    e.preventDefault();
+    try {
+      await changePassword(ownPasswords.current, ownPasswords.next);
+      setMessage({ type: 'success', text: 'Your password was updated. Other sessions have been signed out.' });
+      setOwnPasswords({ current: '', next: '' });
+    } catch (err) {
+      setMessage({ type: 'error', text: err.message });
     }
   };
 
   if (!isOpen) return null;
 
   return (
-    <div className="modal-overlay">
-      <div className="modal-content" style={{ maxWidth: '720px' }}>
+    <div
+      className="modal-overlay"
+      onClick={(e) => {
+        if (e.target === e.currentTarget) onClose();
+      }}
+    >
+      <div className="modal-content" role="dialog" aria-modal="true" aria-label="Staff agents" style={{ maxWidth: '720px' }}>
         {/* Header */}
         <div
           style={{
@@ -105,7 +166,7 @@ export default function AgentManagementModal({ isOpen, onClose }) {
               </p>
             </div>
           </div>
-          <button onClick={onClose} className="btn btn-ghost" style={{ padding: '6px' }}>
+          <button onClick={onClose} className="btn btn-ghost" style={{ padding: '6px' }} aria-label="Close staff agents">
             <X size={18} />
           </button>
         </div>
@@ -219,7 +280,7 @@ export default function AgentManagementModal({ isOpen, onClose }) {
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
                 <input
                   type="text"
-                  placeholder="Full Name (e.g. Dr. Kavita)"
+                  placeholder="Full name"
                   value={formData.name}
                   onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                   required
@@ -277,7 +338,6 @@ export default function AgentManagementModal({ isOpen, onClose }) {
                   }}
                 >
                   <option value="AGENT">Role: Staff Agent</option>
-                  <option value="ADMIN">Role: Tenant Admin</option>
                   <option value="SUPERVISOR">Role: Team Supervisor</option>
                 </select>
               </div>
@@ -290,8 +350,8 @@ export default function AgentManagementModal({ isOpen, onClose }) {
                 >
                   Cancel
                 </button>
-                <button type="submit" className="btn btn-primary" style={{ padding: '6px 12px', fontSize: '12px' }}>
-                  Create Account
+                <button type="submit" disabled={creating} className="btn btn-primary" style={{ padding: '6px 12px', fontSize: '12px' }}>
+                  {creating ? 'Creating...' : 'Create Account'}
                 </button>
               </div>
             </form>
@@ -368,10 +428,108 @@ export default function AgentManagementModal({ isOpen, onClose }) {
                   >
                     {a.role}
                   </span>
+
+                  {agent?.role === 'ADMIN' && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setResetTargetId(resetTargetId === a.id ? null : a.id);
+                        setResetPasswordValue('');
+                      }}
+                      className="btn btn-ghost"
+                      style={{ fontSize: '11px', padding: '4px 8px' }}
+                    >
+                      Reset password
+                    </button>
+                  )}
                 </div>
+                {agent?.role === 'ADMIN' && resetTargetId === a.id && (
+                  <div style={{ display: 'flex', gap: '8px', marginTop: '10px', width: '100%' }}>
+                    <input
+                      type="password"
+                      autoComplete="new-password"
+                      placeholder="New password (min 10 characters)"
+                      value={resetPasswordValue}
+                      onChange={(e) => setResetPasswordValue(e.target.value)}
+                      style={{
+                        flex: 1,
+                        background: '#090d16',
+                        border: '1px solid var(--border-subtle)',
+                        borderRadius: '6px',
+                        padding: '7px 10px',
+                        color: '#fff',
+                        fontSize: '12px',
+                      }}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => handleResetPassword(a)}
+                      className="btn btn-primary"
+                      style={{ padding: '6px 12px', fontSize: '12px' }}
+                    >
+                      Set password
+                    </button>
+                  </div>
+                )}
               </div>
             ))}
           </div>
+
+          {/* Own password */}
+          <form
+            onSubmit={handleChangeOwnPassword}
+            style={{
+              marginTop: '18px',
+              background: 'var(--bg-surface)',
+              borderRadius: 'var(--radius-md)',
+              padding: '14px',
+              border: '1px solid var(--border-medium)',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '10px',
+            }}
+          >
+            <div style={{ fontSize: '12.5px', fontWeight: '600', color: '#fff' }}>Change my password</div>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+              <input
+                type="password"
+                autoComplete="current-password"
+                placeholder="Current password"
+                value={ownPasswords.current}
+                onChange={(e) => setOwnPasswords({ ...ownPasswords, current: e.target.value })}
+                required
+                style={{
+                  background: '#090d16',
+                  border: '1px solid var(--border-subtle)',
+                  borderRadius: '6px',
+                  padding: '8px 10px',
+                  color: '#fff',
+                  fontSize: '12px',
+                }}
+              />
+              <input
+                type="password"
+                autoComplete="new-password"
+                placeholder="New password (min 10 characters)"
+                value={ownPasswords.next}
+                onChange={(e) => setOwnPasswords({ ...ownPasswords, next: e.target.value })}
+                required
+                style={{
+                  background: '#090d16',
+                  border: '1px solid var(--border-subtle)',
+                  borderRadius: '6px',
+                  padding: '8px 10px',
+                  color: '#fff',
+                  fontSize: '12px',
+                }}
+              />
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+              <button type="submit" className="btn btn-primary" style={{ padding: '6px 12px', fontSize: '12px' }}>
+                Update password
+              </button>
+            </div>
+          </form>
         </div>
       </div>
     </div>

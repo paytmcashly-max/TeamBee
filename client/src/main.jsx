@@ -8,13 +8,29 @@ import { ChatProvider } from './context/ChatContext';
 
 // Direct API calls to backend cloud service when configured
 const API_URL = import.meta.env.VITE_API_URL || '';
-if (API_URL) {
+{
   const originalFetch = window.fetch;
-  window.fetch = (input, init) => {
-    if (typeof input === 'string' && input.startsWith('/')) {
-      input = `${API_URL.replace(/\/+$/, '')}${input}`;
+  window.fetch = async (input, init) => {
+    let url = input;
+    if (typeof url === 'string' && url.startsWith('/') && API_URL) {
+      url = `${API_URL.replace(/\/+$/, '')}${url}`;
     }
-    return originalFetch(input, { ...init, credentials: init?.credentials || 'include' });
+    const response = await originalFetch(url, { ...init, credentials: init?.credentials || 'include' });
+    // A 401 from any data endpoint means the session died server-side
+    // (expired, revoked, password changed). Broadcast it so AuthContext can
+    // return the user to the login screen instead of leaving a zombie UI.
+    try {
+      const path = typeof url === 'string' ? url : url?.url || '';
+      if (
+        response.status === 401 &&
+        path.includes('/api/') &&
+        !path.includes('/api/auth/login') &&
+        !path.includes('/api/auth/me')
+      ) {
+        window.dispatchEvent(new Event('auth:unauthorized'));
+      }
+    } catch (ignored) {}
+    return response;
   };
 }
 

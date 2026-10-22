@@ -1,5 +1,6 @@
 const prisma = require('../db/prisma');
 const MetaApiService = require('../services/metaApiService');
+const { decryptSecret } = require('../services/credentialCrypto');
 const { broadcastNewMessage } = require('../services/socketService');
 const { canAccessChat } = require('../middleware/authMiddleware');
 
@@ -31,11 +32,24 @@ class MessageController {
        const requestedBefore = req.query.before;
        let messageWhere = { chatId };
        if (requestedBefore) {
-         const beforeDate = new Date(requestedBefore);
+         // Composite cursor "<iso>|<id>": inbound bursts share the same
+         // second, so a bare timestamp cursor permanently skipped messages.
+         // A legacy bare-ISO cursor keeps the old behaviour.
+         const separatorIndex = requestedBefore.lastIndexOf('|');
+         const datePart = separatorIndex >= 0 ? requestedBefore.slice(0, separatorIndex) : requestedBefore;
+         const cursorId = separatorIndex >= 0 ? requestedBefore.slice(separatorIndex + 1) : null;
+         const beforeDate = new Date(datePart);
          if (Number.isNaN(beforeDate.getTime())) {
            return res.status(400).json({ success: false, error: 'Invalid message cursor' });
          }
-         messageWhere.createdAt = { lt: beforeDate };
+         if (cursorId) {
+           messageWhere.OR = [
+             { createdAt: { lt: beforeDate } },
+             { createdAt: beforeDate, id: { lt: cursorId } },
+           ];
+         } else {
+           messageWhere.createdAt = { lt: beforeDate };
+         }
        }
 
        const messageRows = await prisma.message.findMany({
@@ -45,15 +59,18 @@ class MessageController {
             select: { id: true, name: true, avatarUrl: true },
           },
         },
-         orderBy: { createdAt: 'desc' },
+         orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
          take: requestedLimit + 1,
        });
        const hasMore = messageRows.length > requestedLimit;
        const messages = (hasMore ? messageRows.slice(0, requestedLimit) : messageRows).reverse();
-       const nextBefore = hasMore ? messages[0]?.createdAt : null;
+       const nextBefore = hasMore && messages[0]
+         ? `${messages[0].createdAt.toISOString()}|${messages[0].id}`
+         : null;
 
-      // Calculate if the 24-hour customer care messaging window is currently open
-      let isWindowOpen = true;
+      // Calculate if the 24-hour customer care messaging window is currently
+      // open. A chat with no customer message yet has NO open window.
+      let isWindowOpen = false;
       let windowExpiresAt = null;
 
       if (chat.lastCustomerMessageAt) {
@@ -109,8 +126,22 @@ class MessageController {
          return res.status(400).json({ success: false, error: 'Message content is too long' });
        }
        if (typeof mediaUrl !== 'undefined' && mediaUrl !== null) {
-         if (typeof mediaUrl !== 'string' || mediaUrl.length > 2048 || !/^https:\/\//i.test(mediaUrl)) {
-           return res.status(400).json({ success: false, error: 'mediaUrl must be an HTTPS URL' });
+         let parsedMediaUrl = null;
+         try {
+           parsedMediaUrl = typeof mediaUrl === 'string' ? new URL(mediaUrl) : null;
+         } catch (parseError) {
+           parsedMediaUrl = null;
+         }
+         if (
+           typeof mediaUrl !== 'string' ||
+           mediaUrl.length > 2048 ||
+           !parsedMediaUrl ||
+           parsedMediaUrl.protocol !== 'https:' ||
+           !parsedMediaUrl.hostname ||
+           parsedMediaUrl.username ||
+           parsedMediaUrl.password
+         ) {
+           return res.status(400).json({ success: false, error: 'mediaUrl must be a valid HTTPS URL without embedded credentials' });
          }
        }
        if (typeof mediaFilename !== 'undefined' && mediaFilename !== null &&
@@ -223,17 +254,27 @@ class MessageController {
         });
       }
 
-      // Check 24-hour window SLA
-      if (chat.lastCustomerMessageAt && !forceSend) {
-        const lastMsgTime = new Date(chat.lastCustomerMessageAt).getTime();
-        const isWindowOpen = Date.now() - lastMsgTime < 24 * 60 * 60 * 1000;
-        if (!isWindowOpen && messageType === 'TEXT') {
+      // Check the 24-hour window for EVERY outbound type (Meta rejects
+      // free-form media outside the window too), not just text. A chat with
+      // no customer message yet has no open window.
+      const windowOpen = chat.lastCustomerMessageAt
+        ? Date.now() - new Date(chat.lastCustomerMessageAt).getTime() < 24 * 60 * 60 * 1000
+        : false;
+      if (!windowOpen) {
+        if (!forceSend) {
           return res.status(400).json({
             success: false,
             code: 'WINDOW_EXPIRED',
             error: 'The 24-hour WhatsApp customer reply window has expired. You must send an approved WhatsApp Template message to re-engage this customer.',
           });
         }
+        if (!['ADMIN', 'SUPERVISOR'].includes(req.agent.role)) {
+          return res.status(403).json({
+            success: false,
+            error: 'Only admins or supervisors can force-send outside the 24-hour window',
+          });
+        }
+        console.warn(`[Send Message]: forceSend override by agent ${agentId} (${req.agent.role}) on chat ${chat.id} outside the 24h window`);
       }
 
       // -------------------------------------------------------------
@@ -332,8 +373,9 @@ class MessageController {
       });
       const message = clientMessageId ? { ...messageRecord, clientMessageId } : messageRecord;
 
-      // Update chat preview & bump status to OPEN if it was UNASSIGNED
-      const newStatus = chat.status === 'UNASSIGNED' ? 'OPEN' : chat.status;
+      // Update chat preview; an outbound reply reopens UNASSIGNED/RESOLVED
+      // conversations so the thread cannot sit closed while being worked.
+      const newStatus = chat.status === 'UNASSIGNED' || chat.status === 'RESOLVED' ? 'OPEN' : chat.status;
       const newAssignedAgentId = chat.assignedAgentId || agentId;
 
       await prisma.chat.update({
@@ -375,6 +417,61 @@ class MessageController {
       }
       console.error('[Send Message Error]:', error);
       return res.status(500).json({ success: false, error: 'Failed to send outbound message' });
+    }
+  }
+
+  /**
+   * GET /api/media/:messageId: stream an inbound message's media.
+   * Meta media URLs are short-lived and need the tenant token, so the binary
+   * is proxied server-side after the same access check as reading the chat.
+   */
+  static async getMedia(req, res) {
+    try {
+      const { messageId } = req.params;
+      const message = await prisma.message.findUnique({
+        where: { id: messageId },
+        include: { chat: true, tenant: true },
+      });
+      if (!message || message.tenantId !== req.tenantId || !message.mediaId) {
+        return res.status(404).json({ success: false, error: 'Media not found' });
+      }
+      if (!canAccessChat(req.agent, message.chat)) {
+        return res.status(403).json({ success: false, error: 'Access denied' });
+      }
+
+      const accessToken = decryptSecret(message.tenant.accessToken) || process.env.META_ACCESS_TOKEN;
+      if (!accessToken) {
+        return res.status(502).json({ success: false, error: 'WhatsApp access token is not configured for this workspace' });
+      }
+      const apiVersion = process.env.META_API_VERSION || 'v20.0';
+      const lookup = await fetch(`https://graph.facebook.com/${apiVersion}/${encodeURIComponent(message.mediaId)}`, {
+        headers: { Authorization: `Bearer ${accessToken}` },
+      });
+      if (!lookup.ok) {
+        return res.status(502).json({ success: false, error: 'Could not resolve media with Meta' });
+      }
+      const { url } = await lookup.json();
+      if (!url) {
+        return res.status(502).json({ success: false, error: 'Meta returned no media URL' });
+      }
+      const binary = await fetch(url, { headers: { Authorization: `Bearer ${accessToken}` } });
+      if (!binary.ok || !binary.body) {
+        return res.status(502).json({ success: false, error: 'Could not download media from Meta' });
+      }
+      res.setHeader('Content-Type', binary.headers.get('content-type') || message.mediaMimeType || 'application/octet-stream');
+      const contentLength = binary.headers.get('content-length');
+      if (contentLength) res.setHeader('Content-Length', contentLength);
+      if (message.mediaFilename) {
+        res.setHeader('Content-Disposition', `inline; filename="${message.mediaFilename.replace(/"/g, '')}"`);
+      }
+      const { Readable } = require('stream');
+      Readable.fromWeb(binary.body).pipe(res);
+    } catch (error) {
+      console.error('[Get Media Error]:', error);
+      if (!res.headersSent) {
+        return res.status(500).json({ success: false, error: 'Failed to load media' });
+      }
+      res.end();
     }
   }
 }

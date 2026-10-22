@@ -52,11 +52,44 @@ export function AuthProvider({ children }) {
     return data;
   };
 
+  // Global session-expiry hook (dispatched by the fetch wrapper in main.jsx)
+  useEffect(() => {
+    const handleUnauthorized = () => {
+      setToken(null);
+      setAgent(null);
+      setTenant(null);
+    };
+    window.addEventListener('auth:unauthorized', handleUnauthorized);
+    return () => window.removeEventListener('auth:unauthorized', handleUnauthorized);
+  }, []);
+
   const logout = async () => {
-    await fetch('/api/auth/logout', { method: 'POST', credentials: 'include' }).catch(() => {});
+    await fetch('/api/auth/logout', {
+      method: 'POST',
+      credentials: 'include',
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    }).catch(() => {});
     setToken(null);
     setAgent(null);
     setTenant(null);
+  };
+
+  const changePassword = async (currentPassword, newPassword) => {
+    const res = await fetch('/api/auth/change-password', {
+      method: 'POST',
+      credentials: 'include',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+      body: JSON.stringify({ currentPassword, newPassword }),
+    });
+    const data = await res.json();
+    if (!data.success) {
+      throw new Error(data.error || 'Failed to change password');
+    }
+    if (data.token) setToken(data.token);
+    return data;
   };
 
   const updateTenantInfo = (updated) => {
@@ -72,6 +105,7 @@ export function AuthProvider({ children }) {
         loading,
         login,
         logout,
+        changePassword,
         updateTenantInfo,
         isAdmin: agent?.role === 'ADMIN' || agent?.role === 'SUPERVISOR',
       }}

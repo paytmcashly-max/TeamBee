@@ -8,5 +8,6 @@ router.post('/login', authLimiter, AuthController.login);
 router.post('/register-tenant', registrationLimiter, AuthController.registerTenant);
 router.get('/me', authenticateToken, AuthController.getMe);
 router.post('/logout', AuthController.logout);
+router.post('/change-password', authenticateToken, AuthController.changePassword);
 
 module.exports = router;

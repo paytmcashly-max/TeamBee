@@ -390,7 +390,16 @@ export default function ConversationList({
             return (
               <div
                 key={chat.id}
+                role="button"
+                tabIndex={0}
+                aria-label={`Conversation with ${chat.contact?.name || chat.contact?.waId || 'customer'}`}
                 onClick={() => selectChat(chat.id)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    selectChat(chat.id);
+                  }
+                }}
                 style={{
                   padding: '12px 16px',
                   borderBottom: '1px solid var(--border-subtle)',
@@ -430,21 +439,6 @@ export default function ConversationList({
                     >
                       {chat.contact?.name ? chat.contact.name.charAt(0).toUpperCase() : 'C'}
                     </div>
-                    <span
-                      style={{
-                        position: 'absolute',
-                        bottom: '-2px',
-                        right: '-2px',
-                        fontSize: '8px',
-                        background: '#047857',
-                        color: '#fff',
-                        borderRadius: '3px',
-                        padding: '1px 3px',
-                        fontWeight: '700',
-                      }}
-                    >
-                      +91
-                    </span>
                   </div>
 
                   {/* Body Content */}

@@ -2,7 +2,12 @@ const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const crypto = require('crypto');
 const prisma = require('../db/prisma');
-const { getJwtSecret } = require('../middleware/authMiddleware');
+const { getJwtSecret, verifyAccessToken, readCookie } = require('../middleware/authMiddleware');
+const { hashSecret } = require('../services/credentialCrypto');
+
+// Compared against when the account does not exist, so unknown-email and
+// wrong-password logins cost the same bcrypt time (no enumeration oracle).
+const DUMMY_PASSWORD_HASH = bcrypt.hashSync('timing-equalizer-not-a-real-password', 10);
 
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -27,6 +32,7 @@ function signSession(agent) {
       tenantId: agent.tenantId,
       role: agent.role,
       email: agent.email,
+      tv: agent.tokenVersion ?? 0,
     },
     getJwtSecret(),
     { expiresIn: '7d', algorithm: 'HS256' }
@@ -43,7 +49,8 @@ function setSessionCookie(res, token) {
     'HttpOnly',
     `SameSite=${sameSite === 'none' ? 'None' : sameSite === 'strict' ? 'Strict' : 'Lax'}`,
   ];
-  if (secure) attributes.push('Secure');
+  // SameSite=None is only honoured by browsers together with Secure.
+  if (secure || sameSite === 'none') attributes.push('Secure');
   res.setHeader('Set-Cookie', attributes.join('; '));
 }
 
@@ -65,31 +72,38 @@ class AuthController {
         return res.status(400).json({ success: false, error: 'Email and password are required' });
       }
 
-      let query = { email };
-      if (tenantSlug) {
-        const tenant = await prisma.tenant.findUnique({ where: { slug: tenantSlug } });
-        if (!tenant) {
-          return res.status(401).json({ success: false, error: 'Invalid email or credentials' });
-        }
-        query.tenantId = tenant.id;
-      }
-
-      const agent = await prisma.agent.findFirst({
-        where: query,
+      // Resolve the account deterministically. The same email may exist in
+      // several tenants; without a slug that is ambiguous, and findFirst
+      // would silently pick an arbitrary workspace.
+      const matches = await prisma.agent.findMany({
+        where: { email },
         include: { tenant: true },
       });
 
-      if (!agent) {
+      let agent = null;
+      if (tenantSlug) {
+        const tenant = await prisma.tenant.findUnique({ where: { slug: tenantSlug } });
+        agent = tenant ? matches.find((candidate) => candidate.tenantId === tenant.id) || null : null;
+      } else if (matches.length > 1) {
+        return res.status(400).json({
+          success: false,
+          code: 'WORKSPACE_REQUIRED',
+          error: 'This email belongs to multiple workspaces. Please provide your workspace slug to sign in.',
+        });
+      } else {
+        agent = matches[0] || null;
+      }
+
+      // Always run bcrypt (against a dummy hash for unknown accounts) and
+      // only reveal deactivation after the password has verified, so the
+      // endpoint cannot be used to enumerate accounts or their state.
+      const isValidPassword = await bcrypt.compare(password, agent ? agent.passwordHash : DUMMY_PASSWORD_HASH);
+      if (!agent || !isValidPassword) {
         return res.status(401).json({ success: false, error: 'Invalid email or credentials' });
       }
 
       if (!agent.isActive) {
         return res.status(403).json({ success: false, error: 'This agent account is deactivated' });
-      }
-
-      const isValidPassword = await bcrypt.compare(password, agent.passwordHash);
-      if (!isValidPassword) {
-        return res.status(401).json({ success: false, error: 'Invalid email or credentials' });
       }
 
       // Generate session JWT with 7-day validity
@@ -139,6 +153,24 @@ class AuthController {
         return res.status(400).json({ success: false, error: 'All fields are required' });
       }
 
+      // bcrypt silently truncates past 72 bytes; refuse rather than store a
+      // password whose tail is ignored at compare time.
+      if (Buffer.byteLength(password, 'utf8') > 72) {
+        return res.status(400).json({ success: false, error: 'Password is too long (maximum 72 bytes)' });
+      }
+
+      // Optional invite gate: when REGISTRATION_INVITE_CODE is configured,
+      // self-serve registration closes to everyone without the code.
+      const inviteCode = process.env.REGISTRATION_INVITE_CODE;
+      if (inviteCode) {
+        const supplied = typeof req.body?.inviteCode === 'string' ? req.body.inviteCode : '';
+        const suppliedBuffer = Buffer.from(supplied);
+        const expectedBuffer = Buffer.from(inviteCode);
+        if (suppliedBuffer.length !== expectedBuffer.length || !crypto.timingSafeEqual(suppliedBuffer, expectedBuffer)) {
+          return res.status(403).json({ success: false, error: 'Registration is invite-only right now' });
+        }
+      }
+
       const finalSlug = (requestedSlug || businessName.toLowerCase().replace(/[^a-z0-9]+/g, '-'))
         .replace(/^-+|-+$/g, '')
         .slice(0, 50);
@@ -160,7 +192,9 @@ class AuthController {
           data: {
             name: businessName,
             slug: finalSlug,
-            webhookVerifyToken: `cf_verify_${crypto.randomBytes(24).toString('hex')}`,
+            // Only the hash is stored (same as settings update); the
+            // plaintext verify token is never persisted.
+            webhookVerifyTokenHash: hashSecret(`cf_verify_${crypto.randomBytes(24).toString('hex')}`),
           },
         });
 
@@ -193,6 +227,11 @@ class AuthController {
         tenant: publicTenant(result.tenant),
       });
     } catch (error) {
+      // The slug pre-check races concurrent registrations; the unique index
+      // is the real guard and its violation is a client error, not a 500.
+      if (error && error.code === 'P2002') {
+        return res.status(400).json({ success: false, error: 'A business with this slug or name already exists' });
+      }
       console.error('[Register Tenant Error]:', error);
       return res.status(500).json({ success: false, error: 'Failed to create business account' });
     }
@@ -226,8 +265,69 @@ class AuthController {
   }
 
   static async logout(req, res) {
+    // Revoke the presented session: bumping tokenVersion kills this token
+    // (and any other outstanding tokens for the agent) immediately, instead
+    // of merely clearing a cookie while the JWT lives on for days.
+    try {
+      const authHeader = req.headers['authorization'];
+      const bearerToken = authHeader && authHeader.startsWith('Bearer ') ? authHeader.slice(7).trim() : null;
+      const token = bearerToken && bearerToken !== 'null' && bearerToken !== 'undefined'
+        ? bearerToken
+        : readCookie(req.headers.cookie, 'chatflow_session');
+      if (token) {
+        const decoded = verifyAccessToken(token);
+        const agentId = decoded && (decoded.agentId || decoded.id);
+        if (typeof agentId === 'string') {
+          await prisma.agent.update({
+            where: { id: agentId },
+            data: { tokenVersion: { increment: 1 } },
+          });
+        }
+      }
+    } catch (revokeError) {
+      // Logout must succeed even if the presented token is already invalid.
+      console.warn('[Auth Logout Revoke Notice]:', revokeError.message);
+    }
     clearSessionCookie(res);
     return res.json({ success: true });
+  }
+
+  /**
+   * POST /api/auth/change-password: rotate own password (revokes other sessions)
+   */
+  static async changePassword(req, res) {
+    try {
+      const currentPassword = typeof req.body?.currentPassword === 'string' ? req.body.currentPassword : '';
+      const newPassword = typeof req.body?.newPassword === 'string' ? req.body.newPassword : '';
+
+      if (!currentPassword || newPassword.length < 10 || newPassword.length > 256) {
+        return res.status(400).json({ success: false, error: 'Current password and a new password of at least 10 characters are required' });
+      }
+      if (Buffer.byteLength(newPassword, 'utf8') > 72) {
+        return res.status(400).json({ success: false, error: 'Password is too long (maximum 72 bytes)' });
+      }
+
+      const isValid = await bcrypt.compare(currentPassword, req.agent.passwordHash);
+      if (!isValid) {
+        return res.status(401).json({ success: false, error: 'Current password is incorrect' });
+      }
+
+      const passwordHash = await bcrypt.hash(newPassword, 10);
+      const updated = await prisma.agent.update({
+        where: { id: req.agent.id },
+        data: { passwordHash, tokenVersion: { increment: 1 } },
+        include: { tenant: true },
+      });
+
+      // Re-issue a session for THIS device on the new token version so the
+      // user is not logged out of the tab they just secured.
+      const token = signSession(updated);
+      setSessionCookie(res, token);
+      return res.json({ success: true, token, message: 'Password updated. Other sessions have been signed out.' });
+    } catch (error) {
+      console.error('[Auth Change Password Error]:', error);
+      return res.status(500).json({ success: false, error: 'Failed to change password' });
+    }
   }
 }
 

@@ -72,6 +72,16 @@ async function authenticateToken(req, res, next) {
       });
     }
 
+    // Session revocation: tokens minted before a password change, logout or
+    // admin reset carry an older version and die here. Legacy tokens without
+    // the claim are version 0 (matching the column default).
+    if ((decoded.tv ?? 0) !== (agent.tokenVersion ?? 0)) {
+      return res.status(401).json({
+        success: false,
+        error: 'Session has been revoked. Please sign in again.',
+      });
+    }
+
     req.agent = agent;
     req.tenantId = agent.tenantId;
     req.tenant = agent.tenant;

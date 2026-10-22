@@ -6,6 +6,8 @@ import ConversationList from './components/inbox/ConversationList';
 import ChatCanvas from './components/inbox/ChatCanvas';
 import ContactSidebar from './components/inbox/ContactSidebar';
 import MetaOnboardingModal from './components/modals/MetaOnboardingModal';
+import ErrorBoundary from './components/ErrorBoundary';
+import { useSocket } from './context/SocketContext';
 import TemplateModal from './components/modals/TemplateModal';
 import AgentManagementModal from './components/modals/AgentManagementModal';
 import BroadcastModal from './components/modals/BroadcastModal';
@@ -13,6 +15,7 @@ import BroadcastModal from './components/modals/BroadcastModal';
 export default function App() {
   const { agent, loading } = useAuth();
   const { activeChat, activeChatId, selectChat } = useChat();
+  const { connected } = useSocket();
 
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isTemplateModalOpen, setIsTemplateModalOpen] = useState(false);
@@ -44,7 +47,13 @@ export default function App() {
   }
 
   return (
+    <ErrorBoundary>
     <div className="app-container">
+      {!connected && (
+        <div className="connection-banner" role="alert">
+          Connection lost — reconnecting to TeamBee… New messages will appear once the connection is back.
+        </div>
+      )}
       {/* 3-Column WhatsApp Shared Inbox Layout */}
       <div className={`inbox-layout ${(activeChat || activeChatId) ? 'has-active-chat' : 'no-active-chat'}`}>
         {/* Column 1: Navigation & Conversation List */}
@@ -86,5 +95,6 @@ export default function App() {
       <BroadcastModal isOpen={isBroadcastModalOpen} onClose={() => setIsBroadcastModalOpen(false)} />
       <AgentManagementModal isOpen={isAgentsModalOpen} onClose={() => setIsAgentsModalOpen(false)} />
     </div>
+    </ErrorBoundary>
   );
 }

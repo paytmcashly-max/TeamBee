@@ -32,7 +32,9 @@ class TenantController {
           ...tenant,
           // Credential values are intentionally never returned to clients.
          isConfigured: Boolean(tenant.phoneNumberId && tenant.wabaId && req.tenant.accessToken),
-          webhookUrl: `${req.protocol}://${req.get('host')}/webhook`,
+          // Built from the configured public API base — never from request
+        // headers, which a spoofed X-Forwarded-Host could poison.
+        webhookUrl: `${(process.env.PUBLIC_API_URL || process.env.RENDER_EXTERNAL_URL || `${req.protocol}://${req.get('host')}`).replace(/\/+$/, '')}/webhook`,
         },
       });
     } catch (error) {

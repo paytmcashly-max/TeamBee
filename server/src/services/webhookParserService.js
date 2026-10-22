@@ -131,6 +131,7 @@ class WebhookParserService {
       return { success: false, reason: 'Invalid WhatsApp payload format', results };
     }
 
+    let unresolvedEntries = 0;
     for (const entry of payload.entry) {
       if (!entry || typeof entry !== 'object' || !Array.isArray(entry.changes)) {
         results.errors.push({ error: 'Invalid webhook entry' });
@@ -139,6 +140,7 @@ class WebhookParserService {
       const tenant = await this.resolveTenant(entry);
       if (!tenant) {
         console.warn(`[Webhook Parser]: No registered tenant found for WABA entry ${entry.id}`);
+        if (entry.changes.some((change) => change.field === 'messages')) unresolvedEntries += 1;
         continue;
       }
 
@@ -167,10 +169,10 @@ class WebhookParserService {
                   waId,
                 },
               },
-              update: {
-                name: profileName,
-                updatedAt: new Date(),
-              },
+              // Name is set on create only: an agent may have renamed this
+              // contact in the CRM, and the customer's next message must
+              // not silently revert it to their WhatsApp profile name.
+              update: {},
               create: {
                 tenantId: tenant.id,
                 waId,
@@ -215,6 +217,13 @@ class WebhookParserService {
           }
         }
       }
+    }
+
+    // An entry that carried messages/statuses but matched no tenant means
+    // the messages were dropped: fail the event so it stays visible and
+    // retryable instead of being marked PROCESSED.
+    if (unresolvedEntries > 0 && results.processedMessages === 0 && results.processedStatuses === 0) {
+      return { success: false, reason: 'No registered tenant matched the webhook payload', results };
     }
 
     return { success: true, results };
@@ -328,6 +337,12 @@ class WebhookParserService {
     const customerWaId = rawMsg.from;
     const parsedPayload = this.extractMessagePayload(rawMsg);
     const now = new Date();
+    // Chat ordering and the 24h window key off when the CUSTOMER sent the
+    // message (Meta's timestamp), not when this server happened to process
+    // it — a webhook retried hours late must not reopen an expired window.
+    const inboundAt = Number.isFinite(Number.parseInt(rawMsg.timestamp, 10))
+      ? new Date(Number.parseInt(rawMsg.timestamp, 10) * 1000)
+      : now;
     let result;
 
     try {
@@ -373,8 +388,8 @@ class WebhookParserService {
               contactId: contact.id,
               status: 'UNASSIGNED',
               lastMessagePreview: parsedPayload.content,
-              lastMessageAt: now,
-              lastCustomerMessageAt: now,
+              lastMessageAt: inboundAt,
+              lastCustomerMessageAt: inboundAt,
               unreadCount: 1,
               tags: JSON.stringify(['Inbound']),
             },
@@ -389,8 +404,10 @@ class WebhookParserService {
             data: {
               status: nextStatus,
               lastMessagePreview: parsedPayload.content,
-              lastMessageAt: now,
-              lastCustomerMessageAt: now,
+              lastMessageAt: chat.lastMessageAt && chat.lastMessageAt > inboundAt ? chat.lastMessageAt : inboundAt,
+              lastCustomerMessageAt: chat.lastCustomerMessageAt && chat.lastCustomerMessageAt > inboundAt
+                ? chat.lastCustomerMessageAt
+                : inboundAt,
               unreadCount: { increment: 1 },
             },
           });
@@ -411,9 +428,7 @@ class WebhookParserService {
             rawPayload: JSON.stringify(rawMsg),
             direction: 'INBOUND',
             status: 'DELIVERED',
-            createdAt: Number.isFinite(Number.parseInt(rawMsg.timestamp, 10))
-              ? new Date(Number.parseInt(rawMsg.timestamp, 10) * 1000)
-              : now,
+            createdAt: inboundAt,
           },
         });
 
@@ -481,18 +496,24 @@ class WebhookParserService {
       return { updated: false, reason: 'Message belongs to another tenant' };
     }
 
-    if (!message) {
-      // Check if this was a broadcast recipient update
-      const recipient = await prisma.broadcastRecipient.findFirst({
-        where: { waMessageId },
-        include: { broadcast: { select: { tenantId: true } } },
-      });
+    // A broadcast send creates BOTH a Message row and a BroadcastRecipient
+    // row carrying the same WAMID — a status callback must update both, or
+    // campaign delivered/read counters never move.
+    const recipient = await prisma.broadcastRecipient.findFirst({
+      where: { waMessageId },
+      include: { broadcast: { select: { tenantId: true } } },
+    });
 
-      if (recipient && recipient.broadcast.tenantId === tenant.id) {
+    let recipientUpdated = false;
+    if (recipient && recipient.broadcast.tenantId === tenant.id) {
         const statusPriority = { PENDING: 0, SENT: 1, DELIVERED: 2, READ: 3, FAILED: 4 };
-        const previousStatuses = Object.keys(statusPriority).filter(
-          (candidate) => statusPriority[candidate] < statusPriority[status]
-        );
+        // FAILED is terminal only from pre-delivery states — a late FAILED
+        // callback must never regress a DELIVERED/READ record.
+        const previousStatuses = status === 'FAILED'
+          ? ['PENDING', 'SENT']
+          : Object.keys(statusPriority).filter(
+              (candidate) => statusPriority[candidate] < statusPriority[status]
+            );
         if (previousStatuses.length === 0) {
           return { updated: false, reason: 'Status already applied' };
         }
@@ -531,20 +552,26 @@ class WebhookParserService {
           return true;
         });
 
-        return changed
-          ? { updated: true, type: 'broadcast', recipientId: recipient.id }
-          : { updated: false, reason: 'Status already applied' };
-      }
+        recipientUpdated = changed;
+        if (!message) {
+          return changed
+            ? { updated: true, type: 'broadcast', recipientId: recipient.id }
+            : { updated: false, reason: 'Status already applied' };
+        }
+    }
 
+    if (!message) {
       return { updated: false, reason: 'Message not found for WAMID' };
     }
 
     // Prevent regressing or re-applying status (e.g. don't overwrite READ
     // with DELIVERED, and don't broadcast duplicate READ callbacks).
     const statusPriority = { PENDING: 0, SENT: 1, DELIVERED: 2, READ: 3, FAILED: 4 };
-    const previousStatuses = Object.keys(statusPriority).filter(
-      (candidate) => statusPriority[candidate] < statusPriority[status]
-    );
+    const previousStatuses = status === 'FAILED'
+      ? ['PENDING', 'SENT']
+      : Object.keys(statusPriority).filter(
+          (candidate) => statusPriority[candidate] < statusPriority[status]
+        );
     if (previousStatuses.length === 0) {
       return { updated: false, reason: 'Status already higher than update' };
     }
@@ -558,7 +585,8 @@ class WebhookParserService {
         status,
         errorCode,
         errorMessage,
-        updatedAt: timestamp,
+        // Never move updatedAt backwards for out-of-order callbacks.
+        updatedAt: message.updatedAt && timestamp < message.updatedAt ? message.updatedAt : timestamp,
       },
     });
     if (updateResult.count === 0) {

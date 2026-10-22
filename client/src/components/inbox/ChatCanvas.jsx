@@ -28,9 +28,99 @@ import {
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { useChat } from '../../context/ChatContext';
+import { useSocket } from '../../context/SocketContext';
+
+const API_BASE = (import.meta.env.VITE_API_URL || '').replace(/\/+$/, '');
+
+function dayLabel(dateStr) {
+  const d = new Date(dateStr);
+  if (Number.isNaN(d.getTime())) return null;
+  const sameDay = (a, b) =>
+    a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
+  if (sameDay(d, new Date())) return 'Today';
+  if (sameDay(d, new Date(Date.now() - 86400000))) return 'Yesterday';
+  return d.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' });
+}
+
+// Interleave day separators into the message stream (WhatsApp-style).
+function withDateSeparators(list) {
+  const out = [];
+  let lastDayKey = null;
+  for (const message of list) {
+    const d = new Date(message.createdAt);
+    const key = Number.isNaN(d.getTime()) ? null : `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
+    if (key && key !== lastDayKey) {
+      out.push({ _separator: true, id: `sep-${key}`, label: dayLabel(message.createdAt) });
+      lastDayKey = key;
+    }
+    out.push(message);
+  }
+  return out;
+}
+
+// Inbound media lives behind Meta's expiring URLs, so it is streamed through
+// the authenticated backend proxy. The JWT travels in a header, so the binary
+// is fetched as a blob and rendered from an object URL.
+function AuthedMedia({ messageId, kind, token, filename }) {
+  const [objectUrl, setObjectUrl] = useState(null);
+  const [failed, setFailed] = useState(false);
+
+  useEffect(() => {
+    let revoked = false;
+    let createdUrl = null;
+    (async () => {
+      try {
+        const res = await fetch(`${API_BASE}/api/messages/media/${messageId}`, {
+          credentials: 'include',
+          headers: token ? { Authorization: `Bearer ${token}` } : {},
+        });
+        if (!res.ok) throw new Error('media fetch failed');
+        const blob = await res.blob();
+        createdUrl = URL.createObjectURL(blob);
+        if (!revoked) setObjectUrl(createdUrl);
+      } catch (err) {
+        if (!revoked) setFailed(true);
+      }
+    })();
+    return () => {
+      revoked = true;
+      if (createdUrl) URL.revokeObjectURL(createdUrl);
+    };
+  }, [messageId, token]);
+
+  if (failed) {
+    return (
+      <div style={{ padding: '18px 12px', borderRadius: '8px', background: 'rgba(255,255,255,0.06)', color: 'var(--text-muted)', fontSize: '12px', textAlign: 'center' }}>
+        Media unavailable
+      </div>
+    );
+  }
+  if (!objectUrl) {
+    return (
+      <div style={{ padding: '18px 12px', borderRadius: '8px', background: 'rgba(255,255,255,0.06)', color: 'var(--text-muted)', fontSize: '12px', textAlign: 'center' }}>
+        Loading media…
+      </div>
+    );
+  }
+  if (kind === 'IMAGE') {
+    return <img src={objectUrl} alt="WhatsApp Attachment" style={{ maxWidth: '100%', maxHeight: '200px', borderRadius: '8px', display: 'block', objectFit: 'cover' }} />;
+  }
+  if (kind === 'AUDIO') {
+    return <audio controls src={objectUrl} style={{ maxWidth: '100%' }} />;
+  }
+  if (kind === 'VIDEO') {
+    return <video controls src={objectUrl} style={{ maxWidth: '100%', maxHeight: '220px', borderRadius: '8px', display: 'block' }} />;
+  }
+  return (
+    <a href={objectUrl} target="_blank" rel="noreferrer" style={{ color: '#38bdf8', fontSize: '11.5px', fontWeight: 500 }}>
+      {filename || 'Open document'}
+    </a>
+  );
+}
 
 export default function ChatCanvas({ onOpenTemplatePicker, onToggleSidebar, isSidebarOpen, onBack }) {
   const { agent, isAdmin, token } = useAuth();
+  const { emitTyping } = useSocket();
   const {
     activeChat,
     messages,
@@ -62,16 +152,38 @@ export default function ChatCanvas({ onOpenTemplatePicker, onToggleSidebar, isSi
   const messagesEndRef = useRef(null);
   const messagesContainerRef = useRef(null);
   const textareaRef = useRef(null);
+  const stickToBottomRef = useRef(true);
+  const typingTimeoutRef = useRef(null);
 
-  // Safe container-only auto-scroll (never scrolls window, document, or header off-screen)
+  // Auto-scroll follows new messages ONLY while the agent is already near
+  // the bottom — yanking the view down while they read history (or select
+  // text) destroys their place and their selection.
   useEffect(() => {
-    if (messagesContainerRef.current) {
+    if (messagesContainerRef.current && stickToBottomRef.current) {
       messagesContainerRef.current.scrollTop = messagesContainerRef.current.scrollHeight;
     }
   }, [messages, typingUsers]);
 
+  const handleMessageScroll = () => {
+    const el = messagesContainerRef.current;
+    if (!el) return;
+    stickToBottomRef.current = el.scrollHeight - el.scrollTop - el.clientHeight < 140;
+  };
+
+  // Debounced staff typing indicator (the socket event existed but the
+  // composer never emitted it, so "Staff member is typing" could never show)
+  const signalTyping = () => {
+    if (!activeChat?.id) return;
+    emitTyping(activeChat.id, true);
+    if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
+    typingTimeoutRef.current = setTimeout(() => {
+      if (activeChat?.id) emitTyping(activeChat.id, false);
+    }, 2500);
+  };
+
   // Keep window and canvas header pinned to top when switching chats
   useEffect(() => {
+    stickToBottomRef.current = true;
     window.scrollTo(0, 0);
     if (messagesContainerRef.current) {
       messagesContainerRef.current.scrollTop = messagesContainerRef.current.scrollHeight;
@@ -133,8 +245,10 @@ export default function ChatCanvas({ onOpenTemplatePicker, onToggleSidebar, isSi
           messageType: 'TEXT',
         });
       }
-      setInputContent('');
     } catch (err) {
+      // Never destroy the agent's text on a failed send: restore the draft
+      // (unless they have already started typing something new).
+      setInputContent((prev) => (prev.trim() ? prev : content));
       alert(`Notice: ${err.message}`);
     } finally {
       setSending(false);
@@ -367,7 +481,7 @@ export default function ChatCanvas({ onOpenTemplatePicker, onToggleSidebar, isSi
               <div style={{ position: 'relative' }}>
                 <select
                   value={activeChat.assignedAgentId || ''}
-                  onChange={(e) => assignChat(activeChat.id, e.target.value || null)}
+                  onChange={(e) => assignChat(activeChat.id, e.target.value || null).catch((err) => alert(err.message))}
                   style={{
                     background: 'var(--bg-surface)',
                     color: '#fff',
@@ -396,7 +510,7 @@ export default function ChatCanvas({ onOpenTemplatePicker, onToggleSidebar, isSi
               </div>
             ) : isUnassigned ? (
               <button
-                onClick={() => assignChat(activeChat.id, agent.id)}
+                onClick={() => assignChat(activeChat.id, agent.id).catch((err) => alert(err.message))}
                 className="btn btn-primary"
                 style={{ padding: '5px 10px', fontSize: '11.5px' }}
               >
@@ -412,7 +526,7 @@ export default function ChatCanvas({ onOpenTemplatePicker, onToggleSidebar, isSi
           {/* Resolve / Reopen Button */}
           {isResolved ? (
             <button
-              onClick={() => updateChatStatus(activeChat.id, 'OPEN')}
+              onClick={() => updateChatStatus(activeChat.id, 'OPEN').catch((err) => alert(err.message))}
               className="btn btn-secondary"
               style={{ width: '34px', height: '34px', padding: 0 }}
               title="Reopen Conversation"
@@ -421,7 +535,7 @@ export default function ChatCanvas({ onOpenTemplatePicker, onToggleSidebar, isSi
             </button>
           ) : (
             <button
-              onClick={() => updateChatStatus(activeChat.id, 'RESOLVED')}
+              onClick={() => updateChatStatus(activeChat.id, 'RESOLVED').catch((err) => alert(err.message))}
               className="btn btn-secondary"
               style={{ width: '34px', height: '34px', padding: 0 }}
               title="Mark Resolved"
@@ -472,7 +586,7 @@ export default function ChatCanvas({ onOpenTemplatePicker, onToggleSidebar, isSi
             <>
               <Clock size={13} style={{ color: '#10b981', flexShrink: 0 }} />
               <span style={{ color: '#6ee7b7', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                Meta 24h Window Active: {messagingWindow.hoursRemaining}h remaining
+                Meta 24h Window Active: {(() => { const hrs = parseFloat(messagingWindow.hoursRemaining); return Number.isFinite(hrs) ? (hrs >= 1 ? `${hrs.toFixed(1)}h` : `${Math.max(1, Math.round(hrs * 60))}m`) : '—'; })()} remaining
               </span>
             </>
           ) : (
@@ -497,6 +611,7 @@ export default function ChatCanvas({ onOpenTemplatePicker, onToggleSidebar, isSi
       {/* 3. Messages Stream */}
       <div
         ref={messagesContainerRef}
+        onScroll={handleMessageScroll}
         style={{
           flex: '1 1 0%',
           minHeight: 0,
@@ -526,13 +641,24 @@ export default function ChatCanvas({ onOpenTemplatePicker, onToggleSidebar, isSi
             No messages logged in this session yet.
           </div>
         ) : (
-          messages.map((msg) => {
+          withDateSeparators(messages).map((msg) => {
+            if (msg._separator) {
+              return (
+                <div key={msg.id} className="msg-date-separator">
+                  {msg.label}
+                </div>
+              );
+            }
             const isInbound = msg.direction === 'INBOUND';
             const isSystem = msg.senderType === 'SYSTEM';
             const isNote = msg.messageType === 'NOTE' || msg.senderType === 'NOTE';
 
-            const formatMsgTime = (d) =>
-              new Date(d).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true });
+            const formatMsgTime = (d) => {
+              const parsed = new Date(d);
+              return Number.isNaN(parsed.getTime())
+                ? ''
+                : parsed.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true });
+            };
 
             // 3.1. System Log Bubble
             if (isSystem) {
@@ -620,20 +746,53 @@ export default function ChatCanvas({ onOpenTemplatePicker, onToggleSidebar, isSi
                   {msg.messageType === 'IMAGE' && (
                     <div style={{ marginBottom: '6px' }}>
                       {msg.mediaUrl ? (
-                      <img
-                        src={msg.mediaUrl}
-                        alt="WhatsApp Attachment"
-                        style={{
-                          maxWidth: '100%',
-                          maxHeight: '200px',
-                          borderRadius: '8px',
-                          display: 'block',
-                          objectFit: 'cover',
-                        }}
-                      />
+                        <img
+                          src={msg.mediaUrl}
+                          alt="WhatsApp Attachment"
+                          style={{
+                            maxWidth: '100%',
+                            maxHeight: '200px',
+                            borderRadius: '8px',
+                            display: 'block',
+                            objectFit: 'cover',
+                          }}
+                        />
+                      ) : msg.mediaId ? (
+                        <AuthedMedia messageId={msg.id} kind="IMAGE" token={token} filename={msg.mediaFilename} />
                       ) : (
                         <div style={{ padding: '18px 12px', borderRadius: '8px', background: 'rgba(255,255,255,0.06)', color: 'var(--text-muted)', fontSize: '12px', textAlign: 'center' }}>
                           Media unavailable
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Media Content: Voice note / audio (previously rendered as
+                      an empty bubble with only a filename caption) */}
+                  {msg.messageType === 'AUDIO' && (
+                    <div style={{ marginBottom: '6px' }}>
+                      {msg.mediaUrl ? (
+                        <audio controls src={msg.mediaUrl} style={{ maxWidth: '100%' }} />
+                      ) : msg.mediaId ? (
+                        <AuthedMedia messageId={msg.id} kind="AUDIO" token={token} filename={msg.mediaFilename} />
+                      ) : (
+                        <div style={{ padding: '12px', borderRadius: '8px', background: 'rgba(255,255,255,0.06)', color: 'var(--text-muted)', fontSize: '12px', textAlign: 'center' }}>
+                          Voice message unavailable
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Media Content: Video */}
+                  {msg.messageType === 'VIDEO' && (
+                    <div style={{ marginBottom: '6px' }}>
+                      {msg.mediaUrl ? (
+                        <video controls src={msg.mediaUrl} style={{ maxWidth: '100%', maxHeight: '220px', borderRadius: '8px', display: 'block' }} />
+                      ) : msg.mediaId ? (
+                        <AuthedMedia messageId={msg.id} kind="VIDEO" token={token} filename={msg.mediaFilename} />
+                      ) : (
+                        <div style={{ padding: '12px', borderRadius: '8px', background: 'rgba(255,255,255,0.06)', color: 'var(--text-muted)', fontSize: '12px', textAlign: 'center' }}>
+                          Video unavailable
                         </div>
                       )}
                     </div>
@@ -654,7 +813,15 @@ export default function ChatCanvas({ onOpenTemplatePicker, onToggleSidebar, isSi
                     >
                       <FileText size={18} style={{ color: '#38bdf8' }} />
                       <div style={{ fontSize: '11.5px', fontWeight: '500', wordBreak: 'break-all' }}>
-                        {msg.mediaFilename || 'Document.pdf'}
+                        {msg.mediaUrl ? (
+                          <a href={msg.mediaUrl} target="_blank" rel="noreferrer" style={{ color: '#38bdf8' }}>
+                            {msg.mediaFilename || 'Document'}
+                          </a>
+                        ) : msg.mediaId ? (
+                          <AuthedMedia messageId={msg.id} kind="DOCUMENT" token={token} filename={msg.mediaFilename} />
+                        ) : (
+                          msg.mediaFilename || 'Document'
+                        )}
                       </div>
                     </div>
                   )}
@@ -1101,7 +1268,11 @@ export default function ChatCanvas({ onOpenTemplatePicker, onToggleSidebar, isSi
               ref={textareaRef}
               rows={1}
               value={inputContent}
-              onChange={(e) => setInputContent(e.target.value)}
+              maxLength={4096}
+              onChange={(e) => {
+                setInputContent(e.target.value);
+                signalTyping();
+              }}
               onKeyDown={handleKeyDown}
               placeholder={
                 composeMode === 'NOTE'
@@ -1136,6 +1307,11 @@ export default function ChatCanvas({ onOpenTemplatePicker, onToggleSidebar, isSi
                 lineHeight: 1.4,
               }}
             />
+            {inputContent.length > 3800 && (
+              <span style={{ position: 'absolute', right: '12px', bottom: '-14px', fontSize: '10px', color: inputContent.length >= 4096 ? '#f87171' : 'var(--text-muted)' }}>
+                {inputContent.length}/4096
+              </span>
+            )}
           </div>
 
           {/* Modern Circular WhatsApp Send Button */}

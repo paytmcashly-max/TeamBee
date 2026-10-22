@@ -85,19 +85,22 @@ class WebhookController {
   static async verifyRequest(payload, rawBody, signature) {
     if (!rawBody || !payload || !Array.isArray(payload.entry) || payload.entry.length === 0) return false;
 
-    const tenants = await Promise.all(payload.entry.map((entry) => WebhookParserService.resolveTenant(entry)));
-    if (tenants.some((tenant) => !tenant)) {
-      // Without this log a tenant-ID mismatch is indistinguishable from a bad
-      // signature: Meta gets a 401 and the message vanishes without a trace.
-      console.warn('[Webhook Verify]: Rejected - no tenant matches the payload phone_number_id/WABA. Check the tenant WhatsApp IDs in Settings.');
-      return false;
-    }
-
     const configuredGlobalSecret = process.env.META_APP_SECRET || process.env.APP_SECRET;
     if (configuredGlobalSecret) {
+      // Verify the HMAC before any database work: forged POSTs then cost no
+      // tenant lookups, and tenant resolution happens once, at ingest. A
+      // validly signed payload for an unknown WABA is stored by ingest and
+      // fails loudly in processing instead of vanishing behind a 401.
       const ok = WebhookParserService.verifySignature(rawBody, signature, configuredGlobalSecret);
       if (!ok) console.warn('[Webhook Verify]: Rejected - HMAC signature mismatch against the configured app secret.');
       return ok;
+    }
+
+    // Per-tenant secrets: resolution is unavoidable before verification.
+    const tenants = await Promise.all(payload.entry.map((entry) => WebhookParserService.resolveTenant(entry)));
+    if (tenants.some((tenant) => !tenant)) {
+      console.warn('[Webhook Verify]: Rejected - no tenant matches the payload phone_number_id/WABA. Check the tenant WhatsApp IDs in Settings.');
+      return false;
     }
 
     const tenantSecrets = [...new Set(tenants.map((tenant) => decryptSecret(tenant.appSecret)).filter(Boolean))];

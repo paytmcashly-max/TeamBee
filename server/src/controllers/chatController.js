@@ -74,12 +74,43 @@ class ChatController {
         };
       }
 
+      // filter and status INTERSECT: the old code let the status parameter
+      // silently overwrite the unassigned-queue restriction, widening what
+      // an AGENT-role caller could list.
+      if (whereClause.status && status && status !== 'ALL' && whereClause.status !== status) {
+        return res.json({ success: true, chats: [], pagination: { hasMore: false, nextCursor: null } });
+      }
+
       if (cursor) {
-        const cursorDate = new Date(cursor);
-        if (Number.isNaN(cursorDate.getTime())) {
-          return res.status(400).json({ success: false, error: 'Invalid chat cursor' });
+        // Composite cursor "<iso>|<id>": Meta timestamps repeat at second
+        // precision, so a bare timestamp cursor skips tied rows. A legacy
+        // bare-ISO cursor keeps the old strict-less-than behaviour.
+        const separatorIndex = cursor.lastIndexOf('|');
+        const cursorDatePart = separatorIndex >= 0 ? cursor.slice(0, separatorIndex) : cursor;
+        const cursorId = separatorIndex >= 0 ? cursor.slice(separatorIndex + 1) : null;
+        if (cursorDatePart === 'null') {
+          if (!cursorId) {
+            return res.status(400).json({ success: false, error: 'Invalid chat cursor' });
+          }
+          whereClause.lastMessageAt = null;
+          whereClause.id = { lt: cursorId };
+        } else {
+          const cursorDate = new Date(cursorDatePart);
+          if (Number.isNaN(cursorDate.getTime())) {
+            return res.status(400).json({ success: false, error: 'Invalid chat cursor' });
+          }
+          if (cursorId) {
+            const cursorCondition = {
+              OR: [
+                { lastMessageAt: { lt: cursorDate } },
+                { lastMessageAt: cursorDate, id: { lt: cursorId } },
+              ],
+            };
+            whereClause.AND = [...(whereClause.AND || []), cursorCondition];
+          } else {
+            whereClause.lastMessageAt = { lt: cursorDate };
+          }
         }
-        whereClause.lastMessageAt = { lt: cursorDate };
       }
 
       const rows = await prisma.chat.findMany({
@@ -90,12 +121,15 @@ class ChatController {
             select: { id: true, name: true, email: true, avatarUrl: true, role: true },
           },
         },
-        orderBy: { lastMessageAt: 'desc' },
+        orderBy: [{ lastMessageAt: 'desc' }, { id: 'desc' }],
         take: requestedLimit + 1,
       });
       const hasMore = rows.length > requestedLimit;
       const chats = hasMore ? rows.slice(0, requestedLimit) : rows;
-      const nextCursor = hasMore ? chats[chats.length - 1]?.lastMessageAt : null;
+      const lastRow = chats[chats.length - 1];
+      const nextCursor = hasMore && lastRow
+        ? `${lastRow.lastMessageAt ? lastRow.lastMessageAt.toISOString() : 'null'}|${lastRow.id}`
+        : null;
 
       return res.json({ success: true, chats, pagination: { hasMore, nextCursor } });
     } catch (error) {
@@ -133,12 +167,25 @@ class ChatController {
          });
       }
 
-      // Mark unread count as 0 when viewed
+      // Clear only the unread messages this view actually saw: an
+      // unconditional set-to-0 erased messages that arrived while the chat
+      // was being opened (and one agent's view cleared everyone's badge).
       if (chat.unreadCount > 0) {
-        await prisma.chat.update({
-          where: { id: chat.id },
+        const viewedCount = chat.unreadCount;
+        const cleared = await prisma.chat.updateMany({
+          where: { id: chat.id, unreadCount: viewedCount },
           data: { unreadCount: 0 },
         });
+        if (cleared.count === 0) {
+          await prisma.chat.update({
+            where: { id: chat.id },
+            data: { unreadCount: { decrement: viewedCount } },
+          });
+          await prisma.chat.updateMany({
+            where: { id: chat.id, unreadCount: { lt: 0 } },
+            data: { unreadCount: 0 },
+          });
+        }
         chat.unreadCount = 0;
       }
 
@@ -200,12 +247,23 @@ class ChatController {
         newStatus = 'UNASSIGNED';
       }
 
-      const updatedChat = await prisma.chat.update({
-        where: { id },
+      // Compare-and-swap on the state read above: two agents claiming the
+      // same chat concurrently must not both succeed silently.
+      const claim = await prisma.chat.updateMany({
+        where: { id, assignedAgentId: chat.assignedAgentId, status: chat.status },
         data: {
           assignedAgentId: targetAgentId || null,
           status: newStatus,
         },
+      });
+      if (claim.count === 0) {
+        return res.status(409).json({
+          success: false,
+          error: 'This conversation was just changed by someone else. Refresh and try again.',
+        });
+      }
+      const updatedChat = await prisma.chat.findUnique({
+        where: { id },
         include: {
           contact: true,
           assignedAgent: {
@@ -266,9 +324,18 @@ class ChatController {
          return res.status(403).json({ success: false, error: 'You do not have access to this conversation' });
        }
 
-      const updatedChat = await prisma.chat.update({
-        where: { id },
+      const transition = await prisma.chat.updateMany({
+        where: { id, status: chat.status },
         data: { status },
+      });
+      if (transition.count === 0) {
+        return res.status(409).json({
+          success: false,
+          error: 'This conversation was just changed by someone else. Refresh and try again.',
+        });
+      }
+      const updatedChat = await prisma.chat.findUnique({
+        where: { id },
         include: {
           contact: true,
           assignedAgent: true,
