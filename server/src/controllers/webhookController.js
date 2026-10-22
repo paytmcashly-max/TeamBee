@@ -86,11 +86,18 @@ class WebhookController {
     if (!rawBody || !payload || !Array.isArray(payload.entry) || payload.entry.length === 0) return false;
 
     const tenants = await Promise.all(payload.entry.map((entry) => WebhookParserService.resolveTenant(entry)));
-    if (tenants.some((tenant) => !tenant)) return false;
+    if (tenants.some((tenant) => !tenant)) {
+      // Without this log a tenant-ID mismatch is indistinguishable from a bad
+      // signature: Meta gets a 401 and the message vanishes without a trace.
+      console.warn('[Webhook Verify]: Rejected - no tenant matches the payload phone_number_id/WABA. Check the tenant WhatsApp IDs in Settings.');
+      return false;
+    }
 
     const configuredGlobalSecret = process.env.META_APP_SECRET || process.env.APP_SECRET;
     if (configuredGlobalSecret) {
-      return WebhookParserService.verifySignature(rawBody, signature, configuredGlobalSecret);
+      const ok = WebhookParserService.verifySignature(rawBody, signature, configuredGlobalSecret);
+      if (!ok) console.warn('[Webhook Verify]: Rejected - HMAC signature mismatch against the configured app secret.');
+      return ok;
     }
 
     const tenantSecrets = [...new Set(tenants.map((tenant) => decryptSecret(tenant.appSecret)).filter(Boolean))];

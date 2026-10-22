@@ -6,7 +6,7 @@ const META_GRAPH_URL = 'https://graph.facebook.com';
 const API_VERSION = process.env.META_API_VERSION || 'v20.0';
 
 function isLiveConfig(tenant) {
-  const accessToken = decryptSecret(tenant?.accessToken);
+  const accessToken = resolveAccessToken(tenant);
   if (!tenant || !accessToken || !tenant.phoneNumberId) return false;
   if (accessToken === 'MOCK_TOKEN' || accessToken.startsWith('EAAG_PERMANENT_META_SYSTEM_USER_TOKEN')) return false;
   if (tenant.phoneNumberId.startsWith('PHONE_ID_')) return false;
@@ -21,6 +21,17 @@ function hasLiveAccessToken(tenant) {
       !accessToken.startsWith('EAAG_PERMANENT_META_SYSTEM_USER_TOKEN') &&
       accessToken.length > 30
   );
+}
+
+function resolveAccessToken(tenant) {
+  if (hasLiveAccessToken(tenant)) return decryptSecret(tenant.accessToken);
+  // Deployment-wide fallback: a valid system-user token configured in the
+  // environment must not be shadowed by a stale or placeholder tenant token.
+  const envToken = process.env.META_ACCESS_TOKEN;
+  if (envToken && envToken !== 'MOCK_TOKEN' && !envToken.startsWith('EAAG_PERMANENT_META_SYSTEM_USER_TOKEN') && envToken.length > 30) {
+    return envToken;
+  }
+  return decryptSecret(tenant?.accessToken);
 }
 
 function mockAllowed() {
@@ -49,7 +60,7 @@ class MetaApiService {
 
     // If live credentials configured, dispatch real Meta Graph API call
     if (isLiveConfig(tenant)) {
-      const accessToken = decryptSecret(tenant.accessToken);
+      const accessToken = resolveAccessToken(tenant);
       try {
         const url = `${META_GRAPH_URL}/${API_VERSION}/${tenant.phoneNumberId}/messages`;
         const response = await axios.post(
@@ -106,7 +117,7 @@ class MetaApiService {
     }
 
     if (isLiveConfig(tenant)) {
-      const accessToken = decryptSecret(tenant.accessToken);
+      const accessToken = resolveAccessToken(tenant);
       try {
         const url = `${META_GRAPH_URL}/${API_VERSION}/${tenant.phoneNumberId}/messages`;
         const mediaPayload = {
@@ -163,7 +174,7 @@ class MetaApiService {
     }
 
     if (isLiveConfig(tenant)) {
-      const accessToken = decryptSecret(tenant.accessToken);
+      const accessToken = resolveAccessToken(tenant);
       try {
         const url = `${META_GRAPH_URL}/${API_VERSION}/${tenant.phoneNumberId}/messages`;
         const response = await axios.post(
@@ -212,8 +223,8 @@ class MetaApiService {
    * Pull approved message templates from Meta Cloud API
    */
   static async fetchMetaTemplates(tenant) {
-    const accessToken = decryptSecret(tenant?.accessToken);
-    if (!tenant?.wabaId || !hasLiveAccessToken(tenant)) {
+    const accessToken = resolveAccessToken(tenant);
+    if (!tenant?.wabaId || !accessToken) {
       return { success: false, reason: 'WABA ID or Access Token not configured' };
     }
 
@@ -248,7 +259,7 @@ class MetaApiService {
     }
 
     if (isLiveConfig(tenant)) {
-      const accessToken = decryptSecret(tenant.accessToken);
+      const accessToken = resolveAccessToken(tenant);
       try {
         const url = `${META_GRAPH_URL}/${API_VERSION}/${tenant.phoneNumberId}/messages`;
         const response = await axios.post(

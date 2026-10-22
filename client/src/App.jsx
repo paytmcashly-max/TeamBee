@@ -8,7 +8,6 @@ import ContactSidebar from './components/inbox/ContactSidebar';
 import MetaOnboardingModal from './components/modals/MetaOnboardingModal';
 import TemplateModal from './components/modals/TemplateModal';
 import AgentManagementModal from './components/modals/AgentManagementModal';
-import SimulatorModal from './components/modals/SimulatorModal';
 import BroadcastModal from './components/modals/BroadcastModal';
 
 export default function App() {
@@ -19,7 +18,6 @@ export default function App() {
   const [isTemplateModalOpen, setIsTemplateModalOpen] = useState(false);
   const [isBroadcastModalOpen, setIsBroadcastModalOpen] = useState(false);
   const [isAgentsModalOpen, setIsAgentsModalOpen] = useState(false);
-  const [isSimulatorOpen, setIsSimulatorOpen] = useState(false);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
 
   if (loading) {
@@ -36,7 +34,7 @@ export default function App() {
           fontWeight: '600',
         }}
       >
-        Loading ChatFlow WhatsApp SaaS...
+        Loading TeamBee...
       </div>
     );
   }
@@ -55,7 +53,6 @@ export default function App() {
           onOpenTemplates={() => setIsTemplateModalOpen(true)}
           onOpenBroadcasts={() => setIsBroadcastModalOpen(true)}
           onOpenAgents={() => setIsAgentsModalOpen(true)}
-          onOpenSimulator={() => setIsSimulatorOpen(true)}
         />
 
         {/* Column 2: Active Chat Canvas */}
@@ -88,7 +85,6 @@ export default function App() {
       <TemplateModal isOpen={isTemplateModalOpen} onClose={() => setIsTemplateModalOpen(false)} />
       <BroadcastModal isOpen={isBroadcastModalOpen} onClose={() => setIsBroadcastModalOpen(false)} />
       <AgentManagementModal isOpen={isAgentsModalOpen} onClose={() => setIsAgentsModalOpen(false)} />
-      <SimulatorModal isOpen={isSimulatorOpen} onClose={() => setIsSimulatorOpen(false)} />
     </div>
   );
 }

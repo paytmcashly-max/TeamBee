@@ -34,12 +34,12 @@ export function AuthProvider({ children }) {
     verifySession();
   }, [token]);
 
-  const login = async (email, password, tenantSlug = 'apex-educare') => {
+  const login = async (email, password, tenantSlug) => {
     const res = await fetch('/api/auth/login', {
       method: 'POST',
       credentials: 'include',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email, password, tenantSlug }),
+      body: JSON.stringify({ email, password, tenantSlug: tenantSlug || undefined }),
     });
     const data = await res.json();
     if (!data.success) {

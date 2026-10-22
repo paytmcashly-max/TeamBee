@@ -80,7 +80,21 @@ class TemplateController {
         synced.push(record);
       }
 
-      return res.json({ success: true, count: synced.length, templates: synced });
+      // Prune local rows Meta no longer returns: a template deleted or
+      // replaced on Meta must not linger in the picker and fail at send time.
+      const metaKeys = new Set(metaRes.templates.map((tpl) => `${tpl.name}::${tpl.language}`));
+      const localTemplates = await prisma.template.findMany({
+        where: { tenantId: tenant.id },
+        select: { id: true, name: true, language: true },
+      });
+      const staleIds = localTemplates
+        .filter((tpl) => !metaKeys.has(`${tpl.name}::${tpl.language}`))
+        .map((tpl) => tpl.id);
+      if (staleIds.length > 0) {
+        await prisma.template.deleteMany({ where: { id: { in: staleIds }, tenantId: tenant.id } });
+      }
+
+      return res.json({ success: true, count: synced.length, removed: staleIds.length, templates: synced });
     } catch (error) {
       console.error('[Sync Templates Error]:', error);
       return res.status(500).json({ success: false, error: 'Failed to sync templates with Meta' });
@@ -118,6 +132,13 @@ class TemplateController {
 
       if (!template || template.tenantId !== tenantId) {
         return res.status(404).json({ success: false, error: 'Template not found' });
+      }
+
+      if (template.status !== 'APPROVED') {
+        return res.status(400).json({
+          success: false,
+          error: `Template "${template.name}" is not approved by Meta (status: ${template.status}). Sync templates and choose an approved one.`,
+        });
       }
 
       const variableValues = {};

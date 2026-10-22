@@ -31,6 +31,9 @@ const webhookLimiter = rateLimit({
   windowMs: 60 * 1000,
   limit: 1200,
   skip: () => process.env.NODE_ENV === 'test',
+  // Webhook authenticity is enforced by HMAC signature verification in the
+  // controller; a proxy-header validation error must never drop a delivery.
+  validate: { xForwardedForHeader: false },
 });
 
 module.exports = {

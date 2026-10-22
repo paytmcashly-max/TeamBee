@@ -312,7 +312,7 @@ export default function BroadcastModal({ isOpen, onClose }) {
                 <input
                   type="text"
                   required
-                  placeholder="e.g. Kota NEET 2026 Batch Announcement"
+                  placeholder="e.g. Festival offer announcement for existing customers"
                   value={campaignName}
                   onChange={(e) => setCampaignName(e.target.value)}
                   style={{

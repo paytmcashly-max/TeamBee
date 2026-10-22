@@ -212,7 +212,7 @@ export default function ContactSidebar({ onOpenTemplatePicker, onClose }) {
 
         <div>
           <a
-            href={`https://wa.me/${contact?.waId}?text=${encodeURIComponent('Namaste! Connecting regarding your query on ChatFlow.')}`}
+            href={`https://wa.me/${contact?.waId}?text=${encodeURIComponent('Namaste! Connecting regarding your query on TeamBee.')}`}
             target="_blank"
             rel="noopener noreferrer"
             className="btn btn-secondary"

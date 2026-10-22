@@ -50,10 +50,12 @@ export default function ChatCanvas({ onOpenTemplatePicker, onToggleSidebar, isSi
   const [agentsList, setAgentsList] = useState([]);
   const [showQuickReplies, setShowQuickReplies] = useState(false);
   const [showAttachmentMenu, setShowAttachmentMenu] = useState(false);
+  const [attachUrl, setAttachUrl] = useState('');
+  const [attachName, setAttachName] = useState('');
   const [interactiveButtons, setInteractiveButtons] = useState([
-    'Book Live Demo',
-    'Download Syllabus',
-    'Talk to Counselor',
+    'Yes, please',
+    'No, thanks',
+    'Talk to support',
   ]);
   const [newBtnInput, setNewBtnInput] = useState('');
 
@@ -171,20 +173,20 @@ export default function ChatCanvas({ onOpenTemplatePicker, onToggleSidebar, isSi
 
   const quickReplies = [
     {
-      label: 'NEET Fees & Batches',
-      text: 'Namaste! Our NEET 2026-27 batch fee is ₹85,000/year including study materials, weekly tests, and Kota top mentors.',
+      label: 'Greeting',
+      text: 'Namaste! Thanks for reaching out to us. How can I help you today?',
     },
     {
-      label: 'Demo Class Schedule',
-      text: 'You can attend a complimentary 2-hour Live Demo this Saturday at 5 PM. Would you like us to register your slot?',
+      label: 'Ask for details',
+      text: 'Could you please share a few more details so I can help you better?',
     },
     {
-      label: 'Center Location & Timings',
-      text: 'Our center is open Mon-Sat from 9 AM to 7 PM at 3rd Floor, Apex Tower, Kota / Bandra West, Mumbai.',
+      label: 'Follow-up',
+      text: 'Thanks for your patience. We are checking this for you and will update you shortly.',
     },
     {
-      label: 'Scholarship Test',
-      text: 'We offer up to 90% scholarship based on the Apex Talent Hunt Test (ATHT) conducted every Sunday online and offline.',
+      label: 'Closing',
+      text: 'Thanks for contacting us. If you need anything else, just send us a message here. Have a great day!',
     },
   ];
 
@@ -617,8 +619,9 @@ export default function ChatCanvas({ onOpenTemplatePicker, onToggleSidebar, isSi
                   {/* Media Content: Image */}
                   {msg.messageType === 'IMAGE' && (
                     <div style={{ marginBottom: '6px' }}>
+                      {msg.mediaUrl ? (
                       <img
-                        src={msg.mediaUrl || 'https://images.unsplash.com/photo-1576091160399-112ba8d25d1d?w=600'}
+                        src={msg.mediaUrl}
                         alt="WhatsApp Attachment"
                         style={{
                           maxWidth: '100%',
@@ -628,6 +631,11 @@ export default function ChatCanvas({ onOpenTemplatePicker, onToggleSidebar, isSi
                           objectFit: 'cover',
                         }}
                       />
+                      ) : (
+                        <div style={{ padding: '18px 12px', borderRadius: '8px', background: 'rgba(255,255,255,0.06)', color: 'var(--text-muted)', fontSize: '12px', textAlign: 'center' }}>
+                          Media unavailable
+                        </div>
+                      )}
                     </div>
                   )}
 
@@ -814,51 +822,53 @@ export default function ChatCanvas({ onOpenTemplatePicker, onToggleSidebar, isSi
               ✕
             </button>
           </div>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '5px' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+            <input
+              type="url"
+              value={attachUrl}
+              onChange={(e) => setAttachUrl(e.target.value)}
+              placeholder="Paste a public file URL (https://...)"
+              aria-label="Attachment URL"
+              style={{ background: '#0b1120', border: '1px solid rgba(255,255,255,0.12)', borderRadius: '6px', padding: '7px 9px', color: '#fff', fontSize: '12px', width: '100%' }}
+            />
+            <input
+              type="text"
+              value={attachName}
+              onChange={(e) => setAttachName(e.target.value)}
+              placeholder="File name (optional)"
+              aria-label="Attachment file name"
+              style={{ background: '#0b1120', border: '1px solid rgba(255,255,255,0.12)', borderRadius: '6px', padding: '7px 9px', color: '#fff', fontSize: '12px', width: '100%' }}
+            />
             <button
-              onClick={() =>
-                handleQuickAttachment(
-                  'DOCUMENT',
-                  'NEET_Course_Brochure_2026.pdf',
-                  'https://www.w3.org/WAI/ER/tests/xhtml/testfiles/resources/pdf/dummy.pdf'
-                )
-              }
+              onClick={() => {
+                const url = attachUrl.trim();
+                if (!/^https:\/\//i.test(url)) {
+                  alert('Please paste a valid https:// file URL.');
+                  return;
+                }
+                const fromUrl = url.split('/').pop().split('?')[0];
+                const filename = attachName.trim() || decodeURIComponent(fromUrl || 'attachment');
+                const ext = filename.toLowerCase();
+                const type = ext.endsWith('.pdf') || ext.endsWith('.doc') || ext.endsWith('.docx')
+                  ? 'DOCUMENT'
+                  : ext.endsWith('.mp4') || ext.endsWith('.mov')
+                    ? 'VIDEO'
+                    : ext.endsWith('.mp3') || ext.endsWith('.ogg') || ext.endsWith('.wav') || ext.endsWith('.m4a')
+                      ? 'AUDIO'
+                      : 'IMAGE';
+                setAttachUrl('');
+                setAttachName('');
+                handleQuickAttachment(type, filename, url);
+              }}
               className="btn btn-secondary"
-              style={{ justifyContent: 'flex-start', fontSize: '11.5px', padding: '5px 8px', gap: '8px' }}
+              style={{ justifyContent: 'center', fontSize: '12px', padding: '6px 8px', gap: '8px' }}
             >
               <FileText size={14} style={{ color: '#38bdf8' }} />
-              <span>Kota NEET Brochure (PDF)</span>
+              <span>Send file from URL</span>
             </button>
-
-            <button
-              onClick={() =>
-                handleQuickAttachment(
-                  'DOCUMENT',
-                  'Fee_Structure_Installments_2026.pdf',
-                  'https://www.w3.org/WAI/ER/tests/xhtml/testfiles/resources/pdf/dummy.pdf'
-                )
-              }
-              className="btn btn-secondary"
-              style={{ justifyContent: 'flex-start', fontSize: '11.5px', padding: '5px 8px', gap: '8px' }}
-            >
-              <FileText size={14} style={{ color: '#10b981' }} />
-              <span>Fee Structure & EMI</span>
-            </button>
-
-            <button
-              onClick={() =>
-                handleQuickAttachment(
-                  'IMAGE',
-                  'Apex_Scholarship_Admit_Card.jpg',
-                  'https://images.unsplash.com/photo-1576091160399-112ba8d25d1d?w=600'
-                )
-              }
-              className="btn btn-secondary"
-              style={{ justifyContent: 'flex-start', fontSize: '11.5px', padding: '5px 8px', gap: '8px' }}
-            >
-              <ImageIcon size={14} style={{ color: '#f59e0b' }} />
-              <span>Scholarship Admit Card (JPG)</span>
-            </button>
+            <div style={{ fontSize: '10.5px', color: 'var(--text-muted)', lineHeight: 1.4 }}>
+              The file must be publicly reachable over https. It is delivered to the customer exactly as hosted.
+            </div>
           </div>
         </div>
       )}

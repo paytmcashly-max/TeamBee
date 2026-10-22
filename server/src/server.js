@@ -22,7 +22,10 @@ const simulatorRoutes = require('./routes/simulatorRoutes');
 const app = express();
 const server = http.createServer(app);
 app.disable('x-powered-by');
-if (process.env.TRUST_PROXY === 'true') app.set('trust proxy', 1);
+// Behind Render (and most PaaS) proxies every request carries X-Forwarded-For.
+// Trust exactly one proxy hop by default so req.ip and express-rate-limit work;
+// set TRUST_PROXY=false only for a direct, unproxied deployment.
+if (process.env.TRUST_PROXY !== 'false') app.set('trust proxy', 1);
 
 const allowedOrigins = new Set(
   (process.env.CORS_ORIGINS || process.env.CLIENT_URL || 'http://localhost:3000')
@@ -99,7 +102,11 @@ app.use('/api/chats', chatRoutes);
 app.use('/api/messages', messageRoutes);
 app.use('/api/templates', templateRoutes);
 app.use('/api/broadcasts', broadcastRoutes);
-app.use('/api/simulator', simulatorRoutes);
+// Dev-only tool: the simulator injects fake inbound messages and statuses,
+// so it is mounted only when explicitly enabled (staging), never by default.
+if (process.env.ENABLE_SIMULATOR === 'true') {
+  app.use('/api/simulator', simulatorRoutes);
+}
 
 // Keep API and webhook failures JSON-shaped instead of falling through to the SPA shell.
 app.use('/api', (req, res) => {

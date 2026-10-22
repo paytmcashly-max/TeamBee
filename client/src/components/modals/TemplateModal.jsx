@@ -29,29 +29,60 @@ export default function TemplateModal({ isOpen, onClose }) {
   const [loading, setLoading] = useState(false);
   const [sending, setSending] = useState(false);
   const [message, setMessage] = useState(null);
+  const [syncing, setSyncing] = useState(false);
+
+  const loadTemplates = async () => {
+    setLoading(true);
+    try {
+      const res = await fetch('/api/templates', {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const data = await res.json();
+      if (data.success) {
+        setTemplates(data.templates);
+        if (data.templates.length > 0) {
+          setSelectedTemplate(data.templates[0]);
+          initVariables(data.templates[0]);
+        } else {
+          setSelectedTemplate(null);
+        }
+      }
+    } catch (err) {
+      console.error('Failed to load templates:', err);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   useEffect(() => {
     if (!isOpen || !agent) return;
-    async function loadTemplates() {
-      setLoading(true);
-      try {
-        const res = await fetch('/api/templates', {
-          headers: { Authorization: `Bearer ${token}` },
-        });
-        const data = await res.json();
-        if (data.success && data.templates.length > 0) {
-          setTemplates(data.templates);
-          setSelectedTemplate(data.templates[0]);
-          initVariables(data.templates[0]);
-        }
-      } catch (err) {
-        console.error('Failed to load templates:', err);
-      } finally {
-        setLoading(false);
-      }
-    }
     loadTemplates();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen, agent, token]);
+
+  const handleSync = async () => {
+    setSyncing(true);
+    setMessage(null);
+    try {
+      const res = await fetch('/api/templates/sync', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const data = await res.json();
+      if (!data.success) {
+        throw new Error(data.error || 'Sync failed');
+      }
+      setMessage({
+        type: 'success',
+        text: `Synced ${data.count} template${data.count === 1 ? '' : 's'} from Meta${data.removed ? `, removed ${data.removed} outdated` : ''}.`,
+      });
+      await loadTemplates();
+    } catch (err) {
+      setMessage({ type: 'error', text: `Template sync failed: ${err.message}` });
+    } finally {
+      setSyncing(false);
+    }
+  };
 
   const initVariables = (tpl) => {
     let defaults = {};
@@ -165,9 +196,23 @@ export default function TemplateModal({ isOpen, onClose }) {
               </p>
             </div>
           </div>
-          <button onClick={onClose} className="btn btn-ghost" style={{ padding: '6px' }}>
-            <X size={18} />
-          </button>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+            {agent?.role === 'ADMIN' && (
+              <button
+                onClick={handleSync}
+                disabled={syncing}
+                className="btn btn-secondary"
+                style={{ padding: '6px 10px', fontSize: '11.5px', gap: '6px' }}
+                title="Fetch the latest approved templates from Meta and remove outdated ones"
+              >
+                <RefreshCw size={13} className={syncing ? 'spin' : ''} />
+                {syncing ? 'Syncing...' : 'Sync from Meta'}
+              </button>
+            )}
+            <button onClick={onClose} className="btn btn-ghost" style={{ padding: '6px' }} aria-label="Close templates">
+              <X size={18} />
+            </button>
+          </div>
         </div>
 
         {/* Content Body: Responsive Split view (Template selector + Live Preview) */}
@@ -205,6 +250,17 @@ export default function TemplateModal({ isOpen, onClose }) {
                       }}
                     >
                       {tpl.category}
+                    </span>
+                    <span
+                      style={{
+                        fontSize: '9.5px',
+                        background: tpl.status === 'APPROVED' ? 'rgba(16, 185, 129, 0.15)' : 'rgba(245, 158, 11, 0.15)',
+                        color: tpl.status === 'APPROVED' ? '#34d399' : '#fbbf24',
+                        padding: '1px 5px',
+                        borderRadius: '3px',
+                      }}
+                    >
+                      {tpl.status}
                     </span>
                   </div>
                   <div
@@ -375,13 +431,18 @@ export default function TemplateModal({ isOpen, onClose }) {
 
               <button
                 onClick={handleSend}
-                disabled={sending}
+                disabled={sending || !selectedTemplate || selectedTemplate.status !== 'APPROVED'}
                 className="btn btn-primary"
                 style={{ width: '100%', padding: '10px', fontSize: '13px' }}
               >
                 <Send size={15} />
                 {sending ? 'Dispatching via Meta API...' : 'Dispatch Template Message'}
               </button>
+              {selectedTemplate && selectedTemplate.status !== 'APPROVED' && (
+                <div style={{ fontSize: '11px', color: '#fbbf24', marginTop: '8px' }}>
+                  This template is {selectedTemplate.status} on Meta and cannot be sent. Sync from Meta or choose an approved template.
+                </div>
+              )}
             </div>
           </div>
         </div>

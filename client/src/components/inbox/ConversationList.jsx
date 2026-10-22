@@ -22,7 +22,6 @@ export default function ConversationList({
   onOpenTemplates,
   onOpenBroadcasts,
   onOpenAgents,
-  onOpenSimulator,
 }) {
   const { agent, tenant, isAdmin, logout } = useAuth();
   const {
@@ -98,7 +97,7 @@ export default function ConversationList({
             <div>
               <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                 <span style={{ fontWeight: '700', fontSize: '15px', color: '#fff', letterSpacing: '-0.01em' }}>
-                  {tenant?.name || 'ChatFlow'}
+                  {tenant?.name || 'TeamBee'}
                 </span>
                 <span
                   style={{
@@ -114,21 +113,11 @@ export default function ConversationList({
                 </span>
               </div>
               <div style={{ fontSize: '11.5px', color: 'var(--text-secondary)' }}>
-                {tenant?.displayPhoneNumber || '+91 98765 00000'}
+                {tenant?.displayPhoneNumber || 'Not connected'}
               </div>
             </div>
           </div>
 
-          {/* Quick Simulator Launcher Button */}
-          <button
-            onClick={onOpenSimulator}
-            className="btn btn-secondary"
-            style={{ padding: '5px 10px', fontSize: '11.5px', gap: '5px' }}
-            title="Launch live Meta webhook simulator"
-          >
-            <Radio size={13} style={{ color: '#25D366' }} />
-            Simulator
-          </button>
         </div>
 
         {/* Current Agent Info Strip */}
@@ -145,14 +134,31 @@ export default function ConversationList({
         >
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
             <div style={{ position: 'relative' }}>
-              <img
-                src={
-                  agent?.avatarUrl ||
-                  'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100&auto=format&fit=crop'
-                }
-                alt="Avatar"
-                style={{ width: '28px', height: '28px', borderRadius: '50%', objectFit: 'cover' }}
-              />
+              {agent?.avatarUrl ? (
+                <img
+                  src={agent.avatarUrl}
+                  alt="Avatar"
+                  style={{ width: '28px', height: '28px', borderRadius: '50%', objectFit: 'cover' }}
+                />
+              ) : (
+                <div
+                  aria-label="Avatar"
+                  style={{
+                    width: '28px',
+                    height: '28px',
+                    borderRadius: '50%',
+                    background: 'var(--wa-primary)',
+                    color: '#06281a',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    fontSize: '11px',
+                    fontWeight: '700',
+                  }}
+                >
+                  {(agent?.name || '?').split(' ').map((w) => w[0]).slice(0, 2).join('').toUpperCase()}
+                </div>
+              )}
               <span
                 style={{
                   position: 'absolute',
@@ -373,7 +379,7 @@ export default function ConversationList({
               No conversations found
             </div>
             <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '4px' }}>
-              {searchQuery ? 'No match for your search query.' : 'Try switching tabs or click Simulator to fire a mock inbound WhatsApp lead!'}
+              {searchQuery ? 'No match for your search query.' : 'New conversations appear here when customers message your WhatsApp number.'}
             </div>
           </div>
         ) : (

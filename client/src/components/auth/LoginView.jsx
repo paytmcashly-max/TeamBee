@@ -6,7 +6,7 @@ export default function LoginView() {
   const { login } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [tenantSlug, setTenantSlug] = useState('apex-educare');
+  const [tenantSlug, setTenantSlug] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
 
@@ -68,7 +68,7 @@ export default function LoginView() {
           >
             <MessageSquare size={28} />
           </div>
-          <h1 style={{ fontSize: '22px', color: '#fff', fontWeight: '800' }}>ChatFlow</h1>
+          <h1 style={{ fontSize: '22px', color: '#fff', fontWeight: '800' }}>TeamBee</h1>
           <p style={{ fontSize: '13px', color: 'var(--text-secondary)', marginTop: '4px' }}>
             B2B Multi-Agent WhatsApp Shared Team Inbox
           </p>
