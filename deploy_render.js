@@ -83,13 +83,19 @@ async function main() {
   console.log('📡 Fetching existing Render services...');
   const existingServicesRes = await apiRequest('/services?limit=100');
   const existingServices = (existingServicesRes || []).map((s) => s.service || s);
-  
+  console.log(`📋 Found ${existingServices.length} existing service(s) on Render:`);
+  existingServices.forEach((s) => {
+    console.log(`   - [${s.type}] ${s.name} (ID: ${s.id}, Repo: ${s.repo || 'none'}, URL: ${s.serviceDetails?.url || 'n/a'})`);
+  });
+
   let backendService = existingServices.find(
     (s) => s.name === 'teambee-backend' || s.name === 'teambee-server' || s.name.includes('backend')
   );
   let frontendService = existingServices.find(
     (s) => s.name === 'teambee-frontend' || s.name === 'teambee-client' || s.name.includes('frontend')
   );
+
+
 
   // 3. Create or Update Backend Web Service
   if (!backendService) {
