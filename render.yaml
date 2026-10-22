@@ -1,0 +1,53 @@
+services:
+  # -------------------------------------------------------------
+  # 1. TeamBee Backend Web Service (Node.js + Prisma + Socket.IO)
+  # -------------------------------------------------------------
+  - type: web
+    name: teambee-backend
+    runtime: node
+    region: oregon
+    plan: free
+    rootDir: server
+    buildCommand: npm install && npx prisma generate
+    startCommand: npm start
+    healthCheckPath: /health
+    autoDeploy: true
+    envVars:
+      - key: DATABASE_URL
+        value: postgresql://neondb_owner:npg_rXNdsvW4hH2g@ep-weathered-meadow-akt3lhh6.c-3.us-west-2.aws.neon.tech/neondb?sslmode=require
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 5000
+      - key: JWT_SECRET
+        value: chatflow_super_secret_jwt_key_2026_indian_smb
+      - key: CREDENTIAL_ENCRYPTION_KEY
+        value: teambee_credential_encryption_key_secure_2026_prod
+      - key: META_API_VERSION
+        value: "v20.0"
+      - key: META_ACCESS_TOKEN
+        value: EAAUzCgD1Xc0BSoz5wHEPaIHhQqNB1ABsHmZAPrTvRZAkVgzTvOyqCAbIZBUPVU9rFfbTy9yKrqoAOCLmhC0fAFuZCANDg83hVTqi5BjBZAMZBEpZCaS03j5rkx2IgxWQsAUnqUp7hYzSqDZB7qyMJqqf81aXTDBlKIEzSFzPtfW4nrPuHpe9GnB6ZBLi5YLOS3hwQvQZDZD
+      - key: META_APP_SECRET
+        value: e67f26c4721cb2e3292c6118f73ddaf2
+      - key: CORS_ORIGINS
+        value: "*"
+      - key: CLIENT_URL
+        value: "*"
+
+  # -------------------------------------------------------------
+  # 2. TeamBee Frontend Static Site (Vite + React)
+  # -------------------------------------------------------------
+  - type: web
+    runtime: static
+    name: teambee-frontend
+    region: oregon
+    rootDir: client
+    buildCommand: npm install && npm run build
+    staticPublishPath: dist
+    autoDeploy: true
+    envVars:
+      - key: VITE_API_URL
+        fromService:
+          type: web
+          name: teambee-backend
+          property: host
