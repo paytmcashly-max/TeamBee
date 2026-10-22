@@ -121,6 +121,14 @@ async function main() {
       });
       console.log(`✅ Backend Web Service created! ID: ${backendService.id}`);
     } catch (err) {
+      if (err.error?.message?.includes('unfetchable')) {
+        console.error('\n⚠️ GITHUB PERMISSION ERROR:');
+        console.error('Render cannot access "https://github.com/paytmcashly-max/TeamBee" because the repo is Private and Render does not have permission yet.');
+        console.error('\nQuick Fixes:');
+        console.error('1) Make repo Public:  gh repo edit paytmcashly-max/TeamBee --visibility public --accept-visibility-change-consequences');
+        console.error('2) OR Grant Render App access: https://github.com/apps/render/installations/new');
+        throw err;
+      }
       console.error('❌ Failed to create backend with plan "free", trying "starter"...', err);
       backendService = await apiRequest('/services', 'POST', {
         type: 'web_service',
