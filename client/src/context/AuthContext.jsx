@@ -43,9 +43,18 @@ export function AuthProvider({ children }) {
     });
     const data = await res.json();
     if (!data.success) {
+      // Not an error: the account lives in several workspaces and the user
+      // must pick one. LoginView renders the picker from this payload and
+      // calls login again with the chosen workspace's slug.
+      if (data.code === 'WORKSPACE_SELECTION_REQUIRED') {
+        return data;
+      }
       throw new Error(data.error || 'Login failed');
     }
 
+    try {
+      sessionStorage.setItem('teambee:lastEmail', email);
+    } catch (storageError) {}
     setToken(data.token);
     setAgent(data.agent);
     setTenant(data.tenant);

@@ -13,6 +13,7 @@ import {
   Radio,
   Sparkles,
   LogOut,
+  ArrowLeftRight,
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { useChat } from '../../context/ChatContext';
@@ -218,6 +219,22 @@ export default function ConversationList({
               title="Outbound Broadcast Campaigns"
             >
               <Radio size={15} />
+            </button>
+            <button
+              onClick={() => {
+                // Switch workspace = sign out into the picker flow with the
+                // email prefilled; the password is re-entered (never kept).
+                try {
+                  sessionStorage.setItem('teambee:switchWorkspace', '1');
+                  if (agent?.email) sessionStorage.setItem('teambee:lastEmail', agent.email);
+                } catch (storageError) {}
+                logout();
+              }}
+              className="btn btn-ghost"
+              style={{ padding: '6px', color: 'var(--text-secondary)' }}
+              title="Switch workspace"
+            >
+              <ArrowLeftRight size={15} />
             </button>
             <button
               onClick={logout}

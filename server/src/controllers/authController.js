@@ -80,26 +80,58 @@ class AuthController {
         include: { tenant: true },
       });
 
+      // Account resolution. The same email may have an account in several
+      // workspaces, each with its own password. Design:
+      //  - slug given        -> verify only that workspace's account
+      //  - one account       -> verify it
+      //  - several accounts  -> verify the password against each; exactly one
+      //    match signs straight in, several matches return a workspace
+      //    picker payload (names are revealed ONLY after the password has
+      //    verified, so the picker cannot be used to enumerate workspaces).
       let agent = null;
       if (tenantSlug) {
         const tenant = await prisma.tenant.findUnique({ where: { slug: tenantSlug } });
         agent = tenant ? matches.find((candidate) => candidate.tenantId === tenant.id) || null : null;
-      } else if (matches.length > 1) {
-        return res.status(400).json({
-          success: false,
-          code: 'WORKSPACE_REQUIRED',
-          error: 'This email belongs to multiple workspaces. Please provide your workspace slug to sign in.',
-        });
-      } else {
+        const isValidPassword = await bcrypt.compare(password, agent ? agent.passwordHash : DUMMY_PASSWORD_HASH);
+        if (!agent || !isValidPassword) {
+          return res.status(401).json({ success: false, error: 'Invalid email or credentials' });
+        }
+      } else if (matches.length <= 1) {
         agent = matches[0] || null;
-      }
-
-      // Always run bcrypt (against a dummy hash for unknown accounts) and
-      // only reveal deactivation after the password has verified, so the
-      // endpoint cannot be used to enumerate accounts or their state.
-      const isValidPassword = await bcrypt.compare(password, agent ? agent.passwordHash : DUMMY_PASSWORD_HASH);
-      if (!agent || !isValidPassword) {
-        return res.status(401).json({ success: false, error: 'Invalid email or credentials' });
+        const isValidPassword = await bcrypt.compare(password, agent ? agent.passwordHash : DUMMY_PASSWORD_HASH);
+        if (!agent || !isValidPassword) {
+          return res.status(401).json({ success: false, error: 'Invalid email or credentials' });
+        }
+      } else {
+        const verified = [];
+        for (const candidate of matches.slice(0, 10)) {
+          // Sequential by design: bounded at 10 accounts, and parallel
+          // bcrypt would spike CPU on the login path.
+          if (await bcrypt.compare(password, candidate.passwordHash)) {
+            verified.push(candidate);
+          }
+        }
+        if (verified.length === 0) {
+          return res.status(401).json({ success: false, error: 'Invalid email or credentials' });
+        }
+        const verifiedActive = verified.filter((candidate) => candidate.isActive);
+        if (verifiedActive.length === 0) {
+          return res.status(403).json({ success: false, error: 'This agent account is deactivated' });
+        }
+        if (verifiedActive.length > 1) {
+          return res.json({
+            success: false,
+            code: 'WORKSPACE_SELECTION_REQUIRED',
+            workspaces: verifiedActive.map((candidate) => ({
+              tenantId: candidate.tenantId,
+              name: candidate.tenant.name,
+              slug: candidate.tenant.slug,
+              displayPhoneNumber: candidate.tenant.displayPhoneNumber,
+              role: candidate.role,
+            })),
+          });
+        }
+        agent = verifiedActive[0];
       }
 
       if (!agent.isActive) {
