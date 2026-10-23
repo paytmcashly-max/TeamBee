@@ -1,5 +1,6 @@
 const bcrypt = require('bcryptjs');
 const prisma = require('../db/prisma');
+const { invalidateAgentCache } = require('../middleware/authMiddleware');
 
 class AgentController {
   /**
@@ -200,6 +201,9 @@ class AgentController {
           isActive: true,
         },
       });
+
+      // Role/status/password edits take effect immediately, not at cache TTL.
+      invalidateAgentCache(target.id);
 
       return res.json({ success: true, agent: updated });
     } catch (error) {

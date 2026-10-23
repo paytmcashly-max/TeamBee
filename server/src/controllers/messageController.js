@@ -63,7 +63,14 @@ class MessageController {
          take: requestedLimit + 1,
        });
        const hasMore = messageRows.length > requestedLimit;
-       const messages = (hasMore ? messageRows.slice(0, requestedLimit) : messageRows).reverse();
+       // Payload diet: a message's rawPayload is the full Meta webhook JSON
+       // (kilobytes each) and the client only ever reads it for INTERACTIVE
+       // button pills — strip it for every other type.
+       const messages = (hasMore ? messageRows.slice(0, requestedLimit) : messageRows)
+         .reverse()
+         .map((message) =>
+           message.messageType === 'INTERACTIVE' ? message : { ...message, rawPayload: undefined }
+         );
        const nextBefore = hasMore && messages[0]
          ? `${messages[0].createdAt.toISOString()}|${messages[0].id}`
          : null;

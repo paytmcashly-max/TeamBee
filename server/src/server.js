@@ -3,6 +3,7 @@ const http = require('http');
 const express = require('express');
 const cors = require('cors');
 const helmet = require('helmet');
+const compression = require('compression');
 const path = require('path');
 
 const { initSocket, configureRedisAdapter, closeSocketResources } = require('./services/socketService');
@@ -64,6 +65,18 @@ app.use(
   })
 );
 
+// Gzip API responses (~70% smaller JSON on the wire). Media streams are
+// skipped: their bytes are already encoded and compression would only burn
+// CPU and break streaming.
+app.use(
+  compression({
+    filter: (req, res) => {
+      if (req.path.startsWith('/api/messages/media/')) return false;
+      return compression.filter(req, res);
+    },
+  })
+);
+
 // Express JSON body parser preserving raw body buffer for Webhook HMAC signature verification
 app.use(
   express.json({
@@ -85,9 +98,20 @@ app.get('/health', (req, res) => {
   });
 });
 
+// Readiness: the full schema verification walks information_schema on every
+// call and made /ready take 0.5-0.9s. Cache a successful verification for
+// 60s — readiness still fails within a minute of real schema breakage, and
+// the boot path keeps the strict uncached check.
+let schemaVerifiedAt = 0;
+async function verifyDatabaseSchemaCached() {
+  if (Date.now() - schemaVerifiedAt < 60_000) return;
+  await verifyDatabaseSchema();
+  schemaVerifiedAt = Date.now();
+}
+
 app.get('/ready', async (req, res) => {
   try {
-    await verifyDatabaseSchema();
+    await verifyDatabaseSchemaCached();
     return res.json({ status: 'ready', database: 'up', schema: 'up' });
   } catch (error) {
     console.error('[Readiness Check Error]:', error.message);

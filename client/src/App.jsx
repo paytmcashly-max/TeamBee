@@ -1,16 +1,18 @@
-import React, { useState } from 'react';
+import React, { useState, lazy, Suspense } from 'react';
 import { useAuth } from './context/AuthContext';
 import { useChat } from './context/ChatContext';
 import LoginView from './components/auth/LoginView';
 import ConversationList from './components/inbox/ConversationList';
 import ChatCanvas from './components/inbox/ChatCanvas';
 import ContactSidebar from './components/inbox/ContactSidebar';
-import MetaOnboardingModal from './components/modals/MetaOnboardingModal';
+// Modals are heavy and most sessions never open some of them — split them
+// out of the initial bundle and fetch each on first use.
+const MetaOnboardingModal = lazy(() => import('./components/modals/MetaOnboardingModal'));
 import ErrorBoundary from './components/ErrorBoundary';
 import { useSocket } from './context/SocketContext';
-import TemplateModal from './components/modals/TemplateModal';
-import AgentManagementModal from './components/modals/AgentManagementModal';
-import BroadcastModal from './components/modals/BroadcastModal';
+const TemplateModal = lazy(() => import('./components/modals/TemplateModal'));
+const AgentManagementModal = lazy(() => import('./components/modals/AgentManagementModal'));
+const BroadcastModal = lazy(() => import('./components/modals/BroadcastModal'));
 
 export default function App() {
   const { agent, loading } = useAuth();
@@ -90,10 +92,12 @@ export default function App() {
       </div>
 
       {/* Modals & Consoles */}
-      <MetaOnboardingModal isOpen={isSettingsOpen} onClose={() => setIsSettingsOpen(false)} />
-      <TemplateModal isOpen={isTemplateModalOpen} onClose={() => setIsTemplateModalOpen(false)} />
-      <BroadcastModal isOpen={isBroadcastModalOpen} onClose={() => setIsBroadcastModalOpen(false)} />
-      <AgentManagementModal isOpen={isAgentsModalOpen} onClose={() => setIsAgentsModalOpen(false)} />
+      <Suspense fallback={null}>
+        <MetaOnboardingModal isOpen={isSettingsOpen} onClose={() => setIsSettingsOpen(false)} />
+        <TemplateModal isOpen={isTemplateModalOpen} onClose={() => setIsTemplateModalOpen(false)} />
+        <BroadcastModal isOpen={isBroadcastModalOpen} onClose={() => setIsBroadcastModalOpen(false)} />
+        <AgentManagementModal isOpen={isAgentsModalOpen} onClose={() => setIsAgentsModalOpen(false)} />
+      </Suspense>
     </div>
     </ErrorBoundary>
   );

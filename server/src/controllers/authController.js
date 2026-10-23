@@ -2,7 +2,7 @@ const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const crypto = require('crypto');
 const prisma = require('../db/prisma');
-const { getJwtSecret, verifyAccessToken, readCookie } = require('../middleware/authMiddleware');
+const { getJwtSecret, verifyAccessToken, readCookie, invalidateAgentCache } = require('../middleware/authMiddleware');
 const { hashSecret } = require('../services/credentialCrypto');
 
 // Compared against when the account does not exist, so unknown-email and
@@ -314,6 +314,7 @@ class AuthController {
             where: { id: agentId },
             data: { tokenVersion: { increment: 1 } },
           });
+          invalidateAgentCache(agentId);
         }
       }
     } catch (revokeError) {
@@ -350,6 +351,7 @@ class AuthController {
         data: { passwordHash, tokenVersion: { increment: 1 } },
         include: { tenant: true },
       });
+      invalidateAgentCache(req.agent.id);
 
       // Re-issue a session for THIS device on the new token version so the
       // user is not logged out of the tab they just secured.
