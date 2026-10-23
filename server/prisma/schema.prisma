@@ -228,6 +228,7 @@ model BroadcastRecipient {
   broadcast Broadcast @relation(fields: [broadcastId], references: [id], onDelete: Cascade)
 
   @@index([broadcastId, status])
+  @@index([status, nextAttemptAt])
   @@map("broadcast_recipients")
 }
 

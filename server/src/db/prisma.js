@@ -1,15 +1,13 @@
 const { PrismaClient } = require('@prisma/client');
 
-// Initialize Prisma client with query logging in dev
+// PostgreSQL only. For production scale DATABASE_URL must point at Neon's
+// POOLED endpoint (host containing "-pooler") with PgBouncer parameters,
+// e.g. ...?pgbouncer=true&connection_limit=15&pool_timeout=20 — the app
+// never runs migrations at boot, so transaction pooling is safe and keeps
+// many app instances from exhausting Postgres connections.
 const prisma = new PrismaClient({
   log: process.env.NODE_ENV === 'development' ? ['warn', 'error'] : ['error'],
 });
 
-// Enforce foreign key constraints in SQLite
-if (process.env.DATABASE_URL && process.env.DATABASE_URL.startsWith('file:')) {
-  prisma.$queryRawUnsafe('PRAGMA foreign_keys = ON;').catch((err) => {
-    console.warn('SQLite PRAGMA foreign_keys setup notice:', err.message);
-  });
-}
 
 module.exports = prisma;

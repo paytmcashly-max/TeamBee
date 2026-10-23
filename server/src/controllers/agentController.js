@@ -223,28 +223,43 @@ class AgentController {
       const resolvedChats = await prisma.chat.count({ where: { tenantId: req.tenantId, status: 'RESOLVED' } });
       const totalMessages = await prisma.message.count({ where: { tenantId: req.tenantId } });
 
-      // Bounded recent window (newest first, then re-sorted in JS): the old
-      // query silently measured only the OLDEST 10,000 messages forever.
+      // Average response time computed IN SQL over the last 30 days — the
+      // previous version loaded up to 10,000 message rows into JS and paired
+      // them in a loop, which degrades linearly with tenant volume. The SQL
+      // replicates the exact pairing semantics: a "burst" starts at an
+      // inbound message whose predecessor was not inbound; it is answered by
+      // the first outbound that follows an inbound; the metric averages
+      // (answered_at - burst_start) over all answered bursts.
       const windowStart = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
-      const recentMessages = (await prisma.message.findMany({
-        where: { tenantId: req.tenantId, createdAt: { gte: windowStart } },
-        orderBy: { createdAt: 'desc' },
-        take: 10000,
-        select: { chatId: true, direction: true, createdAt: true },
-      })).reverse();
-      const waitingSince = new Map();
-      const responseTimes = [];
-      for (const message of recentMessages) {
-        if (message.direction === 'INBOUND' && !waitingSince.has(message.chatId)) {
-          waitingSince.set(message.chatId, message.createdAt);
-        } else if (message.direction === 'OUTBOUND' && waitingSince.has(message.chatId)) {
-          responseTimes.push((message.createdAt.getTime() - waitingSince.get(message.chatId).getTime()) / 1000);
-          waitingSince.delete(message.chatId);
-        }
-      }
-      const averageResponse = responseTimes.length
-        ? Math.round(responseTimes.reduce((sum, value) => sum + value, 0) / responseTimes.length)
-        : null;
+      const slaRows = await prisma.$queryRaw`
+        WITH ordered AS (
+          SELECT id, chat_id, direction, created_at,
+                 LAG(direction) OVER (PARTITION BY chat_id ORDER BY created_at, id) AS prev_dir
+          FROM messages
+          WHERE tenant_id = ${req.tenantId} AND created_at >= ${windowStart}
+        ),
+        bursts AS (
+          SELECT id, chat_id, created_at AS burst_start
+          FROM ordered
+          WHERE direction = 'INBOUND' AND (prev_dir IS NULL OR prev_dir <> 'INBOUND')
+        ),
+        responses AS (
+          SELECT chat_id, created_at AS responded_at
+          FROM ordered
+          WHERE direction = 'OUTBOUND' AND prev_dir = 'INBOUND'
+        ),
+        pairs AS (
+          SELECT b.id, b.burst_start, MIN(r.responded_at) AS responded_at
+          FROM bursts b
+          JOIN responses r
+            ON r.chat_id = b.chat_id AND r.responded_at > b.burst_start
+          GROUP BY b.id, b.burst_start
+        )
+        SELECT CAST(AVG(EXTRACT(EPOCH FROM (responded_at - burst_start))) AS double precision) AS avg_sec
+        FROM pairs
+      `;
+      const averageResponse =
+        slaRows.length && slaRows[0].avg_sec != null ? Math.round(slaRows[0].avg_sec) : null;
       const resolutionRate = totalChats ? `${((resolvedChats / totalChats) * 100).toFixed(1)}%` : '0.0%';
 
       return res.json({

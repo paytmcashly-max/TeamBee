@@ -1,4 +1,11 @@
 const { rateLimit, ipKeyGenerator } = require('express-rate-limit');
+const { createRateLimitStores } = require('./redisRateLimitStore');
+
+// Shared store across instances when Redis is configured; without REDIS_URL
+// the limiters fall back to express-rate-limit's per-process MemoryStore
+// (single-instance deployments only). Each limiter gets its own key prefix.
+const sharedStores = process.env.REDIS_URL ? createRateLimitStores(process.env.REDIS_URL) : null;
+const storeFor = (prefix) => (sharedStores ? { store: sharedStores.forLimiter(prefix) } : {});
 
 const standardOptions = {
   standardHeaders: 'draft-8',
@@ -11,10 +18,9 @@ const standardOptions = {
   },
 };
 
-// These in-process limits protect a single instance from accidental abuse.
-// Multi-instance deployments must use a shared express-rate-limit store.
 const authLimiter = rateLimit({
   ...standardOptions,
+  ...storeFor('rl:auth:'),
   windowMs: 15 * 60 * 1000,
   limit: 30,
   keyGenerator: (req) => ipKeyGenerator(req.ip || 'unknown'),
@@ -22,12 +28,14 @@ const authLimiter = rateLimit({
 
 const registrationLimiter = rateLimit({
   ...standardOptions,
+  ...storeFor('rl:register:'),
   windowMs: 60 * 60 * 1000,
   limit: 5,
 });
 
 const webhookLimiter = rateLimit({
   ...standardOptions,
+  ...storeFor('rl:webhook:'),
   windowMs: 60 * 1000,
   limit: 1200,
   skip: () => process.env.NODE_ENV === 'test',
