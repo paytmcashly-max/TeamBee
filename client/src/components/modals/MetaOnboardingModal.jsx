@@ -230,7 +230,7 @@ export default function MetaOnboardingModal({ isOpen, onClose }) {
               />
             </div>
 
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+            <div className="grid-form-2" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
               {/* WhatsApp Business Account ID */}
               <div>
                 <label style={{ display: 'block', fontSize: '12px', fontWeight: '600', color: '#fff', marginBottom: '5px' }}>
@@ -278,7 +278,7 @@ export default function MetaOnboardingModal({ isOpen, onClose }) {
               </div>
             </div>
 
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+            <div className="grid-form-2" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
               {/* Display Phone Number */}
               <div>
                 <label style={{ display: 'block', fontSize: '12px', fontWeight: '600', color: '#fff', marginBottom: '5px' }}>

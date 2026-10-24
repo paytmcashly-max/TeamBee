@@ -265,7 +265,7 @@ export default function AgentManagementModal({ isOpen, onClose }) {
 
           {/* Operational Metrics Cards */}
           {analytics && (
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '12px', marginBottom: '20px' }}>
+            <div className="grid-stats-4" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '12px', marginBottom: '20px' }}>
               <div
                 style={{
                   background: 'var(--bg-surface)',
@@ -349,7 +349,7 @@ export default function AgentManagementModal({ isOpen, onClose }) {
               Auto-assign new chats round-robin across active agents
             </label>
 
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', marginBottom: '10px' }}>
+            <div className="grid-form-2" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', marginBottom: '10px' }}>
               <div>
                 <label style={{ display: 'block', fontSize: '11px', color: 'var(--text-muted)', marginBottom: '4px' }}>Office hours start</label>
                 <input
@@ -401,7 +401,7 @@ export default function AgentManagementModal({ isOpen, onClose }) {
               </div>
             </div>
 
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', marginBottom: '12px' }}>
+            <div className="grid-form-2" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', marginBottom: '12px' }}>
               <div>
                 <label style={{ display: 'block', fontSize: '11px', color: 'var(--text-muted)', marginBottom: '4px' }}>Away reply template (no variables)</label>
                 <select
@@ -475,7 +475,7 @@ export default function AgentManagementModal({ isOpen, onClose }) {
               }}
             >
               <div style={{ fontSize: '12.5px', fontWeight: '600', color: '#fff' }}>Invite New Agent Account</div>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+              <div className="grid-form-2" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
                 <input
                   type="text"
                   placeholder="Full name"
@@ -507,7 +507,7 @@ export default function AgentManagementModal({ isOpen, onClose }) {
                   }}
                 />
               </div>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+              <div className="grid-form-2" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
                 <input
                   type="password"
                   placeholder="Temporary Password"
@@ -688,7 +688,7 @@ export default function AgentManagementModal({ isOpen, onClose }) {
             }}
           >
             <div style={{ fontSize: '12.5px', fontWeight: '600', color: '#fff' }}>Change my password</div>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+            <div className="grid-form-2" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
               <input
                 type="password"
                 autoComplete="current-password"

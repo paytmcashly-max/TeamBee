@@ -161,6 +161,7 @@ export default function LoginView() {
       }}
     >
       <div
+        className="login-card"
         style={{
           width: '90%',
           maxWidth: '460px',

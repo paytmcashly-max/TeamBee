@@ -393,7 +393,7 @@ export default function ConversationList({
       )}
 
       {/* Role-Based Tabs (Mine / Unassigned / All) */}
-      <div style={{ padding: '10px 16px 6px 16px' }}>
+      <div className="list-tabs-wrap" style={{ padding: '10px 16px 6px 16px' }}>
         <div
           style={{
             display: 'flex',
@@ -464,7 +464,7 @@ export default function ConversationList({
       </div>
 
       {/* Search Bar & Status Quick Filter */}
-      <div style={{ padding: '6px 16px 10px 16px' }}>
+      <div className="list-search-wrap" style={{ padding: '6px 16px 10px 16px' }}>
         <div style={{ position: 'relative', marginBottom: '8px' }}>
           <Search
             size={15}
@@ -529,7 +529,7 @@ export default function ConversationList({
 
       {/* Tag filter — only rendered when tags exist */}
       {allTags.length > 0 && (
-        <div style={{ padding: '0 16px 8px 16px' }}>
+        <div className="list-tags-wrap" style={{ padding: '0 16px 8px 16px' }}>
           <div style={{ display: 'flex', gap: '6px', overflowX: 'auto', paddingBottom: '2px' }}>
             <button
               onClick={() => setSelectedTag(null)}

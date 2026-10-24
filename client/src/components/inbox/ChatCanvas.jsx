@@ -573,7 +573,7 @@ export default function ChatCanvas({ onOpenTemplatePicker, onToggleSidebar, isSi
             <button
               type="button"
               onClick={() => setShowSnoozeMenu((open) => !open)}
-              className="btn btn-ghost"
+              className="btn btn-ghost chat-header-action"
               title={
                 activeChat.snoozedUntil && new Date(activeChat.snoozedUntil) > new Date()
                   ? `Snoozed until ${new Date(activeChat.snoozedUntil).toLocaleString('en-IN', { day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' })}`
@@ -639,10 +639,10 @@ export default function ChatCanvas({ onOpenTemplatePicker, onToggleSidebar, isSi
           <span
             className={
               isResolved
-                ? 'badge badge-resolved'
+                ? 'badge badge-resolved chat-status-badge'
                 : isUnassigned
-                ? 'badge badge-unassigned'
-                : 'badge badge-open'
+                ? 'badge badge-unassigned chat-status-badge'
+                : 'badge badge-open chat-status-badge'
             }
             style={{ fontSize: '10px', padding: '3px 8px' }}
           >
@@ -701,7 +701,7 @@ export default function ChatCanvas({ onOpenTemplatePicker, onToggleSidebar, isSi
           {isResolved ? (
             <button
               onClick={() => updateChatStatus(activeChat.id, 'OPEN').catch((err) => alert(err.message))}
-              className="btn btn-secondary"
+              className="btn btn-secondary chat-header-action"
               style={{ width: '34px', height: '34px', padding: 0 }}
               title="Reopen Conversation"
             >
@@ -710,7 +710,7 @@ export default function ChatCanvas({ onOpenTemplatePicker, onToggleSidebar, isSi
           ) : (
             <button
               onClick={() => updateChatStatus(activeChat.id, 'RESOLVED').catch((err) => alert(err.message))}
-              className="btn btn-secondary"
+              className="btn btn-secondary chat-header-action"
               style={{ width: '34px', height: '34px', padding: 0 }}
               title="Mark Resolved"
             >
@@ -719,7 +719,7 @@ export default function ChatCanvas({ onOpenTemplatePicker, onToggleSidebar, isSi
           )}
 
           {/* CRM Info Button to toggle Customer sidebar */}
-          <button
+          <button className="chat-header-action"
             type="button"
             onClick={onToggleSidebar}
             style={{
@@ -784,6 +784,7 @@ export default function ChatCanvas({ onOpenTemplatePicker, onToggleSidebar, isSi
 
       {/* 3. Messages Stream */}
       <div
+        className="messages-stream"
         ref={messagesContainerRef}
         onScroll={handleMessageScroll}
         style={{

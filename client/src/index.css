@@ -105,6 +105,7 @@ input, textarea, select {
 .app-container {
   display: flex;
   height: 100vh;
+  height: 100dvh;
   width: 100vw;
   background-color: var(--bg-app);
   position: relative;
@@ -579,6 +580,75 @@ h1, h2, h3, h4, h5, h6 {
     max-width: 90%;
     padding: 9px 12px;
     font-size: 14px;
+  }
+}
+
+/* ==========================================================================
+   MOBILE UX BATCH (2026-10-25): de-crowding + touch targets.
+   The single-column switch above already existed; this batch fixes the
+   remaining pressure points measured on a 360px phone: the conversation
+   list's tall chrome stack, sub-38px header tap targets in the chat
+   header, cramped modal form grids, and the login card's fixed padding.
+   Everything here is scoped to small screens — desktop is untouched.
+   ========================================================================== */
+@media (max-width: 768px) {
+  /* Conversation list: compress the header chrome so chats get the space */
+  .conversations-header {
+    padding-left: 12px !important;
+    padding-right: 12px !important;
+    padding-bottom: 8px !important;
+  }
+  .list-tabs-wrap {
+    padding: 8px 12px 4px 12px !important;
+  }
+  .list-search-wrap {
+    padding: 4px 12px 8px 12px !important;
+  }
+  .list-tags-wrap {
+    padding: 0 12px 6px 12px !important;
+  }
+
+  /* Chat header: tighter sides, honest tap targets */
+  .chat-canvas-header {
+    padding-left: 10px !important;
+    padding-right: 10px !important;
+  }
+  .chat-header-action {
+    min-width: 38px !important;
+    height: 38px !important;
+  }
+  button.chat-header-action.btn-ghost {
+    padding: 9px !important;
+  }
+
+  /* Composer tools (quick replies / attach) up to target size */
+  .btn-tool {
+    min-width: 38px;
+    min-height: 38px;
+  }
+
+  /* Message stream: reclaim the side gutters */
+  .messages-stream {
+    padding: 12px 10px !important;
+  }
+
+  /* Modal forms: 2-col grids stack, 4-col stats go 2x2 */
+  .grid-form-2 {
+    grid-template-columns: 1fr !important;
+  }
+  .grid-stats-4 {
+    grid-template-columns: repeat(2, 1fr) !important;
+  }
+}
+
+@media (max-width: 480px) {
+  /* The status is already visible in the list and the CRM drawer; on a
+     small phone the header badge is what squeezes the customer name. */
+  .chat-status-badge {
+    display: none !important;
+  }
+  .login-card {
+    padding: 24px 18px !important;
   }
 }
 
