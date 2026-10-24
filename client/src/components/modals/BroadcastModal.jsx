@@ -25,6 +25,8 @@ export default function BroadcastModal({ isOpen, onClose }) {
   const [campaignName, setCampaignName] = useState('');
   const [selectedTemplateId, setSelectedTemplateId] = useState('');
   const [selectedContactIds, setSelectedContactIds] = useState([]);
+  const [contactTags, setContactTags] = useState({}); // contactId -> string[] (union of its chats' tags)
+  const [audienceTag, setAudienceTag] = useState('');
   const [variables, setVariables] = useState({});
   const [launching, setLaunching] = useState(false);
   const [feedback, setFeedback] = useState(null);
@@ -87,7 +89,19 @@ export default function BroadcastModal({ isOpen, onClose }) {
           break;
         }
         (chatData.chats || []).forEach((c) => {
-          if (c.contact && !seen.has(c.contact.id)) {
+          if (!c.contact) return;
+          let chatTags = [];
+          try {
+            const parsed = c.tags ? JSON.parse(c.tags) : [];
+            if (Array.isArray(parsed)) chatTags = parsed;
+          } catch (parseError) {}
+          if (chatTags.length) {
+            setContactTags((prev) => {
+              const merged = new Set([...(prev[c.contact.id] || []), ...chatTags]);
+              return { ...prev, [c.contact.id]: [...merged] };
+            });
+          }
+          if (!seen.has(c.contact.id)) {
             seen.add(c.contact.id);
             uniqueContacts.push(c.contact);
           }
@@ -111,6 +125,16 @@ export default function BroadcastModal({ isOpen, onClose }) {
   };
 
   const selectedTemplate = templates.find((t) => t.id === selectedTemplateId);
+
+  // Tag-targeted audience: the picker can be narrowed to one tag (tags are
+  // managed per chat in the contact sidebar). Selecting stays deliberate —
+  // choosing a tag filters the list, it never auto-selects anyone.
+  const allAudienceTags = [...new Set(Object.values(contactTags).flat())].sort((a, b) => a.localeCompare(b));
+  const visibleContacts = audienceTag
+    ? contacts.filter((c) => (contactTags[c.id] || []).includes(audienceTag))
+    : contacts;
+  const visibleAllSelected =
+    visibleContacts.length > 0 && visibleContacts.every((c) => selectedContactIds.includes(c.id));
 
   // Template placeholders ({{1}}, {{2}}, ...) collected per campaign — the
   // worker used to substitute literal "Sample N" text because this form
@@ -477,17 +501,53 @@ export default function BroadcastModal({ isOpen, onClose }) {
                   </label>
                   <button
                     type="button"
-                    onClick={() =>
-                      setSelectedContactIds(
-                        selectedContactIds.length === contacts.length ? [] : contacts.map((c) => c.id)
-                      )
-                    }
+                    onClick={() => {
+                      if (visibleAllSelected) {
+                        const visibleIds = new Set(visibleContacts.map((c) => c.id));
+                        setSelectedContactIds((prev) => prev.filter((id) => !visibleIds.has(id)));
+                      } else {
+                        setSelectedContactIds((prev) => [
+                          ...new Set([...prev, ...visibleContacts.map((c) => c.id)]),
+                        ]);
+                      }
+                    }}
                     className="btn btn-ghost"
                     style={{ fontSize: '11px', padding: '2px 6px' }}
                   >
-                    {selectedContactIds.length === contacts.length ? 'Deselect All' : 'Select All'}
+                    {visibleAllSelected ? 'Deselect' : 'Select'} {audienceTag ? `"${audienceTag}"` : 'All'}
                   </button>
                 </div>
+
+                {allAudienceTags.length > 0 && (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px' }}>
+                    <span style={{ fontSize: '11.5px', color: 'var(--text-secondary)' }}>Audience tag:</span>
+                    <select
+                      value={audienceTag}
+                      onChange={(e) => setAudienceTag(e.target.value)}
+                      style={{
+                        background: 'var(--bg-surface)',
+                        color: '#fff',
+                        border: '1px solid var(--border-medium)',
+                        borderRadius: '6px',
+                        padding: '5px 8px',
+                        fontSize: '12px',
+                        outline: 'none',
+                      }}
+                    >
+                      <option value="">All contacts ({contacts.length})</option>
+                      {allAudienceTags.map((tag) => (
+                        <option key={tag} value={tag}>
+                          {tag} ({contacts.filter((c) => (contactTags[c.id] || []).includes(tag)).length})
+                        </option>
+                      ))}
+                    </select>
+                    {audienceTag && (
+                      <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
+                        Showing {visibleContacts.length} tagged contact{visibleContacts.length === 1 ? '' : 's'}
+                      </span>
+                    )}
+                  </div>
+                )}
 
                 <div
                   style={{
@@ -502,7 +562,7 @@ export default function BroadcastModal({ isOpen, onClose }) {
                     background: 'var(--bg-surface)',
                   }}
                 >
-                  {contacts.map((contact) => (
+                  {visibleContacts.map((contact) => (
                     <label
                       key={contact.id}
                       style={{

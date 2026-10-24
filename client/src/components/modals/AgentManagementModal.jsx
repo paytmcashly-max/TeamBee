@@ -14,6 +14,17 @@ export default function AgentManagementModal({ isOpen, onClose }) {
   const [showAddForm, setShowAddForm] = useState(false);
   const [message, setMessage] = useState(null);
 
+  const [automation, setAutomation] = useState({
+    autoAssignEnabled: false,
+    officeHoursStart: '',
+    officeHoursEnd: '',
+    officeHoursDays: '1,2,3,4,5',
+    officeHoursTimezone: 'Asia/Kolkata',
+    awayTemplateName: '',
+  });
+  const [automationTemplates, setAutomationTemplates] = useState([]);
+  const [savingAutomation, setSavingAutomation] = useState(false);
+
   const [formData, setFormData] = useState({
     name: '',
     email: '',
@@ -25,15 +36,39 @@ export default function AgentManagementModal({ isOpen, onClose }) {
     if (!agent) return;
     setLoading(true);
     try {
-      const [agentsRes, metricsRes] = await Promise.all([
+      const [agentsRes, metricsRes, settingsRes, templatesRes] = await Promise.all([
         fetch('/api/agents', { headers: { Authorization: `Bearer ${token}` } }),
         fetch('/api/agents/analytics', { headers: { Authorization: `Bearer ${token}` } }),
+        fetch('/api/tenant/settings', { headers: { Authorization: `Bearer ${token}` } }),
+        fetch('/api/templates', { headers: { Authorization: `Bearer ${token}` } }),
       ]);
       const agentsData = await agentsRes.json();
       const metricsData = await metricsRes.json();
+      const settingsData = await settingsRes.json();
+      const templatesData = await templatesRes.json();
 
       if (agentsData.success) setAgents(agentsData.agents);
       if (metricsData.success) setAnalytics(metricsData.metrics);
+      if (settingsData.success && settingsData.settings) {
+        const s = settingsData.settings;
+        setAutomation({
+          autoAssignEnabled: Boolean(s.autoAssignEnabled),
+          officeHoursStart: s.officeHoursStart || '',
+          officeHoursEnd: s.officeHoursEnd || '',
+          officeHoursDays: s.officeHoursDays || '1,2,3,4,5',
+          officeHoursTimezone: s.officeHoursTimezone || 'Asia/Kolkata',
+          awayTemplateName: s.awayTemplateName || '',
+        });
+      }
+      if (templatesData.success) {
+        // The away reply sends with no variables, so only zero-variable
+        // APPROVED templates are eligible.
+        setAutomationTemplates(
+          (templatesData.templates || []).filter(
+            (t) => t.status === 'APPROVED' && !/\{\{\d+\}\}/.test(t.bodyText || '')
+          )
+        );
+      }
     } catch (err) {
       console.error('Failed to load team data:', err);
     } finally {
@@ -56,6 +91,47 @@ export default function AgentManagementModal({ isOpen, onClose }) {
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, [isOpen, onClose]);
+
+  const handleSaveAutomation = async () => {
+    setSavingAutomation(true);
+    setMessage(null);
+    try {
+      const res = await fetch('/api/tenant/settings', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({
+          autoAssignEnabled: automation.autoAssignEnabled,
+          officeHoursStart: automation.officeHoursStart || null,
+          officeHoursEnd: automation.officeHoursEnd || null,
+          officeHoursDays: automation.officeHoursDays || null,
+          officeHoursTimezone: automation.officeHoursTimezone || 'Asia/Kolkata',
+          awayTemplateName: automation.awayTemplateName || null,
+        }),
+      });
+      const data = await res.json();
+      if (!data.success) throw new Error(data.error || 'Failed to save automation settings');
+      setMessage({ type: 'success', text: 'Automation settings saved.' });
+    } catch (err) {
+      setMessage({ type: 'error', text: err.message });
+    } finally {
+      setSavingAutomation(false);
+    }
+  };
+
+  const toggleAutomationDay = (day) => {
+    const days = new Set(
+      (automation.officeHoursDays || '')
+        .split(',')
+        .map((d) => d.trim())
+        .filter(Boolean)
+    );
+    if (days.has(String(day))) days.delete(String(day));
+    else days.add(String(day));
+    setAutomation((prev) => ({
+      ...prev,
+      officeHoursDays: [...days].sort().join(','),
+    }));
+  };
 
   const handleCreateAgent = async (e) => {
     e.preventDefault();
@@ -244,6 +320,128 @@ export default function AgentManagementModal({ isOpen, onClose }) {
               </div>
             </div>
           )}
+
+          {/* Automation: round-robin auto-assign + office-hours away reply */}
+          <div
+            style={{
+              background: 'var(--bg-surface)',
+              border: '1px solid var(--border-subtle)',
+              borderRadius: 'var(--radius-md)',
+              padding: '14px',
+              marginBottom: '16px',
+            }}
+          >
+            <div style={{ fontSize: '13px', fontWeight: '600', color: '#fff', marginBottom: '4px' }}>
+              ⚙️ Automation
+            </div>
+            <p style={{ fontSize: '11.5px', color: 'var(--text-muted)', margin: '0 0 12px 0', lineHeight: 1.5 }}>
+              New unassigned chats can be auto-assigned round-robin, and customers who write outside office
+              hours can receive one automatic template reply (max once per 12 hours per chat).
+            </p>
+
+            <label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '12.5px', color: '#e2e8f0', cursor: 'pointer', marginBottom: '12px' }}>
+              <input
+                type="checkbox"
+                checked={automation.autoAssignEnabled}
+                disabled={!isAdmin}
+                onChange={(e) => setAutomation((p) => ({ ...p, autoAssignEnabled: e.target.checked }))}
+              />
+              Auto-assign new chats round-robin across active agents
+            </label>
+
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', marginBottom: '10px' }}>
+              <div>
+                <label style={{ display: 'block', fontSize: '11px', color: 'var(--text-muted)', marginBottom: '4px' }}>Office hours start</label>
+                <input
+                  type="time"
+                  value={automation.officeHoursStart}
+                  disabled={!isAdmin}
+                  onChange={(e) => setAutomation((p) => ({ ...p, officeHoursStart: e.target.value }))}
+                  style={{ width: '100%', background: '#0b1120', border: '1px solid var(--border-medium)', borderRadius: '7px', padding: '7px 9px', color: '#fff', fontSize: '12.5px' }}
+                />
+              </div>
+              <div>
+                <label style={{ display: 'block', fontSize: '11px', color: 'var(--text-muted)', marginBottom: '4px' }}>Office hours end</label>
+                <input
+                  type="time"
+                  value={automation.officeHoursEnd}
+                  disabled={!isAdmin}
+                  onChange={(e) => setAutomation((p) => ({ ...p, officeHoursEnd: e.target.value }))}
+                  style={{ width: '100%', background: '#0b1120', border: '1px solid var(--border-medium)', borderRadius: '7px', padding: '7px 9px', color: '#fff', fontSize: '12.5px' }}
+                />
+              </div>
+            </div>
+
+            <div style={{ marginBottom: '10px' }}>
+              <label style={{ display: 'block', fontSize: '11px', color: 'var(--text-muted)', marginBottom: '5px' }}>Working days</label>
+              <div style={{ display: 'flex', gap: '5px', flexWrap: 'wrap' }}>
+                {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((label, day) => {
+                  const active = (automation.officeHoursDays || '').split(',').includes(String(day));
+                  return (
+                    <button
+                      key={label}
+                      type="button"
+                      disabled={!isAdmin}
+                      onClick={() => toggleAutomationDay(day)}
+                      style={{
+                        padding: '4px 10px',
+                        borderRadius: '999px',
+                        fontSize: '11.5px',
+                        border: '1px solid',
+                        borderColor: active ? 'rgba(37, 211, 102, 0.5)' : 'var(--border-medium)',
+                        background: active ? 'rgba(37, 211, 102, 0.15)' : 'transparent',
+                        color: active ? '#25D366' : 'var(--text-secondary)',
+                        cursor: 'pointer',
+                      }}
+                    >
+                      {label}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', marginBottom: '12px' }}>
+              <div>
+                <label style={{ display: 'block', fontSize: '11px', color: 'var(--text-muted)', marginBottom: '4px' }}>Away reply template (no variables)</label>
+                <select
+                  value={automation.awayTemplateName}
+                  disabled={!isAdmin}
+                  onChange={(e) => setAutomation((p) => ({ ...p, awayTemplateName: e.target.value }))}
+                  style={{ width: '100%', background: '#0b1120', border: '1px solid var(--border-medium)', borderRadius: '7px', padding: '7px 9px', color: '#fff', fontSize: '12.5px' }}
+                >
+                  <option value="">None — no away reply</option>
+                  {automationTemplates.map((t) => (
+                    <option key={t.id} value={t.name}>
+                      {t.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label style={{ display: 'block', fontSize: '11px', color: 'var(--text-muted)', marginBottom: '4px' }}>Timezone</label>
+                <input
+                  type="text"
+                  value={automation.officeHoursTimezone}
+                  disabled={!isAdmin}
+                  onChange={(e) => setAutomation((p) => ({ ...p, officeHoursTimezone: e.target.value }))}
+                  placeholder="Asia/Kolkata"
+                  style={{ width: '100%', background: '#0b1120', border: '1px solid var(--border-medium)', borderRadius: '7px', padding: '7px 9px', color: '#fff', fontSize: '12.5px' }}
+                />
+              </div>
+            </div>
+
+            {isAdmin && (
+              <button
+                onClick={handleSaveAutomation}
+                disabled={savingAutomation}
+                className="btn btn-primary"
+                style={{ padding: '7px 14px', fontSize: '12.5px' }}
+              >
+                {savingAutomation ? 'Saving…' : 'Save automation'}
+              </button>
+            )}
+          </div>
 
           {/* Action Header */}
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px' }}>

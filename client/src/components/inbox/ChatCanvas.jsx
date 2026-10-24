@@ -132,13 +132,62 @@ export default function ChatCanvas({ onOpenTemplatePicker, onToggleSidebar, isSi
     typingUsers,
     messagePagination,
     loadOlderMessages,
+    snoozeChat,
   } = useChat();
+  const [showSnoozeMenu, setShowSnoozeMenu] = useState(false);
+  const [pendingMentions, setPendingMentions] = useState([]); // [{id, name}]
+  const [mentionQuery, setMentionQuery] = useState(null); // string while an @token is being typed (NOTE mode)
+
+  const mentionCandidates =
+    mentionQuery === null
+      ? []
+      : agentsList.filter(
+          (a) =>
+            a.id !== agent?.id &&
+            a.name.toLowerCase().includes(mentionQuery.toLowerCase())
+        );
+
+  const pickMention = (candidate) => {
+    setInputContent((prev) => prev.replace(/@([\w ]*)$/, `@${candidate.name} `));
+    setPendingMentions((prev) =>
+      prev.some((m) => m.id === candidate.id) ? prev : [...prev, { id: candidate.id, name: candidate.name }]
+    );
+    setMentionQuery(null);
+    textareaRef.current?.focus();
+  };
+
+  const snoozePresets = () => {
+    const now = new Date();
+    const inOneHour = new Date(now.getTime() + 60 * 60 * 1000);
+    const tomorrowNine = new Date(now);
+    tomorrowNine.setDate(tomorrowNine.getDate() + 1);
+    tomorrowNine.setHours(9, 0, 0, 0);
+    const nextWeek = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
+    return [
+      { label: 'For 1 hour', until: inOneHour },
+      { label: 'Tomorrow, 9 AM', until: tomorrowNine },
+      { label: 'Next week', until: nextWeek },
+    ];
+  };
+
+  const applySnooze = async (until) => {
+    setShowSnoozeMenu(false);
+    try {
+      await snoozeChat(activeChat.id, until ? until.toISOString() : null);
+    } catch (err) {
+      alert(err.message);
+    }
+  };
 
   const [inputContent, setInputContent] = useState('');
   const [composeMode, setComposeMode] = useState('WHATSAPP'); // 'WHATSAPP' | 'NOTE' | 'INTERACTIVE'
   const [sending, setSending] = useState(false);
   const [agentsList, setAgentsList] = useState([]);
   const [showQuickReplies, setShowQuickReplies] = useState(false);
+  const [tenantQuickReplies, setTenantQuickReplies] = useState([]);
+  const [qrSearch, setQrSearch] = useState('');
+  const [qrForm, setQrForm] = useState(null); // {id?, title, body, shortcut} while managing
+  const [qrError, setQrError] = useState(null);
   const [showAttachmentMenu, setShowAttachmentMenu] = useState(false);
   const [attachUrl, setAttachUrl] = useState('');
   const [attachName, setAttachName] = useState('');
@@ -220,10 +269,16 @@ export default function ChatCanvas({ onOpenTemplatePicker, onToggleSidebar, isSi
 
     try {
       if (composeMode === 'NOTE') {
-        // Send Private Team Note
+        // Send Private Team Note (with @mentions whose @Name survived edits)
+        const mentionIds = pendingMentions
+          .filter((m) => content.includes(`@${m.name}`))
+          .map((m) => m.id);
+        setPendingMentions([]);
+        setMentionQuery(null);
         await sendMessage(content, {
           isInternal: true,
           messageType: 'NOTE',
+          mentions: mentionIds,
         });
       } else if (composeMode === 'INTERACTIVE') {
         // Send WhatsApp Interactive Message with quick action buttons
@@ -285,24 +340,76 @@ export default function ChatCanvas({ onOpenTemplatePicker, onToggleSidebar, isSi
     }
   };
 
-  const quickReplies = [
-    {
-      label: 'Greeting',
-      text: 'Namaste! Thanks for reaching out to us. How can I help you today?',
-    },
-    {
-      label: 'Ask for details',
-      text: 'Could you please share a few more details so I can help you better?',
-    },
-    {
-      label: 'Follow-up',
-      text: 'Thanks for your patience. We are checking this for you and will update you shortly.',
-    },
-    {
-      label: 'Closing',
-      text: 'Thanks for contacting us. If you need anything else, just send us a message here. Have a great day!',
-    },
+  // Per-tenant quick replies from the API; the built-in starters below show
+  // only until the workspace saves its own (admins manage them inline).
+  const DEFAULT_QUICK_REPLIES = [
+    { id: null, title: 'Greeting', shortcut: null, body: 'Namaste! Thanks for reaching out to us. How can I help you today?' },
+    { id: null, title: 'Ask for details', shortcut: null, body: 'Could you please share a few more details so I can help you better?' },
+    { id: null, title: 'Follow-up', shortcut: null, body: 'Thanks for your patience. We are checking this for you and will update you shortly.' },
+    { id: null, title: 'Closing', shortcut: null, body: 'Thanks for contacting us. If you need anything else, just send us a message here. Have a great day!' },
   ];
+
+  const qrApi = async (method, path, payload) => {
+    const res = await fetch(`/api/quick-replies${path}`, {
+      method,
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: payload ? JSON.stringify(payload) : undefined,
+    });
+    const data = await res.json();
+    if (!data.success) throw new Error(data.error || 'Quick reply request failed');
+    return data;
+  };
+
+  const refreshQuickReplies = async () => {
+    try {
+      const data = await qrApi('GET', '');
+      setTenantQuickReplies(data.quickReplies || []);
+    } catch (err) {
+      // Starters remain available; management simply stays hidden offline.
+      setTenantQuickReplies([]);
+    }
+  };
+
+  useEffect(() => {
+    if (token) refreshQuickReplies();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [token]);
+
+  const saveQrForm = async () => {
+    setQrError(null);
+    try {
+      if (qrForm.id) {
+        await qrApi('PUT', `/${qrForm.id}`, qrForm);
+      } else {
+        await qrApi('POST', '', qrForm);
+      }
+      setQrForm(null);
+      await refreshQuickReplies();
+    } catch (err) {
+      setQrError(err.message);
+    }
+  };
+
+  const deleteQuickReply = async (reply) => {
+    if (!window.confirm(`Delete quick reply "${reply.title}"?`)) return;
+    try {
+      await qrApi('DELETE', `/${reply.id}`);
+      await refreshQuickReplies();
+    } catch (err) {
+      alert(err.message);
+    }
+  };
+
+  const quickReplies = tenantQuickReplies.length ? tenantQuickReplies : DEFAULT_QUICK_REPLIES;
+  const visibleQuickReplies = quickReplies.filter((qr) => {
+    const q = qrSearch.trim().toLowerCase().replace(/^\//, '');
+    if (!q) return true;
+    return (
+      qr.title.toLowerCase().includes(q) ||
+      qr.body.toLowerCase().includes(q) ||
+      (qr.shortcut || '').includes(q)
+    );
+  });
 
   if (!activeChat) {
     return (
@@ -461,6 +568,73 @@ export default function ChatCanvas({ onOpenTemplatePicker, onToggleSidebar, isSi
 
         {/* Action Controls: Status, Assignment (Desktop), Resolution & CRM Sidebar Toggle */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexShrink: 0 }}>
+          {/* Snooze / follow-up reminder */}
+          <div style={{ position: 'relative' }}>
+            <button
+              type="button"
+              onClick={() => setShowSnoozeMenu((open) => !open)}
+              className="btn btn-ghost"
+              title={
+                activeChat.snoozedUntil && new Date(activeChat.snoozedUntil) > new Date()
+                  ? `Snoozed until ${new Date(activeChat.snoozedUntil).toLocaleString('en-IN', { day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' })}`
+                  : 'Snooze / remind me later'
+              }
+              style={{
+                padding: '6px',
+                color:
+                  activeChat.snoozedUntil && new Date(activeChat.snoozedUntil) > new Date()
+                    ? '#f59e0b'
+                    : 'var(--text-secondary)',
+              }}
+            >
+              <Clock size={16} />
+            </button>
+            {showSnoozeMenu && (
+              <>
+                <div onClick={() => setShowSnoozeMenu(false)} style={{ position: 'fixed', inset: 0, zIndex: 40 }} />
+                <div
+                  style={{
+                    position: 'absolute',
+                    top: 'calc(100% + 6px)',
+                    right: 0,
+                    minWidth: '190px',
+                    background: '#111827',
+                    border: '1px solid var(--border-subtle)',
+                    borderRadius: '10px',
+                    boxShadow: '0 18px 40px rgba(0,0,0,0.55)',
+                    padding: '6px',
+                    zIndex: 50,
+                  }}
+                >
+                  <div style={{ fontSize: '10.5px', fontWeight: '700', color: 'var(--text-muted)', padding: '4px 8px', letterSpacing: '0.4px' }}>
+                    SNOOZE THIS CHAT
+                  </div>
+                  {snoozePresets().map((preset) => (
+                    <button
+                      key={preset.label}
+                      type="button"
+                      onClick={() => applySnooze(preset.until)}
+                      className="btn btn-ghost"
+                      style={{ display: 'block', width: '100%', textAlign: 'left', padding: '7px 8px', fontSize: '12.5px', color: '#e2e8f0' }}
+                    >
+                      {preset.label}
+                    </button>
+                  ))}
+                  {activeChat.snoozedUntil && new Date(activeChat.snoozedUntil) > new Date() && (
+                    <button
+                      type="button"
+                      onClick={() => applySnooze(null)}
+                      className="btn btn-ghost"
+                      style={{ display: 'block', width: '100%', textAlign: 'left', padding: '7px 8px', fontSize: '12.5px', color: '#f59e0b', borderTop: '1px solid var(--border-subtle)', marginTop: '4px' }}
+                    >
+                      Unsnooze now
+                    </button>
+                  )}
+                </div>
+              </>
+            )}
+          </div>
+
           {/* Status Badge */}
           <span
             className={
@@ -652,6 +826,14 @@ export default function ChatCanvas({ onOpenTemplatePicker, onToggleSidebar, isSi
             const isInbound = msg.direction === 'INBOUND';
             const isSystem = msg.senderType === 'SYSTEM';
             const isNote = msg.messageType === 'NOTE' || msg.senderType === 'NOTE';
+            let noteMentions = [];
+            if (isNote && msg.rawPayload) {
+              try {
+                const parsed = JSON.parse(msg.rawPayload);
+                if (Array.isArray(parsed?.mentions)) noteMentions = parsed.mentions;
+              } catch (parseError) {}
+            }
+            const mentionsMe = Boolean(agent?.id && noteMentions.includes(agent.id));
 
             const formatMsgTime = (d) => {
               const parsed = new Date(d);
@@ -697,6 +879,20 @@ export default function ChatCanvas({ onOpenTemplatePicker, onToggleSidebar, isSi
                       <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '11px', color: '#f59e0b', fontWeight: '700' }}>
                         <Lock size={12} />
                         <span>INTERNAL NOTE • Team only</span>
+                        {mentionsMe && (
+                          <span
+                            style={{
+                              fontSize: '9.5px',
+                              background: '#f59e0b',
+                              color: '#1c1005',
+                              padding: '1px 6px',
+                              borderRadius: '4px',
+                              fontWeight: '800',
+                            }}
+                          >
+                            YOU WERE MENTIONED
+                          </span>
+                        )}
                       </div>
                       <span style={{ fontSize: '10px', color: 'var(--text-muted)' }}>
                         {formatMsgTime(msg.createdAt)}
@@ -901,6 +1097,57 @@ export default function ChatCanvas({ onOpenTemplatePicker, onToggleSidebar, isSi
         <div ref={messagesEndRef} />
       </div>
 
+      {/* @mention picker (NOTE compose mode) */}
+      {composeMode === 'NOTE' && mentionQuery !== null && mentionCandidates.length > 0 && (
+        <div
+          style={{
+            position: 'absolute',
+            bottom: '115px',
+            left: '12px',
+            background: 'var(--bg-surface)',
+            border: '1px solid rgba(245, 158, 11, 0.4)',
+            borderRadius: 'var(--radius-lg)',
+            padding: '8px',
+            boxShadow: 'var(--shadow-card)',
+            zIndex: 20,
+            minWidth: '210px',
+          }}
+        >
+          <div style={{ fontSize: '10.5px', fontWeight: '700', color: '#f59e0b', padding: '2px 6px 6px 6px', letterSpacing: '0.4px' }}>
+            MENTION A TEAMMATE
+          </div>
+          {mentionCandidates.slice(0, 6).map((candidate) => (
+            <button
+              key={candidate.id}
+              type="button"
+              onClick={() => pickMention(candidate)}
+              className="btn btn-ghost"
+              style={{ display: 'flex', width: '100%', textAlign: 'left', padding: '6px 8px', fontSize: '12.5px', color: '#e2e8f0', alignItems: 'center', gap: '8px' }}
+            >
+              <span
+                style={{
+                  width: '22px',
+                  height: '22px',
+                  borderRadius: '50%',
+                  background: 'rgba(245,158,11,0.2)',
+                  color: '#f59e0b',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  fontSize: '10px',
+                  fontWeight: '700',
+                  flexShrink: 0,
+                }}
+              >
+                {(candidate.name || '?').charAt(0).toUpperCase()}
+              </span>
+              {candidate.name}
+              <span style={{ fontSize: '10px', color: 'var(--text-muted)' }}>{candidate.role}</span>
+            </button>
+          ))}
+        </div>
+      )}
+
       {/* 4. Quick Replies Flyout */}
       {showQuickReplies && (
         <div
@@ -915,50 +1162,140 @@ export default function ChatCanvas({ onOpenTemplatePicker, onToggleSidebar, isSi
             padding: '12px',
             boxShadow: 'var(--shadow-card)',
             zIndex: 20,
-            maxHeight: '260px',
+            maxHeight: '320px',
             overflowY: 'auto',
           }}
         >
-          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
-            <span style={{ fontSize: '12px', fontWeight: '600', color: '#fff' }}>⚡ Canned Quick Responses</span>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+            <span style={{ fontSize: '12px', fontWeight: '600', color: '#fff' }}>⚡ Quick Replies</span>
             <button
-              onClick={() => setShowQuickReplies(false)}
+              onClick={() => { setShowQuickReplies(false); setQrForm(null); setQrError(null); }}
               className="btn btn-ghost"
               style={{ padding: '2px 6px', fontSize: '11px' }}
             >
               ✕ Close
             </button>
           </div>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '6px' }}>
-            {quickReplies.map((qr, idx) => (
-              <button
-                key={idx}
-                onClick={() => {
-                  setInputContent(qr.text);
-                  setShowQuickReplies(false);
-                  textareaRef.current?.focus();
-                }}
-                className="btn btn-secondary"
-                style={{ textAlign: 'left', padding: '6px 8px', fontSize: '11.5px', justifyContent: 'flex-start' }}
-              >
-                <div>
-                  <div style={{ fontWeight: '600', color: 'var(--wa-primary)' }}>{qr.label}</div>
-                  <div
-                    style={{
-                      fontSize: '10.5px',
-                      color: 'var(--text-muted)',
-                      overflow: 'hidden',
-                      textOverflow: 'ellipsis',
-                      whiteSpace: 'nowrap',
-                      maxWidth: '220px',
-                    }}
-                  >
-                    {qr.text}
-                  </div>
+
+          {qrForm ? (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '7px' }}>
+              <input
+                value={qrForm.title}
+                onChange={(e) => setQrForm({ ...qrForm, title: e.target.value })}
+                placeholder="Title, e.g. Price list"
+                maxLength={80}
+                style={{ background: '#0b1120', border: '1px solid var(--border-medium)', borderRadius: '7px', padding: '8px 10px', color: '#fff', fontSize: '12px' }}
+              />
+              <input
+                value={qrForm.shortcut || ''}
+                onChange={(e) => setQrForm({ ...qrForm, shortcut: e.target.value })}
+                placeholder="Shortcut (optional), e.g. price — type /price in the composer"
+                maxLength={40}
+                style={{ background: '#0b1120', border: '1px solid var(--border-medium)', borderRadius: '7px', padding: '8px 10px', color: '#fff', fontSize: '12px' }}
+              />
+              <textarea
+                value={qrForm.body}
+                onChange={(e) => setQrForm({ ...qrForm, body: e.target.value })}
+                placeholder="The message text agents will insert…"
+                rows={3}
+                maxLength={1000}
+                style={{ background: '#0b1120', border: '1px solid var(--border-medium)', borderRadius: '7px', padding: '8px 10px', color: '#fff', fontSize: '12px', resize: 'vertical' }}
+              />
+              {qrError && <div style={{ fontSize: '11.5px', color: '#fca5a5' }}>{qrError}</div>}
+              <div style={{ display: 'flex', gap: '8px' }}>
+                <button onClick={saveQrForm} className="btn btn-primary" style={{ padding: '7px 14px', fontSize: '12px' }}>
+                  {qrForm.id ? 'Save changes' : 'Add quick reply'}
+                </button>
+                <button onClick={() => { setQrForm(null); setQrError(null); }} className="btn btn-ghost" style={{ padding: '7px 10px', fontSize: '12px' }}>
+                  Cancel
+                </button>
+              </div>
+            </div>
+          ) : (
+            <>
+              <input
+                value={qrSearch}
+                onChange={(e) => setQrSearch(e.target.value)}
+                placeholder="Search replies or shortcuts…"
+                autoFocus
+                style={{ width: '100%', background: '#0b1120', border: '1px solid var(--border-medium)', borderRadius: '7px', padding: '8px 10px', color: '#fff', fontSize: '12px', marginBottom: '9px' }}
+              />
+              {visibleQuickReplies.length === 0 ? (
+                <div style={{ fontSize: '12px', color: 'var(--text-muted)', padding: '6px 2px 10px 2px' }}>
+                  No quick replies match “{qrSearch}”.
                 </div>
-              </button>
-            ))}
-          </div>
+              ) : (
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '6px' }}>
+                  {visibleQuickReplies.map((qr) => (
+                    <div key={qr.id || qr.title} style={{ position: 'relative' }}>
+                      <button
+                        onClick={() => {
+                          setInputContent(qr.body);
+                          setShowQuickReplies(false);
+                          setQrSearch('');
+                          textareaRef.current?.focus();
+                        }}
+                        className="btn btn-secondary"
+                        style={{ textAlign: 'left', padding: '6px 8px', fontSize: '11.5px', justifyContent: 'flex-start', width: '100%' }}
+                      >
+                        <div style={{ minWidth: 0 }}>
+                          <div style={{ fontWeight: '600', color: 'var(--wa-primary)', display: 'flex', gap: '6px', alignItems: 'center' }}>
+                            <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{qr.title}</span>
+                            {qr.shortcut && (
+                              <span style={{ fontSize: '9.5px', background: 'rgba(37,211,102,0.14)', padding: '1px 5px', borderRadius: '4px', flexShrink: 0 }}>
+                                /{qr.shortcut}
+                              </span>
+                            )}
+                          </div>
+                          <div style={{ fontSize: '10.5px', color: 'var(--text-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '220px' }}>
+                            {qr.body}
+                          </div>
+                        </div>
+                      </button>
+                      {isAdmin && qr.id && (
+                        <span style={{ position: 'absolute', top: '4px', right: '4px', display: 'flex', gap: '2px' }}>
+                          <button
+                            type="button"
+                            title="Edit"
+                            onClick={() => { setQrForm({ id: qr.id, title: qr.title, body: qr.body, shortcut: qr.shortcut || '' }); setQrError(null); }}
+                            className="btn btn-ghost"
+                            style={{ padding: '2px 5px', fontSize: '10.5px' }}
+                          >
+                            ✎
+                          </button>
+                          <button
+                            type="button"
+                            title="Delete"
+                            onClick={() => deleteQuickReply(qr)}
+                            className="btn btn-ghost"
+                            style={{ padding: '2px 5px', fontSize: '10.5px', color: '#f87171' }}
+                          >
+                            🗑
+                          </button>
+                        </span>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '9px' }}>
+                <span style={{ fontSize: '10.5px', color: 'var(--text-muted)' }}>
+                  {tenantQuickReplies.length === 0
+                    ? 'Starter replies shown — admins can add your own.'
+                    : 'Tip: type /shortcut in the message box.'}
+                </span>
+                {isAdmin && (
+                  <button
+                    onClick={() => { setQrForm({ title: '', body: '', shortcut: '' }); setQrError(null); }}
+                    className="btn btn-ghost"
+                    style={{ padding: '3px 8px', fontSize: '11.5px', color: 'var(--wa-primary)' }}
+                  >
+                    + Add quick reply
+                  </button>
+                )}
+              </div>
+            </>
+          )}
         </div>
       )}
 
@@ -1270,8 +1607,23 @@ export default function ChatCanvas({ onOpenTemplatePicker, onToggleSidebar, isSi
               value={inputContent}
               maxLength={4096}
               onChange={(e) => {
-                setInputContent(e.target.value);
+                const value = e.target.value;
+                setInputContent(value);
                 signalTyping();
+                // "/" quick-reply shortcut: a lone slash token opens the
+                // picker pre-filtered by whatever follows the slash.
+                if (composeMode === 'WHATSAPP' && /^\/\S*$/.test(value)) {
+                  setQrSearch(value.slice(1));
+                  setShowQuickReplies(true);
+                }
+                // "@" mention picker (internal notes only): track the
+                // trailing @token so the candidate list can filter live.
+                if (composeMode === 'NOTE') {
+                  const atMatch = value.match(/@([\w ]*)$/);
+                  setMentionQuery(atMatch ? atMatch[1] : null);
+                } else if (mentionQuery !== null) {
+                  setMentionQuery(null);
+                }
               }}
               onKeyDown={handleKeyDown}
               placeholder={

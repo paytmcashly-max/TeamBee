@@ -56,6 +56,7 @@ export function ChatProvider({ children }) {
   const [chats, setChats] = useState([]);
   const [activeChatId, setActiveChatId] = useState(null);
   const [activeChat, setActiveChat] = useState(null);
+  const [mentionAlert, setMentionAlert] = useState(null);
   const [messages, setMessages] = useState([]);
   const [messagingWindow, setMessagingWindow] = useState({ isOpen: true, hoursRemaining: 24 });
   const [loadingChats, setLoadingChats] = useState(false);
@@ -425,6 +426,19 @@ export function ChatProvider({ children }) {
       }
     };
 
+    // Someone @mentioned me in an internal note (personal-room event)
+    const handleNoteMention = (payload) => {
+      setMentionAlert(payload);
+    };
+
+    // Chat snoozed / unsnoozed (by anyone, or by the expiry sweep)
+    const handleChatSnoozeChanged = ({ chatId, snoozedUntil }) => {
+      setChats((prev) =>
+        prev.map((c) => (c.id === chatId ? { ...c, snoozedUntil } : c))
+      );
+      setActiveChat((prev) => (prev && prev.id === chatId ? { ...prev, snoozedUntil } : prev));
+    };
+
     // Agent typing indicator
     const handleAgentTyping = ({ chatId, agentName, isTyping }) => {
       if (chatId === activeChatId) {
@@ -437,6 +451,8 @@ export function ChatProvider({ children }) {
     socket.on('message_status_updated', handleStatusUpdate);
     socket.on('chat_assigned', handleChatAssigned);
     socket.on('chat_status_changed', handleChatStatusChanged);
+    socket.on('chat_snooze_changed', handleChatSnoozeChanged);
+    socket.on('note_mention', handleNoteMention);
     socket.on('agent_typing', handleAgentTyping);
 
     return () => {
@@ -445,6 +461,8 @@ export function ChatProvider({ children }) {
       socket.off('message_status_updated', handleStatusUpdate);
       socket.off('chat_assigned', handleChatAssigned);
       socket.off('chat_status_changed', handleChatStatusChanged);
+      socket.off('chat_snooze_changed', handleChatSnoozeChanged);
+      socket.off('note_mention', handleNoteMention);
       socket.off('agent_typing', handleAgentTyping);
     };
   }, [socket, activeChatId, fetchChats]);
@@ -474,6 +492,7 @@ export function ChatProvider({ children }) {
       payload.mediaFilename = options.mediaFilename || null;
       payload.isInternal = !!options.isInternal;
       payload.buttons = options.buttons || [];
+      payload.mentions = Array.isArray(options.mentions) ? options.mentions : [];
     }
 
     // ⚡ Instant Optimistic UI (0ms latency): Append bubble immediately with PENDING clock
@@ -692,6 +711,30 @@ export function ChatProvider({ children }) {
   };
 
   /**
+   * Snooze a chat until `until` (ISO string) or clear with null.
+   */
+  const snoozeChat = async (chatId, until) => {
+    if (!agent) return;
+    const res = await fetch(`/api/chats/${chatId}/snooze`, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({ until }),
+    });
+    const data = await res.json();
+    if (!data.success) throw new Error(data.error || 'Failed to update snooze');
+    setChats((prev) =>
+      prev.map((c) => (c.id === chatId ? { ...c, snoozedUntil: data.chat.snoozedUntil, snoozedById: data.chat.snoozedById } : c))
+    );
+    setActiveChat((prev) =>
+      prev && prev.id === chatId ? { ...prev, snoozedUntil: data.chat.snoozedUntil, snoozedById: data.chat.snoozedById } : prev
+    );
+    return data;
+  };
+
+  /**
    * Update contact CRM details (name, email, customAttributes)
    */
   const updateContact = async (chatId, contactData) => {
@@ -740,6 +783,9 @@ export function ChatProvider({ children }) {
         assignChat,
         updateChatStatus,
         updateChatTags,
+        snoozeChat,
+        mentionAlert,
+        clearMentionAlert: () => setMentionAlert(null),
         updateContact,
          fetchChats,
          loadMoreChats,

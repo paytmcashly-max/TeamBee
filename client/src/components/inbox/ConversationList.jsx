@@ -78,7 +78,10 @@ export default function ConversationList({
     loadingChats,
     chatPagination,
     loadMoreChats,
+    mentionAlert,
+    clearMentionAlert,
   } = useChat();
+  const [selectedTag, setSelectedTag] = useState(null);
 
   const formatTime = (isoString) => {
     if (!isoString) return '';
@@ -104,7 +107,14 @@ export default function ConversationList({
   };
 
   // ⚡ Instant in-memory search filtering (0ms latency while typing)
+// Distinct tags across the loaded chats (tags live on chats as a JSON
+  // string array; ContactSidebar manages them per chat).
+  const allTags = [...new Set(chats.flatMap((c) => parseTags(c.tags)))].sort((a, b) =>
+    a.localeCompare(b)
+  );
+
   const filteredChats = chats.filter((c) => {
+    if (selectedTag && !parseTags(c.tags).includes(selectedTag)) return false;
     if (!searchQuery.trim()) return true;
     const q = searchQuery.toLowerCase();
     const nameMatch = c.contact?.name?.toLowerCase().includes(q);
@@ -336,6 +346,52 @@ export default function ConversationList({
         </div>
       </div>
 
+      {/* @mention alert — a teammate tagged me in an internal note */}
+      {mentionAlert && (
+        <div
+          style={{
+            margin: '10px 16px 0 16px',
+            padding: '9px 12px',
+            borderRadius: '10px',
+            background: 'rgba(245, 158, 11, 0.14)',
+            border: '1px solid rgba(245, 158, 11, 0.45)',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px',
+          }}
+        >
+          <span style={{ fontSize: '12px', color: '#fcd34d', flex: 1, lineHeight: 1.45 }}>
+            <strong>{mentionAlert.authorName || 'A teammate'}</strong> mentioned you in an internal note
+            {mentionAlert.contactName ? (
+              <>
+                {' '}on <strong>{mentionAlert.contactName}</strong>
+              </>
+            ) : null}
+            .
+          </span>
+          <button
+            type="button"
+            onClick={() => {
+              selectChat(mentionAlert.chatId);
+              clearMentionAlert();
+            }}
+            className="btn btn-ghost"
+            style={{ fontSize: '11.5px', padding: '3px 8px', color: '#f59e0b', fontWeight: '700', whiteSpace: 'nowrap' }}
+          >
+            View
+          </button>
+          <button
+            type="button"
+            onClick={clearMentionAlert}
+            className="btn btn-ghost"
+            style={{ fontSize: '11.5px', padding: '3px 6px', color: 'var(--text-secondary)' }}
+            aria-label="Dismiss mention alert"
+          >
+            ✕
+          </button>
+        </div>
+      )}
+
       {/* Role-Based Tabs (Mine / Unassigned / All) */}
       <div style={{ padding: '10px 16px 6px 16px' }}>
         <div
@@ -471,6 +527,51 @@ export default function ConversationList({
         </div>
       </div>
 
+      {/* Tag filter — only rendered when tags exist */}
+      {allTags.length > 0 && (
+        <div style={{ padding: '0 16px 8px 16px' }}>
+          <div style={{ display: 'flex', gap: '6px', overflowX: 'auto', paddingBottom: '2px' }}>
+            <button
+              onClick={() => setSelectedTag(null)}
+              style={{
+                padding: '3px 9px',
+                borderRadius: '999px',
+                fontSize: '11px',
+                fontWeight: !selectedTag ? '600' : '400',
+                border: '1px solid',
+                borderColor: !selectedTag ? 'rgba(255,255,255,0.25)' : 'transparent',
+                background: !selectedTag ? 'rgba(255,255,255,0.1)' : 'transparent',
+                color: !selectedTag ? '#fff' : 'var(--text-muted)',
+                cursor: 'pointer',
+                whiteSpace: 'nowrap',
+              }}
+            >
+              All tags
+            </button>
+            {allTags.map((tag) => (
+              <button
+                key={tag}
+                onClick={() => setSelectedTag(selectedTag === tag ? null : tag)}
+                style={{
+                  padding: '3px 9px',
+                  borderRadius: '999px',
+                  fontSize: '11px',
+                  fontWeight: selectedTag === tag ? '600' : '400',
+                  border: '1px solid',
+                  borderColor: selectedTag === tag ? 'rgba(167, 139, 250, 0.5)' : 'transparent',
+                  background: selectedTag === tag ? 'rgba(167, 139, 250, 0.2)' : 'transparent',
+                  color: selectedTag === tag ? '#c4b5fd' : 'var(--text-muted)',
+                  cursor: 'pointer',
+                  whiteSpace: 'nowrap',
+                }}
+              >
+                {tag}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* Conversation Cards List */}
       <div style={{ flex: 1, overflowY: 'auto' }}>
         {loadingChats && chats.length === 0 ? (
@@ -562,7 +663,25 @@ export default function ConversationList({
                       >
                         {chat.contact?.name || `+${chat.contact?.waId}`}
                       </span>
-                      <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
+                      <span style={{ fontSize: '11px', color: 'var(--text-muted)', display: 'inline-flex', alignItems: 'center', gap: '5px' }}>
+                        {chat.snoozedUntil && new Date(chat.snoozedUntil) > new Date() && (
+                          <span
+                            title={`Snoozed until ${new Date(chat.snoozedUntil).toLocaleString('en-IN', { day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' })}`}
+                            style={{
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: '2px',
+                              fontSize: '9.5px',
+                              fontWeight: '700',
+                              background: 'rgba(245, 158, 11, 0.16)',
+                              color: '#f59e0b',
+                              padding: '1px 5px',
+                              borderRadius: '4px',
+                            }}
+                          >
+                            <Clock size={9} /> {new Date(chat.snoozedUntil).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}
+                          </span>
+                        )}
                         {formatTime(chat.lastMessageAt)}
                       </span>
                     </div>
