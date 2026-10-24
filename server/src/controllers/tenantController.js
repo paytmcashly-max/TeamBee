@@ -17,6 +17,12 @@ class TenantController {
           phoneNumberId: true,
           displayPhoneNumber: true,
           plan: true,
+          autoAssignEnabled: true,
+          officeHoursStart: true,
+          officeHoursEnd: true,
+          officeHoursDays: true,
+          officeHoursTimezone: true,
+          awayTemplateName: true,
           createdAt: true,
           updatedAt: true,
         },
@@ -56,6 +62,12 @@ class TenantController {
         webhookVerifyToken,
         appSecret,
         displayPhoneNumber,
+        autoAssignEnabled,
+        officeHoursStart,
+        officeHoursEnd,
+        officeHoursDays,
+        officeHoursTimezone,
+        awayTemplateName,
       } = req.body;
 
       const stringFields = {
@@ -86,6 +98,62 @@ class TenantController {
        }
        if (appSecret !== undefined) updateData.appSecret = appSecret.trim() ? encryptSecret(appSecret.trim()) : null;
       if (displayPhoneNumber !== undefined) updateData.displayPhoneNumber = displayPhoneNumber.trim() || null;
+
+      // Automation settings (auto-assign + office hours). Validated
+      // strictly: a malformed value must never reach the automation engine.
+      if (autoAssignEnabled !== undefined) {
+        if (typeof autoAssignEnabled !== 'boolean') {
+          return res.status(400).json({ success: false, error: 'autoAssignEnabled must be a boolean' });
+        }
+        updateData.autoAssignEnabled = autoAssignEnabled;
+      }
+      const timePattern = /^(\d{1,2}):(\d{2})$/;
+      for (const [field, value] of [
+        ['officeHoursStart', officeHoursStart],
+        ['officeHoursEnd', officeHoursEnd],
+      ]) {
+        if (value !== undefined) {
+          if (value === null || value === '') {
+            updateData[field] = null;
+          } else {
+            const match = typeof value === 'string' ? timePattern.exec(value.trim()) : null;
+            if (!match || Number(match[1]) > 23 || Number(match[2]) > 59) {
+              return res.status(400).json({ success: false, error: `${field} must be HH:MM (24h) or empty` });
+            }
+            updateData[field] = value.trim();
+          }
+        }
+      }
+      if (officeHoursDays !== undefined) {
+        if (officeHoursDays === null || officeHoursDays === '') {
+          updateData.officeHoursDays = null;
+        } else if (
+          typeof officeHoursDays !== 'string' ||
+          !officeHoursDays.split(',').every((d) => /^[0-6]$/.test(d.trim()))
+        ) {
+          return res.status(400).json({ success: false, error: 'officeHoursDays must be comma-separated day numbers 0-6' });
+        } else {
+          updateData.officeHoursDays = officeHoursDays;
+        }
+      }
+      if (officeHoursTimezone !== undefined) {
+        if (typeof officeHoursTimezone !== 'string' || !officeHoursTimezone.trim()) {
+          return res.status(400).json({ success: false, error: 'officeHoursTimezone must be an IANA timezone name' });
+        }
+        try {
+          // Throws RangeError for a timezone Node/ICU does not know.
+          new Intl.DateTimeFormat('en-US', { timeZone: officeHoursTimezone.trim() });
+        } catch (tzError) {
+          return res.status(400).json({ success: false, error: 'officeHoursTimezone must be an IANA timezone name' });
+        }
+        updateData.officeHoursTimezone = officeHoursTimezone.trim().slice(0, 64);
+      }
+      if (awayTemplateName !== undefined) {
+        if (awayTemplateName !== null && typeof awayTemplateName !== 'string') {
+          return res.status(400).json({ success: false, error: 'awayTemplateName must be a string' });
+        }
+        updateData.awayTemplateName = awayTemplateName?.trim() ? awayTemplateName.trim().slice(0, 200) : null;
+      }
 
       // Only update access token if a new, unmasked token string was submitted
       if (accessToken?.trim() && !accessToken.includes('...')) {

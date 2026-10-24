@@ -1,7 +1,7 @@
 const prisma = require('../db/prisma');
 const MetaApiService = require('../services/metaApiService');
 const { decryptSecret } = require('../services/credentialCrypto');
-const { broadcastNewMessage } = require('../services/socketService');
+const { broadcastNewMessage, broadcastNoteMentions } = require('../services/socketService');
 const { canAccessChat } = require('../middleware/authMiddleware');
 
 class MessageController {
@@ -64,12 +64,14 @@ class MessageController {
        });
        const hasMore = messageRows.length > requestedLimit;
        // Payload diet: a message's rawPayload is the full Meta webhook JSON
-       // (kilobytes each) and the client only ever reads it for INTERACTIVE
-       // button pills — strip it for every other type.
+       // (kilobytes each). The client reads it only for INTERACTIVE button
+       // pills and NOTE @mentions — strip it for every other type.
        const messages = (hasMore ? messageRows.slice(0, requestedLimit) : messageRows)
          .reverse()
          .map((message) =>
-           message.messageType === 'INTERACTIVE' ? message : { ...message, rawPayload: undefined }
+           message.messageType === 'INTERACTIVE' || message.messageType === 'NOTE'
+             ? message
+             : { ...message, rawPayload: undefined }
          );
        const nextBefore = hasMore && messages[0]
          ? `${messages[0].createdAt.toISOString()}|${messages[0].id}`
@@ -117,6 +119,7 @@ class MessageController {
         forceSend = false,
         isInternal = false,
         buttons = [],
+        mentions = [],
         clientMessageId: rawClientMessageId,
       } = req.body;
       const { id: agentId, name: agentName, tenantId } = req.agent;
@@ -160,6 +163,9 @@ class MessageController {
        }
        if (typeof forceSend !== 'boolean' || typeof isInternal !== 'boolean' || !Array.isArray(buttons)) {
          return res.status(400).json({ success: false, error: 'Invalid message options' });
+       }
+       if (!Array.isArray(mentions) || mentions.length > 10 || mentions.some((m) => typeof m !== 'string')) {
+         return res.status(400).json({ success: false, error: 'Invalid mentions' });
        }
        if (buttons.length > 3 || buttons.some((button) => !button || typeof button !== 'object' ||
          (button.id !== undefined && (typeof button.id !== 'string' || button.id.length > 100)) ||
@@ -220,6 +226,18 @@ class MessageController {
       // 1. PRIVATE INTERNAL TEAM NOTE (Bypasses Meta Cloud API)
       // -------------------------------------------------------------
       if (isInternal || messageType === 'NOTE') {
+        // @mentions ride inside rawPayload (no schema change on the hot
+        // messages table); ids are re-validated against the tenant so a
+        // client can never mention another workspace's agent.
+        let validMentionIds = [];
+        if (mentions.length) {
+          const mentionedAgents = await prisma.agent.findMany({
+            where: { tenantId, id: { in: mentions } },
+            select: { id: true },
+          });
+          validMentionIds = mentionedAgents.map((a) => a.id);
+        }
+
         const noteMessage = await prisma.message.create({
           data: {
             chatId: chat.id,
@@ -229,6 +247,7 @@ class MessageController {
              clientMessageId,
              messageType: 'NOTE',
             content,
+            rawPayload: validMentionIds.length ? JSON.stringify({ mentions: validMentionIds }) : null,
             direction: 'OUTBOUND',
             status: 'DELIVERED',
             createdAt: now,
@@ -253,6 +272,16 @@ class MessageController {
         // browser reconcile this event with its optimistic note bubble.
         const responseMessage = clientMessageId ? { ...noteMessage, clientMessageId } : noteMessage;
         broadcastNewMessage(tenantId, chat.id, responseMessage, chat.assignedAgentId || agentId);
+
+        const notifyIds = validMentionIds.filter((id) => id !== agentId);
+        if (notifyIds.length) {
+          broadcastNoteMentions(tenantId, chat.id, {
+            authorName: agentName,
+            contactName: chat.contact?.name || null,
+            mentionedAgentIds: notifyIds,
+            messageId: noteMessage.id,
+          });
+        }
 
         return res.status(201).json({
           success: true,

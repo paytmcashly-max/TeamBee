@@ -8,6 +8,7 @@ router.get('/:id', authenticateToken, ChatController.getChatById);
 router.put('/:id/assign', authenticateToken, ChatController.assignChat);
 router.put('/:id/status', authenticateToken, ChatController.updateStatus);
 router.put('/:id/tags', authenticateToken, ChatController.updateTags);
+router.put('/:id/snooze', authenticateToken, ChatController.snoozeChat);
 router.put('/:id/contact', authenticateToken, ChatController.updateContact);
 
 module.exports = router;

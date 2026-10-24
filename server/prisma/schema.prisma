@@ -25,6 +25,13 @@ model Tenant {
   appSecret          String?  @map("app_secret")
   displayPhoneNumber String?  @map("display_phone_number")
   plan               String   @default("PRO")
+  autoAssignEnabled  Boolean  @default(false) @map("auto_assign_enabled")
+  assignmentCounter  Int      @default(0) @map("assignment_counter")
+  officeHoursStart   String?  @map("office_hours_start")
+  officeHoursEnd     String?  @map("office_hours_end")
+  officeHoursDays    String?  @map("office_hours_days")
+  officeHoursTimezone String  @default("Asia/Kolkata") @map("office_hours_timezone")
+  awayTemplateName   String?  @map("away_template_name")
   createdAt          DateTime @default(now()) @map("created_at")
   updatedAt          DateTime @updatedAt @map("updated_at")
 
@@ -36,6 +43,7 @@ model Tenant {
   templates     Template[]
   broadcasts    Broadcast[]
   webhookEvents WebhookEvent[]
+  quickReplies  QuickReply[]
 
   @@map("tenants")
 }
@@ -102,6 +110,9 @@ model Chat {
   lastMessageAt         DateTime? @default(now()) @map("last_message_at")
   lastCustomerMessageAt DateTime? @default(now()) @map("last_customer_message_at") // For 24-hr messaging window
   unreadCount           Int       @default(0) @map("unread_count")
+  snoozedUntil          DateTime? @map("snoozed_until")
+  snoozedById           String?   @map("snoozed_by_id")
+  lastAwayReplyAt       DateTime? @map("last_away_reply_at")
   tags                  String?   @default("[]") // JSON string array e.g. ["Urgent", "Fee Enquiry"]
   createdAt             DateTime  @default(now()) @map("created_at")
   updatedAt             DateTime  @updatedAt @map("updated_at")
@@ -116,6 +127,7 @@ model Chat {
   @@index([tenantId, status])
   @@index([tenantId, assignedAgentId])
   @@index([tenantId, lastMessageAt])
+  @@index([snoozedUntil])
   @@map("chats")
 }
 
@@ -250,3 +262,24 @@ model WebhookEvent {
   @@index([tenantId, receivedAt])
   @@map("webhook_events")
 }
+
+// -------------------------------------------------------------
+// QUICK REPLIES (per-tenant canned responses)
+// -------------------------------------------------------------
+model QuickReply {
+  id        String   @id @default(uuid())
+  tenantId  String   @map("tenant_id")
+  title     String
+  body      String
+  shortcut  String?
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, shortcut])
+  @@index([tenantId])
+  @@map("quick_replies")
+}
+
+

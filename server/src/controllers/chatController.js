@@ -2,6 +2,7 @@ const prisma = require('../db/prisma');
 const {
   broadcastChatAssignment,
   broadcastChatStatusTransition,
+  broadcastChatSnoozeChanged,
 } = require('../services/socketService');
 const { canAccessChat } = require('../middleware/authMiddleware');
 
@@ -365,6 +366,58 @@ class ChatController {
     } catch (error) {
       console.error('[Update Status Error]:', error);
       return res.status(500).json({ success: false, error: 'Failed to update conversation status' });
+    }
+  }
+
+  /**
+   * PUT /api/chats/:id/snooze: snooze a chat until a future time, or clear
+   * the snooze with { until: null }. Snoozed chats stay fully usable; the
+   * inbox just badges them and the expiry sweep resurfaces them.
+   */
+  static async snoozeChat(req, res) {
+    try {
+      const { id } = req.params;
+      const { until } = req.body || {};
+
+      let snoozedUntil = null;
+      if (until !== null && until !== undefined) {
+        const parsed = new Date(until);
+        const now = Date.now();
+        if (Number.isNaN(parsed.getTime()) || parsed.getTime() <= now + 30_000) {
+          return res.status(400).json({ success: false, error: 'Snooze time must be at least a minute in the future' });
+        }
+        if (parsed.getTime() > now + 30 * 24 * 60 * 60 * 1000) {
+          return res.status(400).json({ success: false, error: 'Snooze time cannot be more than 30 days ahead' });
+        }
+        snoozedUntil = parsed;
+      }
+
+      const chat = await prisma.chat.findUnique({ where: { id } });
+      if (!chat || chat.tenantId !== req.tenantId) {
+        return res.status(404).json({ success: false, error: 'Chat not found' });
+      }
+      if (!canAccessChat(req.agent, chat)) {
+        return res.status(403).json({ success: false, error: 'You do not have access to this conversation' });
+      }
+
+      const updated = await prisma.chat.update({
+        where: { id },
+        data: {
+          snoozedUntil,
+          snoozedById: snoozedUntil ? req.agent.id : null,
+        },
+        select: { id: true, snoozedUntil: true, snoozedById: true, assignedAgentId: true },
+      });
+
+      broadcastChatSnoozeChanged(req.tenantId, id, updated.snoozedUntil, updated.assignedAgentId);
+
+      return res.json({
+        success: true,
+        chat: { id: updated.id, snoozedUntil: updated.snoozedUntil, snoozedById: updated.snoozedById },
+      });
+    } catch (error) {
+      console.error('[Snooze Chat Error]:', error);
+      return res.status(500).json({ success: false, error: 'Failed to update snooze' });
     }
   }
 

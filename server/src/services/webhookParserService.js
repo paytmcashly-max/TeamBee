@@ -4,6 +4,7 @@ const {
   broadcastNewMessage,
   broadcastMessageStatus,
 } = require('./socketService');
+const { applyInboundAutomation } = require('./automationService');
 
 /**
  * Hardened Webhook Parser Engine for Meta WhatsApp Cloud API (v20.0+)
@@ -454,6 +455,10 @@ class WebhookParserService {
 
     // Broadcast only after the transaction commits.
     broadcastNewMessage(tenant.id, result.chat.id, result.message, result.chat.assignedAgentId);
+
+    // Post-ingestion automation (round-robin auto-assign, office-hours
+    // away reply). Fire-and-forget: it can never delay or fail ingestion.
+    void applyInboundAutomation({ tenant, chatId: result.chat.id });
 
     return result;
   }

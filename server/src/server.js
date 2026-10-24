@@ -10,6 +10,7 @@ const { initSocket, configureRedisAdapter, closeSocketResources } = require('./s
 const prisma = require('./db/prisma');
 const WebhookParserService = require('./services/webhookParserService');
 const { drainPendingBroadcasts } = require('./services/broadcastWorker');
+const { expireSnoozedChats } = require('./services/snoozeService');
 const webhookRoutes = require('./routes/webhookRoutes');
 const authRoutes = require('./routes/authRoutes');
 const tenantRoutes = require('./routes/tenantRoutes');
@@ -18,6 +19,7 @@ const chatRoutes = require('./routes/chatRoutes');
 const messageRoutes = require('./routes/messageRoutes');
 const templateRoutes = require('./routes/templateRoutes');
 const broadcastRoutes = require('./routes/broadcastRoutes');
+const quickReplyRoutes = require('./routes/quickReplyRoutes');
 const simulatorRoutes = require('./routes/simulatorRoutes');
 
 const app = express();
@@ -128,6 +130,7 @@ app.use('/api/chats', chatRoutes);
 app.use('/api/messages', messageRoutes);
 app.use('/api/templates', templateRoutes);
 app.use('/api/broadcasts', broadcastRoutes);
+app.use('/api/quick-replies', quickReplyRoutes);
 // Dev-only tool: the simulator injects fake inbound messages and statuses,
 // so it is mounted only when explicitly enabled (staging), never by default.
 if (process.env.ENABLE_SIMULATOR === 'true') {
@@ -276,6 +279,7 @@ async function start() {
         const recoveryInterval = setInterval(() => {
           scheduleBackgroundRecovery('Webhook', () => WebhookParserService.drainPendingWebhookEvents());
           scheduleBackgroundRecovery('Broadcast', () => drainPendingBroadcasts());
+          scheduleBackgroundRecovery('Snooze', () => expireSnoozedChats());
         }, 60_000);
         if (typeof recoveryInterval.unref === 'function') recoveryInterval.unref();
         resolve(server);

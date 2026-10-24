@@ -394,6 +394,38 @@ function broadcastChatStatusTransition(tenantId, chatId, { status, updatedBy, as
   });
 }
 
+/**
+ * Notify each @mentioned agent's personal room about an internal note.
+ * Carries no note text — just enough for an alert strip with a jump link.
+ */
+function broadcastNoteMentions(tenantId, chatId, { authorName, contactName, mentionedAgentIds, messageId }) {
+  if (!io || !Array.isArray(mentionedAgentIds)) return;
+  for (const agentId of mentionedAgentIds) {
+    io.to(`agent:${agentId}`).emit('note_mention', {
+      chatId,
+      messageId,
+      authorName,
+      contactName,
+    });
+  }
+}
+
+/**
+ * Helper to emit a chat snooze change (set or expired/cleared) to the same
+ * audiences that follow the chat's lifecycle.
+ */
+function broadcastChatSnoozeChanged(tenantId, chatId, snoozedUntil, assignedAgentId) {
+  if (!io) return;
+  const payload = { chatId, snoozedUntil };
+  io.to(`tenant:${tenantId}:admins`).emit('chat_snooze_changed', payload);
+  if (assignedAgentId) {
+    io.to(`agent:${assignedAgentId}`).emit('chat_snooze_changed', payload);
+  } else {
+    io.to(`tenant:${tenantId}:agents`).emit('chat_snooze_changed', payload);
+  }
+  io.to(`chat:${chatId}`).emit('chat_snooze_changed', payload);
+}
+
 module.exports = {
   initSocket,
   configureRedisAdapter,
@@ -403,4 +435,6 @@ module.exports = {
   broadcastMessageStatus,
   broadcastChatAssignment,
   broadcastChatStatusTransition,
+  broadcastChatSnoozeChanged,
+  broadcastNoteMentions,
 };
