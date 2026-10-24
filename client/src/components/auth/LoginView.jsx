@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { MessageSquare, ArrowRight, ArrowLeft, ChevronRight, Building2, Check } from 'lucide-react';
+import { MessageSquare, ArrowRight, ArrowLeft, ChevronRight, Check } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 
 const inputStyle = {
@@ -30,8 +30,6 @@ export default function LoginView() {
     }
   });
   const [password, setPassword] = useState('');
-  const [tenantSlug, setTenantSlug] = useState('');
-  const [showSlugField, setShowSlugField] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [notice, setNotice] = useState(() => {
@@ -108,7 +106,7 @@ export default function LoginView() {
       if (!lookupCurrent) {
         available = await runLookup(email);
       }
-      let chosenSlug = tenantSlug.trim() || selectedSlug || singleWorkspaceSlug || undefined;
+      let chosenSlug = selectedSlug || singleWorkspaceSlug || undefined;
       if (!chosenSlug && available.length >= 2) {
         // Several workspaces and none picked yet: if they all share this
         // password the post-password picker could sort it out, but the
@@ -455,31 +453,6 @@ export default function LoginView() {
                 style={inputStyle}
               />
             </div>
-
-            {showSlugField ? (
-              <div>
-                <label style={labelStyle} htmlFor="login-slug">
-                  Workspace Slug <span style={{ fontWeight: '400', color: '#64748b' }}>(optional — jump straight to one workspace)</span>
-                </label>
-                <input
-                  id="login-slug"
-                  type="text"
-                  value={tenantSlug}
-                  onChange={(e) => setTenantSlug(e.target.value)}
-                  placeholder="e.g. your-business-name"
-                  style={inputStyle}
-                />
-              </div>
-            ) : (
-              <button
-                type="button"
-                onClick={() => setShowSlugField(true)}
-                className="btn btn-ghost"
-                style={{ alignSelf: 'flex-start', padding: '2px 4px', fontSize: '12px', color: 'var(--text-secondary)', gap: '5px' }}
-              >
-                <Building2 size={13} /> I have a workspace slug
-              </button>
-            )}
 
             <button
               type="submit"
