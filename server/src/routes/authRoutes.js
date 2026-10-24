@@ -4,6 +4,7 @@ const AuthController = require('../controllers/authController');
 const { authenticateToken } = require('../middleware/authMiddleware');
 const { authLimiter, registrationLimiter } = require('../middleware/rateLimit');
 
+router.post('/workspaces/lookup', authLimiter, AuthController.lookupWorkspaces);
 router.post('/login', authLimiter, AuthController.login);
 router.post('/register-tenant', registrationLimiter, AuthController.registerTenant);
 router.get('/me', authenticateToken, AuthController.getMe);

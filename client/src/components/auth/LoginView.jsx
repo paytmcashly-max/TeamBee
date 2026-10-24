@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { MessageSquare, ArrowRight, ArrowLeft, ChevronRight, Building2 } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { MessageSquare, ArrowRight, ArrowLeft, ChevronRight, Building2, Check } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 
 const inputStyle = {
@@ -21,7 +21,7 @@ const labelStyle = {
 };
 
 export default function LoginView() {
-  const { login } = useAuth();
+  const { login, lookupWorkspaces } = useAuth();
   const [email, setEmail] = useState(() => {
     try {
       return sessionStorage.getItem('teambee:lastEmail') || '';
@@ -44,11 +44,58 @@ export default function LoginView() {
     }
   });
 
-  // Two-step sign-in: credentials first; when the account exists in several
-  // workspaces (same password), the server answers with a picker payload
-  // instead of a session, and the user chooses where to land.
+  // Post-password picker (fallback): when sign-in was attempted without a
+  // chosen workspace and the account lives in several (same password), the
+  // server answers with a picker payload instead of a session.
   const [workspaces, setWorkspaces] = useState(null);
   const [selectingSlug, setSelectingSlug] = useState(null);
+
+  // Login-page workspace discovery: when an email is entered, its active
+  // workspaces are fetched from the database. Exactly one -> the chooser
+  // stays hidden and the login scopes to it silently. Two or more -> a
+  // chooser renders right here on the login page. A failed lookup never
+  // blocks sign-in; the post-password picker above remains the fallback.
+  const [emailWorkspaces, setEmailWorkspaces] = useState([]);
+  const [lookupEmail, setLookupEmail] = useState('');
+  const [selectedSlug, setSelectedSlug] = useState(null);
+  const [lookingUp, setLookingUp] = useState(false);
+
+  const runLookup = async (rawEmail) => {
+    const target = (rawEmail || '').trim();
+    if (!target || !target.includes('@')) {
+      setEmailWorkspaces([]);
+      setLookupEmail(target);
+      return [];
+    }
+    setLookingUp(true);
+    try {
+      const found = await lookupWorkspaces(target);
+      setEmailWorkspaces(found);
+      setLookupEmail(target);
+      setSelectedSlug((current) =>
+        current && found.some((ws) => ws.slug === current) ? current : null
+      );
+      return found;
+    } catch (lookupError) {
+      setEmailWorkspaces([]);
+      setLookupEmail(target);
+      return [];
+    } finally {
+      setLookingUp(false);
+    }
+  };
+
+  // Arriving with a prefilled email (e.g. Switch workspace from the inbox):
+  // discover its workspaces immediately so the chooser is already there.
+  useEffect(() => {
+    if (email) runLookup(email);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const lookupCurrent = lookupEmail === email.trim();
+  const chooserWorkspaces = lookupCurrent ? emailWorkspaces : [];
+  const singleWorkspaceSlug =
+    chooserWorkspaces.length === 1 ? chooserWorkspaces[0].slug : null;
 
   const handleSubmit = async (e) => {
     if (e) e.preventDefault();
@@ -56,7 +103,20 @@ export default function LoginView() {
     setError(null);
     setNotice(null);
     try {
-      const result = await login(email, password, tenantSlug.trim() || undefined);
+      // Make sure discovery ran for the email exactly as submitted.
+      let available = chooserWorkspaces;
+      if (!lookupCurrent) {
+        available = await runLookup(email);
+      }
+      let chosenSlug = tenantSlug.trim() || selectedSlug || singleWorkspaceSlug || undefined;
+      if (!chosenSlug && available.length >= 2) {
+        // Several workspaces and none picked yet: if they all share this
+        // password the post-password picker could sort it out, but the
+        // explicit on-page choice is clearer — ask for it.
+        setError('Please choose your workspace above before signing in.');
+        return;
+      }
+      const result = await login(email, password, chosenSlug);
       if (result && result.code === 'WORKSPACE_SELECTION_REQUIRED') {
         setWorkspaces(result.workspaces || []);
       }
@@ -290,11 +350,98 @@ export default function LoginView() {
                 type="email"
                 autoComplete="email"
                 value={email}
-                onChange={(e) => setEmail(e.target.value)}
+                onChange={(e) => {
+                  setEmail(e.target.value);
+                  // Discovery results belong to the previous email only.
+                  setEmailWorkspaces([]);
+                  setLookupEmail('');
+                  setSelectedSlug(null);
+                }}
+                onBlur={() => {
+                  if (email.trim() && lookupEmail !== email.trim()) runLookup(email);
+                }}
                 required
                 style={inputStyle}
               />
             </div>
+
+            {lookingUp && (
+              <p style={{ fontSize: '12px', color: 'var(--text-secondary)', marginTop: '-6px' }}>
+                Checking your workspaces…
+              </p>
+            )}
+
+            {chooserWorkspaces.length >= 2 && (
+              <div>
+                <span style={labelStyle} id="workspace-chooser-label">Choose your workspace</span>
+                <div role="radiogroup" aria-labelledby="workspace-chooser-label" style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                  {chooserWorkspaces.map((workspace) => {
+                    const selected = selectedSlug === workspace.slug;
+                    return (
+                      <button
+                        key={workspace.tenantId}
+                        type="button"
+                        role="radio"
+                        aria-checked={selected}
+                        onClick={() => setSelectedSlug(workspace.slug)}
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '11px',
+                          width: '100%',
+                          textAlign: 'left',
+                          background: selected ? 'rgba(37, 211, 102, 0.07)' : '#0b1120',
+                          border: selected
+                            ? '1px solid rgba(37, 211, 102, 0.6)'
+                            : '1px solid rgba(255, 255, 255, 0.12)',
+                          borderRadius: '10px',
+                          padding: '11px 13px',
+                          cursor: 'pointer',
+                        }}
+                      >
+                        <span
+                          style={{
+                            width: '36px',
+                            height: '36px',
+                            minWidth: '36px',
+                            borderRadius: '9px',
+                            background: 'linear-gradient(135deg, #1e293b 0%, #334155 100%)',
+                            border: '1px solid rgba(255,255,255,0.1)',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            fontSize: '14px',
+                            fontWeight: '700',
+                            color: '#25D366',
+                          }}
+                        >
+                          {(workspace.name || 'W').trim().charAt(0).toUpperCase()}
+                        </span>
+                        <span style={{ flex: 1, minWidth: 0 }}>
+                          <span
+                            style={{
+                              display: 'block',
+                              fontSize: '13.5px',
+                              fontWeight: '700',
+                              color: '#fff',
+                              whiteSpace: 'nowrap',
+                              overflow: 'hidden',
+                              textOverflow: 'ellipsis',
+                            }}
+                          >
+                            {workspace.name}
+                          </span>
+                          <span style={{ display: 'block', fontSize: '11px', color: 'var(--text-secondary)', marginTop: '1px' }}>
+                            {workspace.slug}
+                          </span>
+                        </span>
+                        {selected && <Check size={16} style={{ color: '#25D366', flexShrink: 0 }} />}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
 
             <div>
               <label style={labelStyle} htmlFor="login-password">Password</label>
@@ -345,7 +492,7 @@ export default function LoginView() {
             </button>
 
             <p style={{ fontSize: '11.5px', color: '#64748b', textAlign: 'center', lineHeight: 1.5 }}>
-              Part of several workspaces? Sign in once — you will choose which one to open next.
+              Part of several workspaces? Enter your email and pick yours above — a single workspace is selected automatically.
             </p>
           </form>
         )}

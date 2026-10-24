@@ -60,6 +60,46 @@ function clearSessionCookie(res) {
 
 class AuthController {
   /**
+   * POST /api/auth/workspaces/lookup: which workspaces can this email sign
+   * in to? Powers the login page's chooser: the page fetches this when an
+   * email is entered and shows a chooser only when 2+ active workspaces
+   * exist; a single workspace scopes the login silently. Rate-limited at
+   * the route. Only names + slugs are returned here — display phone
+   * numbers and roles stay behind password verification (see the login
+   * handler's WORKSPACE_SELECTION_REQUIRED payload).
+   */
+  static async lookupWorkspaces(req, res) {
+    try {
+      const email = cleanString(req.body?.email, 254).toLowerCase();
+      if (!EMAIL_PATTERN.test(email)) {
+        return res.status(400).json({ success: false, error: 'A valid email is required' });
+      }
+
+      const agents = await prisma.agent.findMany({
+        where: { email, isActive: true },
+        include: { tenant: true },
+        take: 25,
+      });
+
+      const byTenant = new Map();
+      for (const agent of agents) {
+        if (agent.tenant && !byTenant.has(agent.tenant.id)) {
+          byTenant.set(agent.tenant.id, {
+            tenantId: agent.tenant.id,
+            name: agent.tenant.name,
+            slug: agent.tenant.slug,
+          });
+        }
+      }
+
+      return res.json({ success: true, workspaces: [...byTenant.values()] });
+    } catch (error) {
+      console.error('[Workspace Lookup Error]:', error);
+      return res.status(500).json({ success: false, error: 'Failed to look up workspaces' });
+    }
+  }
+
+  /**
    * POST /api/auth/login: Login for Tenant Admin and Staff Agents
    */
   static async login(req, res) {

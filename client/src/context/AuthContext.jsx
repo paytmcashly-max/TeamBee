@@ -72,6 +72,22 @@ export function AuthProvider({ children }) {
     return () => window.removeEventListener('auth:unauthorized', handleUnauthorized);
   }, []);
 
+  // Login-page workspace discovery: which active workspaces can this
+  // email sign in to? The login view shows a chooser only for 2+.
+  const lookupWorkspaces = async (email) => {
+    const res = await fetch('/api/auth/workspaces/lookup', {
+      method: 'POST',
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email }),
+    });
+    const data = await res.json();
+    if (!data.success) {
+      throw new Error(data.error || 'Workspace lookup failed');
+    }
+    return data.workspaces || [];
+  };
+
   const logout = async () => {
     await fetch('/api/auth/logout', {
       method: 'POST',
@@ -113,6 +129,7 @@ export function AuthProvider({ children }) {
         tenant,
         loading,
         login,
+        lookupWorkspaces,
         logout,
         changePassword,
         updateTenantInfo,
