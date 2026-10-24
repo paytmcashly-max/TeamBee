@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Search,
   Check,
@@ -14,6 +14,7 @@ import {
   Sparkles,
   LogOut,
   ArrowLeftRight,
+  MoreVertical,
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { useChat } from '../../context/ChatContext';
@@ -25,6 +26,45 @@ export default function ConversationList({
   onOpenAgents,
 }) {
   const { agent, tenant, isAdmin, logout } = useAuth();
+  const [menuOpen, setMenuOpen] = useState(false);
+
+  // The header carries only the primary action (Broadcast) plus this menu:
+  // consoles (templates, team, Meta settings) and session actions (switch
+  // workspace, sign out) live here instead of six competing icon buttons.
+  useEffect(() => {
+    if (!menuOpen) return undefined;
+    const onKey = (e) => {
+      if (e.key === 'Escape') setMenuOpen(false);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [menuOpen]);
+
+  const handleSwitchWorkspace = () => {
+    // Switch workspace = sign out into the picker flow with the email
+    // prefilled; the password is re-entered (never kept).
+    try {
+      sessionStorage.setItem('teambee:switchWorkspace', '1');
+      if (agent?.email) sessionStorage.setItem('teambee:lastEmail', agent.email);
+    } catch (storageError) {}
+    logout();
+  };
+
+  const menuItemStyle = (danger) => ({
+    display: 'flex',
+    alignItems: 'center',
+    gap: '10px',
+    width: '100%',
+    textAlign: 'left',
+    background: 'transparent',
+    border: 'none',
+    borderRadius: '8px',
+    padding: '9px 10px',
+    fontSize: '13px',
+    fontWeight: '500',
+    color: danger ? '#f87171' : '#e2e8f0',
+    cursor: 'pointer',
+  });
   const {
     chats,
     activeChatId,
@@ -178,72 +218,120 @@ export default function ConversationList({
                 {agent?.name}
               </div>
               <div style={{ fontSize: '10.5px', color: 'var(--text-muted)' }}>
-                {isAdmin ? '👑 Tenant Admin' : 'Staff Agent'}
+                {isAdmin ? 'Tenant Admin' : 'Staff Agent'}
               </div>
             </div>
           </div>
 
-          <div style={{ display: 'flex', gap: '3px', alignItems: 'center' }}>
-            {isAdmin && (
-              <>
-                <button
-                  onClick={onOpenAgents}
-                  className="btn btn-ghost"
-                  style={{ padding: '6px', color: 'var(--text-secondary)' }}
-                  title="Team Staff & Agents"
-                >
-                  <Users size={15} />
-                </button>
-                <button
-                  onClick={onOpenSettings}
-                  className="btn btn-ghost"
-                  style={{ padding: '6px', color: 'var(--text-secondary)' }}
-                  title="Meta API Credentials"
-                >
-                  <Shield size={15} />
-                </button>
-              </>
-            )}
-            <button
-              onClick={onOpenTemplates}
-              className="btn btn-ghost"
-              style={{ padding: '6px', color: 'var(--text-secondary)' }}
-              title="Approved WhatsApp Templates"
-            >
-              <Sparkles size={15} />
-            </button>
+          <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
+            {/* The one primary action that earns a permanent header slot */}
             <button
               onClick={onOpenBroadcasts}
-              className="btn btn-ghost"
-              style={{ padding: '6px', color: '#38bdf8' }}
               title="Outbound Broadcast Campaigns"
-            >
-              <Radio size={15} />
-            </button>
-            <button
-              onClick={() => {
-                // Switch workspace = sign out into the picker flow with the
-                // email prefilled; the password is re-entered (never kept).
-                try {
-                  sessionStorage.setItem('teambee:switchWorkspace', '1');
-                  if (agent?.email) sessionStorage.setItem('teambee:lastEmail', agent.email);
-                } catch (storageError) {}
-                logout();
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px',
+                padding: '6px 11px',
+                borderRadius: '999px',
+                background: 'rgba(56, 189, 248, 0.12)',
+                border: '1px solid rgba(56, 189, 248, 0.35)',
+                color: '#38bdf8',
+                fontSize: '12px',
+                fontWeight: '600',
+                cursor: 'pointer',
+                whiteSpace: 'nowrap',
               }}
-              className="btn btn-ghost"
-              style={{ padding: '6px', color: 'var(--text-secondary)' }}
-              title="Switch workspace"
             >
-              <ArrowLeftRight size={15} />
+              <Radio size={14} /> Broadcast
             </button>
-            <button
-              onClick={logout}
-              className="btn btn-ghost"
-              style={{ padding: '6px', color: '#f87171' }}
-              title="Sign out"
-            >
-              <LogOut size={15} />
-            </button>
+
+            <div style={{ position: 'relative' }}>
+              <button
+                onClick={() => setMenuOpen((open) => !open)}
+                className="btn btn-ghost"
+                style={{ padding: '6px', color: 'var(--text-secondary)' }}
+                title="More actions"
+                aria-haspopup="menu"
+                aria-expanded={menuOpen}
+              >
+                <MoreVertical size={16} />
+              </button>
+              {menuOpen && (
+                <>
+                  <div
+                    onClick={() => setMenuOpen(false)}
+                    style={{ position: 'fixed', inset: 0, zIndex: 40 }}
+                  />
+                  <div
+                    role="menu"
+                    style={{
+                      position: 'absolute',
+                      top: 'calc(100% + 6px)',
+                      right: 0,
+                      minWidth: '224px',
+                      background: '#111827',
+                      border: '1px solid var(--border-subtle)',
+                      borderRadius: '12px',
+                      boxShadow: '0 18px 40px rgba(0, 0, 0, 0.55)',
+                      padding: '6px',
+                      zIndex: 50,
+                    }}
+                  >
+                    <button
+                      type="button"
+                      role="menuitem"
+                      style={menuItemStyle(false)}
+                      onClick={() => { setMenuOpen(false); onOpenTemplates(); }}
+                    >
+                      <Sparkles size={15} style={{ color: 'var(--text-secondary)', flexShrink: 0 }} />
+                      Templates
+                    </button>
+                    {isAdmin && (
+                      <button
+                        type="button"
+                        role="menuitem"
+                        style={menuItemStyle(false)}
+                        onClick={() => { setMenuOpen(false); onOpenAgents(); }}
+                      >
+                        <Users size={15} style={{ color: 'var(--text-secondary)', flexShrink: 0 }} />
+                        Team &amp; Agents
+                      </button>
+                    )}
+                    {isAdmin && (
+                      <button
+                        type="button"
+                        role="menuitem"
+                        style={menuItemStyle(false)}
+                        onClick={() => { setMenuOpen(false); onOpenSettings(); }}
+                      >
+                        <Shield size={15} style={{ color: 'var(--text-secondary)', flexShrink: 0 }} />
+                        Meta API Settings
+                      </button>
+                    )}
+                    <div style={{ height: '1px', background: 'var(--border-subtle)', margin: '5px 4px' }} />
+                    <button
+                      type="button"
+                      role="menuitem"
+                      style={menuItemStyle(false)}
+                      onClick={() => { setMenuOpen(false); handleSwitchWorkspace(); }}
+                    >
+                      <ArrowLeftRight size={15} style={{ color: 'var(--text-secondary)', flexShrink: 0 }} />
+                      Switch workspace
+                    </button>
+                    <button
+                      type="button"
+                      role="menuitem"
+                      style={menuItemStyle(true)}
+                      onClick={() => { setMenuOpen(false); logout(); }}
+                    >
+                      <LogOut size={15} style={{ flexShrink: 0 }} />
+                      Sign out
+                    </button>
+                  </div>
+                </>
+              )}
+            </div>
           </div>
         </div>
       </div>
