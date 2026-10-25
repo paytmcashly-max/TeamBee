@@ -1450,6 +1450,7 @@ export default function ChatCanvas({ onOpenTemplatePicker, onToggleSidebar, isSi
       >
         {/* 6.1 Mode Switcher Tabs */}
         <div
+          className="composer-mode-row"
           style={{
             display: 'flex',
             alignItems: 'center',
@@ -1462,6 +1463,7 @@ export default function ChatCanvas({ onOpenTemplatePicker, onToggleSidebar, isSi
           <div style={{ display: 'flex', alignItems: 'center', gap: '4px', flexShrink: 0 }}>
             <button
               type="button"
+              className="composer-mode-tab"
               onClick={() => setComposeMode('WHATSAPP')}
               style={{
                 display: 'inline-flex',
@@ -1483,6 +1485,7 @@ export default function ChatCanvas({ onOpenTemplatePicker, onToggleSidebar, isSi
 
             <button
               type="button"
+              className="composer-mode-tab"
               onClick={() => setComposeMode('NOTE')}
               style={{
                 display: 'inline-flex',
@@ -1504,6 +1507,7 @@ export default function ChatCanvas({ onOpenTemplatePicker, onToggleSidebar, isSi
 
             <button
               type="button"
+              className="composer-mode-tab"
               onClick={() => setComposeMode('INTERACTIVE')}
               style={{
                 display: 'inline-flex',
@@ -1525,7 +1529,7 @@ export default function ChatCanvas({ onOpenTemplatePicker, onToggleSidebar, isSi
           </div>
 
           {/* Quick Reaction Pills */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: '3px', flexShrink: 0 }}>
+          <div className="quick-reactions" style={{ display: 'flex', alignItems: 'center', gap: '3px', flexShrink: 0 }}>
             {['👍', '🙏', '❤️', '🎓', '📚'].map((emoji) => (
               <button
                 key={emoji}

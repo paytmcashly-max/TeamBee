@@ -210,6 +210,7 @@ export default function BroadcastModal({ isOpen, onClose }) {
 
   return (
     <div
+      className="broadcast-backdrop"
       onClick={(e) => {
         if (e.target === e.currentTarget) onClose();
       }}
@@ -226,6 +227,7 @@ export default function BroadcastModal({ isOpen, onClose }) {
       }}
     >
       <div
+        className="broadcast-dialog"
         role="dialog"
         aria-modal="true"
         aria-label="Broadcast campaigns"
@@ -292,7 +294,7 @@ export default function BroadcastModal({ isOpen, onClose }) {
         </div>
 
         {/* Body */}
-        <div style={{ flex: 1, overflowY: 'auto', padding: '24px' }}>
+        <div className="broadcast-body" style={{ flex: 1, overflowY: 'auto', padding: '24px' }}>
           {feedback && (
             <div
               style={{
@@ -339,6 +341,7 @@ export default function BroadcastModal({ isOpen, onClose }) {
                   {broadcasts.map((bc) => (
                     <div
                       key={bc.id}
+                      className="broadcast-card"
                       style={{
                         background: 'var(--bg-surface)',
                         border: '1px solid var(--border-medium)',
@@ -370,7 +373,7 @@ export default function BroadcastModal({ isOpen, onClose }) {
                       </div>
 
                       {/* Stats Badges */}
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
+                      <div className="broadcast-card-stats" style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
                         <div style={{ textAlign: 'center' }}>
                           <div style={{ fontSize: '16px', fontWeight: '700', color: '#fff' }}>{bc.totalCount}</div>
                           <div style={{ fontSize: '10px', color: 'var(--text-muted)' }}>Total</div>

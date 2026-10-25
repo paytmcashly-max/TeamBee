@@ -560,6 +560,7 @@ export default function AgentManagementModal({ isOpen, onClose }) {
             {agents.map((a) => (
               <div
                 key={a.id}
+                className="agent-row"
                 style={{
                   background: 'var(--bg-surface)',
                   padding: '12px 14px',
@@ -607,7 +608,7 @@ export default function AgentManagementModal({ isOpen, onClose }) {
                   </div>
                 </div>
 
-                <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
+                <div className="agent-row-actions" style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
                   <span
                     style={{
                       fontSize: '11px',
@@ -642,7 +643,7 @@ export default function AgentManagementModal({ isOpen, onClose }) {
                   )}
                 </div>
                 {agent?.role === 'ADMIN' && resetTargetId === a.id && (
-                  <div style={{ display: 'flex', gap: '8px', marginTop: '10px', width: '100%' }}>
+                  <div className="agent-reset-row" style={{ display: 'flex', gap: '8px', marginTop: '10px', width: '100%' }}>
                     <input
                       type="password"
                       autoComplete="new-password"

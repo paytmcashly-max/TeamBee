@@ -233,6 +233,63 @@ body {
   }
 }
 
+/* Phones (≤768px): the three surfaces that still assumed desktop width.
+   1) Composer message-type row — tabs + quick emojis were ~450px in a
+      sideways-scrolling strip with ~24px-tall tabs; now the row wraps
+      and the tabs are proper touch targets.
+   2) Team & Agents rows — identity + chips + Reset password (~470px)
+      never wrapped; actions now drop to their own line and the reset
+      form takes a full row.
+   3) Broadcast — this dialog uses its own inline shell (not
+      .modal-content), so it never got the phone sheet treatment; it is
+      now full-screen, and campaign cards wrap their stats underneath. */
+@media (max-width: 768px) {
+  .composer-mode-row {
+    flex-wrap: wrap;
+    overflow-x: visible !important;
+  }
+  .composer-mode-tab {
+    min-height: 40px;
+    padding: 8px 12px !important;
+  }
+  .quick-reactions > button {
+    min-width: 36px;
+    min-height: 36px;
+    padding: 8px !important;
+  }
+  .agent-row {
+    flex-wrap: wrap;
+  }
+  .agent-row-actions {
+    flex-wrap: wrap;
+    gap: 8px !important;
+    margin-top: 8px;
+  }
+  .agent-reset-row {
+    flex: 1 1 100%;
+  }
+  .broadcast-backdrop {
+    padding: 0 !important;
+  }
+  .broadcast-dialog {
+    width: 100% !important;
+    height: 100dvh;
+    max-height: 100dvh !important;
+    border-radius: 0 !important;
+  }
+  .broadcast-body {
+    padding: 14px !important;
+  }
+  .broadcast-card {
+    flex-wrap: wrap;
+  }
+  .broadcast-card-stats {
+    flex: 1 1 100%;
+    justify-content: space-between;
+    margin-top: 10px;
+  }
+}
+
 /* 3-Column Layout Grid */
 .inbox-layout {
   display: flex;
