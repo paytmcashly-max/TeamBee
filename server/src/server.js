@@ -10,6 +10,7 @@ const { initSocket, configureRedisAdapter, closeSocketResources } = require('./s
 const prisma = require('./db/prisma');
 const WebhookParserService = require('./services/webhookParserService');
 const { drainPendingBroadcasts } = require('./services/broadcastWorker');
+const { startMaintenanceScheduler, stopMaintenanceScheduler } = require('./queues/maintenanceQueue');
 const { expireSnoozedChats } = require('./services/snoozeService');
 const webhookRoutes = require('./routes/webhookRoutes');
 const authRoutes = require('./routes/authRoutes');
@@ -205,6 +206,7 @@ const PORT = process.env.PORT || 5000;
 let io;
 let shuttingDown = false;
 const backgroundRecoveryTasks = new Set();
+let maintenanceInterval = null;
 
 function scheduleBackgroundRecovery(label, task) {
   const recoveryTask = Promise.resolve()
@@ -304,13 +306,24 @@ async function start() {
         ));
         // Scheduled retries (broadcast backoff, webhook dead-letters) need a
         // periodic driver — a boot-time pass alone would leave them parked
-        // until the next deploy.
-        const recoveryInterval = setInterval(() => {
+        // until the next deploy. Preferred driver is the Redis-backed
+        // BullMQ scheduler (the drains run ONCE globally per interval,
+        // however many instances are up); the in-process interval remains
+        // as the automatic fallback when Redis is unavailable.
+        const runMaintenanceDrains = () => {
           scheduleBackgroundRecovery('Webhook', () => WebhookParserService.drainPendingWebhookEvents());
           scheduleBackgroundRecovery('Broadcast', () => drainPendingBroadcasts());
           scheduleBackgroundRecovery('Snooze', () => expireSnoozedChats());
-        }, 60_000);
-        if (typeof recoveryInterval.unref === 'function') recoveryInterval.unref();
+        };
+        startMaintenanceScheduler(runMaintenanceDrains)
+          .then((mode) => {
+            if (mode === 'interval' && !shuttingDown) {
+              maintenanceInterval = setInterval(runMaintenanceDrains, 60_000);
+              if (typeof maintenanceInterval.unref === 'function') maintenanceInterval.unref();
+              console.log('[Maintenance] Periodic drains on in-process interval (fallback)');
+            }
+          })
+          .catch((err) => console.error('[Maintenance] scheduler start error:', err.message));
         resolve(server);
       });
     });
@@ -325,6 +338,8 @@ async function start() {
 async function shutdown(signal) {
   console.log(`[Shutdown]: Received ${signal}, closing server gracefully...`);
   shuttingDown = true;
+  if (maintenanceInterval) clearInterval(maintenanceInterval);
+  await stopMaintenanceScheduler().catch(() => {});
   await Promise.allSettled([...backgroundRecoveryTasks]);
   if (io?.close) io.close();
   await closeSocketResources();
