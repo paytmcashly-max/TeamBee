@@ -15,6 +15,21 @@ function cleanString(value, maxLength) {
   return typeof value === 'string' ? value.trim().slice(0, maxLength) : '';
 }
 
+// Effective subscription status: a TRIAL whose trialEndsAt has passed is
+// EXPIRED everywhere it is read (login, /me, register) without needing a
+// background job to flip the stored value.
+function effectiveSubscriptionStatus(tenant) {
+  if (!tenant) return 'ACTIVE';
+  if (
+    tenant.subscriptionStatus === 'TRIAL' &&
+    tenant.trialEndsAt &&
+    new Date(tenant.trialEndsAt).getTime() < Date.now()
+  ) {
+    return 'EXPIRED';
+  }
+  return tenant.subscriptionStatus || 'ACTIVE';
+}
+
 function publicTenant(tenant) {
   return {
     id: tenant.id,
@@ -22,6 +37,9 @@ function publicTenant(tenant) {
     slug: tenant.slug,
     displayPhoneNumber: tenant.displayPhoneNumber,
     hasMetaConfigured: Boolean(tenant.phoneNumberId && tenant.accessToken),
+    plan: tenant.plan || 'PRO',
+    subscriptionStatus: effectiveSubscriptionStatus(tenant),
+    trialEndsAt: tenant.trialEndsAt || null,
   };
 }
 
@@ -246,10 +264,13 @@ class AuthController {
         return res.status(400).json({ success: false, error: 'Password is too long (maximum 72 bytes)' });
       }
 
-      // Optional invite gate: when REGISTRATION_INVITE_CODE is configured,
-      // self-serve registration closes to everyone without the code.
+      // Invite gate: when REGISTRATION_INVITE_CODE is configured,
+      // self-serve registration closes to everyone without the code —
+      // unless public signup has been deliberately opened
+      // (PUBLIC_SIGNUP_ENABLED=true), in which case anyone may register
+      // and the invite code remains valid as an alternate path.
       const inviteCode = process.env.REGISTRATION_INVITE_CODE;
-      if (inviteCode) {
+      if (inviteCode && process.env.PUBLIC_SIGNUP_ENABLED !== 'true') {
         const supplied = typeof req.body?.inviteCode === 'string' ? req.body.inviteCode : '';
         const suppliedBuffer = Buffer.from(supplied);
         const expectedBuffer = Buffer.from(inviteCode);
@@ -279,6 +300,10 @@ class AuthController {
           data: {
             name: businessName,
             slug: finalSlug,
+            // New public signups start on a 14-day free trial of PRO.
+            plan: 'PRO',
+            subscriptionStatus: 'TRIAL',
+            trialEndsAt: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000),
             // Only the hash is stored (same as settings update); the
             // plaintext verify token is never persisted.
             webhookVerifyTokenHash: hashSecret(`cf_verify_${crypto.randomBytes(24).toString('hex')}`),

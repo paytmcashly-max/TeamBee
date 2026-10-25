@@ -25,6 +25,8 @@ model Tenant {
   appSecret          String?  @map("app_secret")
   displayPhoneNumber String?  @map("display_phone_number")
   plan               String   @default("PRO")
+  subscriptionStatus String   @default("ACTIVE") @map("subscription_status")
+  trialEndsAt        DateTime? @map("trial_ends_at")
   autoAssignEnabled  Boolean  @default(false) @map("auto_assign_enabled")
   assignmentCounter  Int      @default(0) @map("assignment_counter")
   officeHoursStart   String?  @map("office_hours_start")
