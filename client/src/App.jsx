@@ -3,6 +3,8 @@ import { useAuth } from './context/AuthContext';
 import { useChat } from './context/ChatContext';
 import LoginView from './components/auth/LoginView';
 import SignupView from './components/auth/SignupView';
+import ForgotPasswordView from './components/auth/ForgotPasswordView';
+import ResetPasswordView from './components/auth/ResetPasswordView';
 import LandingPage from './components/landing/LandingPage';
 import { TermsView, PrivacyView } from './components/landing/LegalViews';
 const DashboardView = lazy(() => import('./components/dashboard/DashboardView'));
@@ -27,6 +29,14 @@ export default function App() {
   // meets a landing page with pricing and a real signup — not a bare
   // login form.
   const [publicView, setPublicView] = useState('landing');
+  // Password-reset email links land on /?reset=<token>.
+  const [resetToken] = useState(() => {
+    try {
+      return new URLSearchParams(window.location.search).get('reset') || '';
+    } catch {
+      return '';
+    }
+  });
   // Logged-in home: owners land on the dashboard, agents in the inbox.
   const [mainView, setMainView] = useState(null);
   useEffect(() => {
@@ -147,11 +157,28 @@ export default function App() {
   }
 
   if (!agent) {
-    if (publicView === 'login') {
+    if (resetToken && publicView !== 'login-after-reset') {
+      return (
+        <ResetPasswordView
+          token={resetToken}
+          onDone={() => {
+            try {
+              window.history.replaceState({}, '', window.location.pathname);
+            } catch {}
+            setPublicView('login-after-reset');
+          }}
+        />
+      );
+    }
+    if (publicView === 'forgot') {
+      return <ForgotPasswordView onBack={() => setPublicView('login')} />;
+    }
+    if (publicView === 'login' || publicView === 'login-after-reset') {
       return (
         <LoginView
           onShowSignup={() => setPublicView('signup')}
           onBack={() => setPublicView('landing')}
+          onForgot={() => setPublicView('forgot')}
         />
       );
     }

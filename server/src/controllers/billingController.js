@@ -2,13 +2,7 @@ const crypto = require('crypto');
 const axios = require('axios');
 const prisma = require('../db/prisma');
 
-// Plan catalogue (paise, per month). Single source of truth server-side;
-// the client keeps a display copy in src/data/plans.js.
-const PLANS = {
-  STARTER: { name: 'Starter', amountPaise: 99900, agents: 3 },
-  GROWTH: { name: 'Growth', amountPaise: 199900, agents: 10 },
-  PRO: { name: 'Pro', amountPaise: 399900, agents: 25 },
-};
+const { PLANS } = require('../data/plans');
 
 function billingConfigured() {
   return Boolean(process.env.RAZORPAY_KEY_ID && process.env.RAZORPAY_KEY_SECRET);

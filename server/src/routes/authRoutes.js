@@ -10,5 +10,7 @@ router.post('/register-tenant', registrationLimiter, AuthController.registerTena
 router.get('/me', authenticateToken, AuthController.getMe);
 router.post('/logout', AuthController.logout);
 router.post('/change-password', authenticateToken, AuthController.changePassword);
+router.post('/forgot-password', authLimiter, AuthController.forgotPassword);
+router.post('/reset-password', authLimiter, AuthController.resetPassword);
 
 module.exports = router;

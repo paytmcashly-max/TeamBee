@@ -4,6 +4,8 @@ const crypto = require('crypto');
 const prisma = require('../db/prisma');
 const { getJwtSecret, verifyAccessToken, readCookie, invalidateAgentCache } = require('../middleware/authMiddleware');
 const { hashSecret } = require('../services/credentialCrypto');
+const { logAuditEvent } = require('../services/auditLog');
+const { sendEmail, appBaseUrl } = require('../services/emailService');
 
 // Compared against when the account does not exist, so unknown-email and
 // wrong-password logins cost the same bcrypt time (no enumeration oracle).
@@ -167,12 +169,14 @@ class AuthController {
         agent = tenant ? matches.find((candidate) => candidate.tenantId === tenant.id) || null : null;
         const isValidPassword = await bcrypt.compare(password, agent ? agent.passwordHash : DUMMY_PASSWORD_HASH);
         if (!agent || !isValidPassword) {
+          await logAuditEvent({ event: 'LOGIN_FAILED', req, metadata: { email } });
           return res.status(401).json({ success: false, error: 'Invalid email or credentials' });
         }
       } else if (matches.length <= 1) {
         agent = matches[0] || null;
         const isValidPassword = await bcrypt.compare(password, agent ? agent.passwordHash : DUMMY_PASSWORD_HASH);
         if (!agent || !isValidPassword) {
+          await logAuditEvent({ event: 'LOGIN_FAILED', req, metadata: { email } });
           return res.status(401).json({ success: false, error: 'Invalid email or credentials' });
         }
       } else {
@@ -185,6 +189,7 @@ class AuthController {
           }
         }
         if (verified.length === 0) {
+          await logAuditEvent({ event: 'LOGIN_FAILED', req, metadata: { email } });
           return res.status(401).json({ success: false, error: 'Invalid email or credentials' });
         }
         const verifiedActive = verified.filter((candidate) => candidate.isActive);
@@ -211,6 +216,7 @@ class AuthController {
         return res.status(403).json({ success: false, error: 'This agent account is deactivated' });
       }
 
+      await logAuditEvent({ tenantId: agent.tenantId, agentId: agent.id, event: 'LOGIN_SUCCESS', req });
       // Generate session JWT with 7-day validity
       const token = signSession(agent);
       setSessionCookie(res, token);
@@ -324,6 +330,7 @@ class AuthController {
         return { tenant, admin };
       });
 
+      await logAuditEvent({ tenantId: result.tenant.id, agentId: result.admin.id, event: 'REGISTER_TENANT', req, metadata: { slug: result.tenant.slug } });
       const token = signSession(result.admin);
       setSessionCookie(res, token);
 
@@ -440,12 +447,128 @@ class AuthController {
 
       // Re-issue a session for THIS device on the new token version so the
       // user is not logged out of the tab they just secured.
+      await logAuditEvent({ tenantId: req.agent.tenantId, agentId: req.agent.id, event: 'PASSWORD_CHANGED', req });
       const token = signSession(updated);
       setSessionCookie(res, token);
       return res.json({ success: true, token, message: 'Password updated. Other sessions have been signed out.' });
     } catch (error) {
       console.error('[Auth Change Password Error]:', error);
       return res.status(500).json({ success: false, error: 'Failed to change password' });
+    }
+  }
+  /**
+   * POST /api/auth/forgot-password: Start a self-serve reset. The
+   * response is deliberately identical whether or not the email exists
+   * (no account enumeration). A single-use token (1 hour) is emailed as
+   * a link; only its SHA-256 hash is stored. With several workspaces on
+   * one email, the email carries one link per workspace (max 3).
+   */
+  static async forgotPassword(req, res) {
+    const generic = {
+      success: true,
+      message: 'If an account exists for that email, a password reset link is on its way.',
+    };
+    try {
+      const email = cleanString(req.body?.email, 320).toLowerCase();
+      if (!email || !EMAIL_PATTERN.test(email)) {
+        return res.json(generic);
+      }
+      const matches = await prisma.agent.findMany({
+        where: { email, isActive: true },
+        include: { tenant: true },
+        take: 3,
+      });
+      if (matches.length === 0) {
+        return res.json(generic);
+      }
+
+      const links = [];
+      for (const agent of matches) {
+        const rawToken = crypto.randomBytes(32).toString('hex');
+        const tokenHash = crypto.createHash('sha256').update(rawToken).digest('hex');
+        await prisma.agent.update({
+          where: { id: agent.id },
+          data: {
+            passwordResetTokenHash: tokenHash,
+            passwordResetExpiresAt: new Date(Date.now() + 60 * 60 * 1000),
+          },
+        });
+        await logAuditEvent({
+          tenantId: agent.tenantId,
+          agentId: agent.id,
+          event: 'PASSWORD_RESET_REQUESTED',
+          req,
+        });
+        links.push({ workspace: agent.tenant.name, url: `${appBaseUrl()}/?reset=${rawToken}` });
+      }
+
+      const listHtml = links
+        .map(
+          (l) =>
+            `<p><strong>${l.workspace}</strong><br/><a href="${l.url}">Reset your password</a> — ${l.url}</p>`
+        )
+        .join('');
+      const listText = links.map((l) => `${l.workspace}: ${l.url}`).join('\n\n');
+      await sendEmail({
+        to: email,
+        subject: 'Reset your TeamBee password',
+        html: `<p>Hello,</p><p>We received a request to reset your TeamBee password. The link${
+          links.length > 1 ? 's below are' : ' below is'
+        } valid for 1 hour. If you did not request this, you can ignore this email — your password stays unchanged.</p>${listHtml}`,
+        text: `We received a request to reset your TeamBee password. The link(s) below are valid for 1 hour. If you did not request this, ignore this email.\n\n${listText}`,
+      });
+
+      return res.json(generic);
+    } catch (error) {
+      console.error('[Forgot Password Error]:', error);
+      return res.json(generic);
+    }
+  }
+
+  /**
+   * POST /api/auth/reset-password: Complete a reset. Consumes the
+   * token (single-use), rotates the password, and bumps tokenVersion so
+   * every existing session is signed out.
+   */
+  static async resetPassword(req, res) {
+    try {
+      const token = typeof req.body?.token === 'string' ? req.body.token : '';
+      const password = typeof req.body?.password === 'string' ? req.body.password : '';
+      if (!token || password.length < 10 || password.length > 256) {
+        return res.status(400).json({ success: false, error: 'A valid reset link and a new password of at least 10 characters are required' });
+      }
+      if (Buffer.byteLength(password, 'utf8') > 72) {
+        return res.status(400).json({ success: false, error: 'Password is too long (maximum 72 bytes)' });
+      }
+      const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
+      const agent = await prisma.agent.findFirst({
+        where: { passwordResetTokenHash: tokenHash, isActive: true },
+      });
+      if (!agent || !agent.passwordResetExpiresAt || agent.passwordResetExpiresAt.getTime() < Date.now()) {
+        return res.status(400).json({ success: false, error: 'This reset link is invalid or has expired. Please request a new one.' });
+      }
+
+      const passwordHash = await bcrypt.hash(password, 10);
+      await prisma.agent.update({
+        where: { id: agent.id },
+        data: {
+          passwordHash,
+          passwordResetTokenHash: null,
+          passwordResetExpiresAt: null,
+          tokenVersion: { increment: 1 },
+        },
+      });
+      invalidateAgentCache(agent.id);
+      await logAuditEvent({
+        tenantId: agent.tenantId,
+        agentId: agent.id,
+        event: 'PASSWORD_RESET_COMPLETED',
+        req,
+      });
+      return res.json({ success: true, message: 'Password updated. Please sign in with your new password.' });
+    } catch (error) {
+      console.error('[Reset Password Error]:', error);
+      return res.status(500).json({ success: false, error: 'Failed to reset password' });
     }
   }
 }

@@ -11,7 +11,7 @@
     "prisma:migrate:deploy": "prisma migrate deploy",
     "prisma:push": "prisma db push",
     "seed": "node src/db/seed.js",
-    "test": "node tests/test-webhook-parser.js",
+    "test": "node tests/test-automation-units.js && node tests/test-feature-controllers.js && node tests/test-migrations.pg-mem.js",
     "postinstall": "prisma generate"
   },
   "dependencies": {
@@ -31,5 +31,8 @@
     "redis": "^6.3.0",
     "socket.io": "^4.8.1",
     "uuid": "^11.0.5"
+  },
+  "devDependencies": {
+    "pg-mem": "^3.0.5"
   }
 }

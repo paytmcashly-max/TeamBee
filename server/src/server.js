@@ -125,6 +125,31 @@ app.get('/ready', async (req, res) => {
 
 // Mount Routes
 app.use('/webhook', webhookRoutes);
+// Request IDs + one structured JSON log line per API request. Until
+// this existed, production logs were ad-hoc console lines with no way
+// to correlate a user's complaint with the requests it touched.
+app.use((req, res, next) => {
+  req.id = req.headers['x-request-id'] || require('crypto').randomUUID();
+  res.setHeader('X-Request-Id', req.id);
+  if (req.path.startsWith('/api/')) {
+    const startedAt = Date.now();
+    res.on('finish', () => {
+      console.log(
+        JSON.stringify({
+          ts: new Date().toISOString(),
+          id: req.id,
+          method: req.method,
+          path: req.originalUrl?.split('?')[0],
+          status: res.statusCode,
+          ms: Date.now() - startedAt,
+          tenantId: req.tenantId || undefined,
+        })
+      );
+    });
+  }
+  next();
+});
+
 app.use('/api/auth', authRoutes);
 app.use('/api/tenant', tenantRoutes);
 app.use('/api/agents', agentRoutes);

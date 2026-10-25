@@ -1,5 +1,6 @@
 const bcrypt = require('bcryptjs');
 const prisma = require('../db/prisma');
+const { logAuditEvent } = require('../services/auditLog');
 const { invalidateAgentCache } = require('../middleware/authMiddleware');
 
 class AgentController {
@@ -64,6 +65,22 @@ class AgentController {
         return res.status(400).json({ success: false, error: 'Password is too long (maximum 72 bytes)' });
       }
 
+      // Plan seat limit: the pricing page promises per-plan agent caps —
+      // enforce them here, at the only door agents are created through.
+      const tenant = await prisma.tenant.findUnique({ where: { id: req.tenantId } });
+      const { agentLimitForTenant, effectivePlanKey } = require('../services/planLimits');
+      const seatLimit = agentLimitForTenant(tenant);
+      const activeAgents = await prisma.agent.count({
+        where: { tenantId: req.tenantId, isActive: true },
+      });
+      if (activeAgents >= seatLimit) {
+        return res.status(403).json({
+          success: false,
+          error: `Your ${effectivePlanKey(tenant)} plan includes up to ${seatLimit} agents. Upgrade your plan to add more team members.`,
+          code: 'PLAN_SEAT_LIMIT',
+        });
+      }
+
       // Check duplicate
       const existing = await prisma.agent.findFirst({
         where: {
@@ -99,6 +116,7 @@ class AgentController {
         },
       });
 
+      await logAuditEvent({ tenantId: req.tenantId, agentId: req.agent.id, event: 'AGENT_CREATED', req, metadata: { createdAgentId: agent.id, role: agent.role } });
       return res.status(201).json({ success: true, agent });
     } catch (error) {
       console.error('[Create Agent Error]:', error);

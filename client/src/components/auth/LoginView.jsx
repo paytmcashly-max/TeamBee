@@ -20,7 +20,7 @@ const labelStyle = {
   marginBottom: '4px',
 };
 
-export default function LoginView({ onShowSignup, onBack } = {}) {
+export default function LoginView({ onShowSignup, onBack, onForgot } = {}) {
   const { login, lookupWorkspaces } = useAuth();
   const [email, setEmail] = useState(() => {
     try {
@@ -481,6 +481,14 @@ export default function LoginView({ onShowSignup, onBack } = {}) {
                 {'  ·  '}
                 <button type="button" onClick={onBack} style={{ background: 'none', border: 'none', color: 'var(--text-secondary)', cursor: 'pointer', fontSize: '12.5px', padding: 0 }}>
                   Back to home
+                </button>
+              </>
+            )}
+            {onForgot && (
+              <>
+                {'  ·  '}
+                <button type="button" onClick={onForgot} style={{ background: 'none', border: 'none', color: 'var(--text-secondary)', cursor: 'pointer', fontSize: '12.5px', padding: 0 }}>
+                  Forgot password?
                 </button>
               </>
             )}
