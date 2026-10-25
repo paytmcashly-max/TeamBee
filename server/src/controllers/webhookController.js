@@ -60,15 +60,17 @@ class WebhookController {
        const payloadHash = crypto.createHash('sha256').update(req.rawBody).digest('hex');
        const tenants = await Promise.all(payload.entry.map((entry) => WebhookParserService.resolveTenant(entry)));
        const tenantIds = [...new Set(tenants.filter(Boolean).map((tenant) => tenant.id))];
-       const event = await prisma.webhookEvent.upsert({
-         where: { payloadHash },
-         update: {},
-         create: {
-           payloadHash,
-           payload: JSON.stringify(payload),
-           tenantId: tenantIds.length === 1 ? tenantIds[0] : null,
-         },
-       });
+       const event = await systemDb((db) =>
+         db.webhookEvent.upsert({
+           where: { payloadHash },
+           update: {},
+           create: {
+             payloadHash,
+             payload: JSON.stringify(payload),
+             tenantId: tenantIds.length === 1 ? tenantIds[0] : null,
+           },
+         })
+       );
 
       // A valid Meta request is acknowledged only after durable persistence.
       res.status(200).send('EVENT_RECEIVED');

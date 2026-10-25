@@ -1,5 +1,6 @@
 const prisma = require('../db/prisma');
 const { processBroadcast } = require('../services/broadcastWorker');
+const { withTenantDb, rlsContextEnabled } = require('../db/withTenant');
 
 const MAX_RECIPIENTS = 10000;
 
@@ -16,8 +17,9 @@ function normalizeVariables(variables) {
 class BroadcastController {
   static async listBroadcasts(req, res) {
     try {
-      const broadcasts = await prisma.broadcast.findMany({
-        where: { tenantId: req.tenantId },
+      const broadcasts = await req.db((db) =>
+        db.broadcast.findMany({
+          where: { tenantId: req.tenantId },
         include: {
           template: {
             select: { name: true, category: true, bodyText: true },
@@ -28,9 +30,10 @@ class BroadcastController {
             select: { phone: true, name: true, status: true, sentAt: true, errorMessage: true, lastError: true },
           },
         },
-        orderBy: { createdAt: 'desc' },
-        take: 100,
-      });
+          orderBy: { createdAt: 'desc' },
+          take: 100,
+        })
+      );
 
       return res.json({ success: true, broadcasts });
     } catch (error) {
@@ -56,20 +59,27 @@ class BroadcastController {
       }
 
       const tenantId = req.tenantId;
-      const template = await prisma.template.findFirst({
-        where: { id: templateId, tenantId, status: 'APPROVED' },
-      });
+      const template = await req.db((db) =>
+        db.template.findFirst({
+          where: { id: templateId, tenantId, status: 'APPROVED' },
+        })
+      );
       if (!template) return res.status(404).json({ success: false, error: 'Approved template not found' });
 
-      const targetContacts = await prisma.contact.findMany({
-        where: { tenantId, id: { in: [...new Set(contactIds)] } },
-        select: { id: true, waId: true, name: true },
-      });
+      const targetContacts = await req.db((db) =>
+        db.contact.findMany({
+          where: { tenantId, id: { in: [...new Set(contactIds)] } },
+          select: { id: true, waId: true, name: true },
+        })
+      );
       if (targetContacts.length === 0) {
         return res.status(400).json({ success: false, error: 'No contacts selected or found for broadcast' });
       }
 
-      const broadcast = await prisma.$transaction(async (tx) => {
+      const runBroadcastTx = rlsContextEnabled()
+        ? (cb) => withTenantDb(tenantId, cb)
+        : (cb) => prisma.$transaction(cb);
+      const broadcast = await runBroadcastTx(async (tx) => {
         const created = await tx.broadcast.create({
           data: {
             tenantId,
