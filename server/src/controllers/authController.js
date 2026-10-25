@@ -39,23 +39,38 @@ function signSession(agent) {
   );
 }
 
+// The SPA and this API are always served from different origins in this
+// deployment (separate frontend/backend hosts), so the session cookie
+// must be SameSite=None (+Secure) for browsers to send it on the app's
+// cross-origin fetches at all. With the old Lax default the cookie was
+// silently withheld after every page reload: /api/auth/me failed, the
+// socket had no token, and users saw a permanent "connection lost"
+// banner plus repeat logouts. COOKIE_SAME_SITE can still override.
+function sessionSameSite() {
+  const sameSite = String(process.env.COOKIE_SAME_SITE || 'none').toLowerCase();
+  return sameSite === 'strict' ? 'Strict' : sameSite === 'lax' ? 'Lax' : 'None';
+}
+
 function setSessionCookie(res, token) {
-  const sameSite = String(process.env.COOKIE_SAME_SITE || 'lax').toLowerCase();
   const secure = process.env.NODE_ENV === 'production' || process.env.COOKIE_SECURE === 'true';
+  const sameSite = sessionSameSite();
   const attributes = [
     `chatflow_session=${encodeURIComponent(token)}`,
     'Max-Age=604800',
     'Path=/',
     'HttpOnly',
-    `SameSite=${sameSite === 'none' ? 'None' : sameSite === 'strict' ? 'Strict' : 'Lax'}`,
+    `SameSite=${sameSite}`,
   ];
   // SameSite=None is only honoured by browsers together with Secure.
-  if (secure || sameSite === 'none') attributes.push('Secure');
+  if (secure || sameSite === 'None') attributes.push('Secure');
   res.setHeader('Set-Cookie', attributes.join('; '));
 }
 
 function clearSessionCookie(res) {
-  res.setHeader('Set-Cookie', 'chatflow_session=; Max-Age=0; Path=/; HttpOnly; SameSite=Lax');
+  res.setHeader(
+    'Set-Cookie',
+    `chatflow_session=; Max-Age=0; Path=/; HttpOnly; SameSite=${sessionSameSite()}`
+  );
 }
 
 class AuthController {
@@ -315,6 +330,11 @@ class AuthController {
   static async getMe(req, res) {
     return res.json({
       success: true,
+      // A freshly minted session token rides along so a reloaded SPA can
+      // restore its in-memory Bearer token (used by API calls and the
+      // socket handshake) from the cookie-backed session. Same claims
+      // and tokenVersion as the cookie token, so revocation still works.
+      token: signSession(req.agent),
       agent: {
         id: req.agent.id,
         name: req.agent.name,

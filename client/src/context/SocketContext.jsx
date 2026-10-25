@@ -10,10 +10,15 @@ export function SocketProvider({ children }) {
   const [activeChatRoom, setActiveChatRoom] = useState(null);
   const socketRef = useRef(null);
   const activeChatRoomRef = useRef(null);
+  const tokenRef = useRef(token);
 
   useEffect(() => {
     activeChatRoomRef.current = activeChatRoom;
   }, [activeChatRoom]);
+
+  useEffect(() => {
+    tokenRef.current = token;
+  }, [token]);
 
   useEffect(() => {
     if (!agent) {
@@ -30,7 +35,9 @@ export function SocketProvider({ children }) {
     // Connect to Socket.io server with JWT authentication handshake
     const socketUrl = import.meta.env.VITE_API_URL ? import.meta.env.VITE_API_URL.replace(/\/+$/, '') : '/';
     const socket = io(socketUrl, {
-      auth: { token },
+      // Evaluated on every (re)connect, so a reconnect never replays a
+      // token that has since been rotated or re-issued.
+      auth: (cb) => cb({ token: tokenRef.current }),
       withCredentials: true,
       transports: ['websocket', 'polling'],
       // Never give up: a capped attempt count left agents silently offline

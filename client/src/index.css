@@ -101,15 +101,23 @@ input, textarea, select {
   background: rgba(255, 255, 255, 0.25);
 }
 
-/* App Wrapper */
+/* App Wrapper — a COLUMN shell: the connection banner is a slim strip
+   on top and the inbox layout takes the rest. (This rule never set
+   flex-direction, so the shell laid out as a row: when the banner
+   appeared it became a full-height slab that squeezed the whole app
+   out of the screen — a phone showed nothing but the red banner.) */
 .app-container {
   display: flex;
+  flex-direction: column;
   height: 100vh;
   height: 100dvh;
   width: 100vw;
   background-color: var(--bg-app);
   position: relative;
   overflow: hidden;
+}
+.connection-banner {
+  flex: 0 0 auto;
 }
 
 /* Scroll plumbing for an app shell: the page itself never rubber-bands,
@@ -229,7 +237,7 @@ body {
 .inbox-layout {
   display: flex;
   flex: 1;
-  height: 100%;
+  min-height: 0;
   width: 100%;
   overflow: hidden;
   position: relative;

@@ -1,12 +1,26 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
 
 const AuthContext = createContext(null);
+
+// Reads the tokenVersion claim out of a JWT without verifying it (the
+// server verifies); used to adopt a re-issued token only when it is
+// actually newer, so verifySession cannot loop on its own token updates.
+function tokenVersionOf(t) {
+  try {
+    const part = t.split('.')[1].replace(/-/g, '+').replace(/_/g, '/');
+    const payload = JSON.parse(atob(part));
+    return payload.tv ?? 0;
+  } catch (e) {
+    return null;
+  }
+}
 
 export function AuthProvider({ children }) {
   const [token, setToken] = useState(null);
   const [agent, setAgent] = useState(null);
   const [tenant, setTenant] = useState(null);
   const [loading, setLoading] = useState(true);
+  const verifySessionRef = useRef(null);
 
   // Validate session on mount
   useEffect(() => {
@@ -20,6 +34,14 @@ export function AuthProvider({ children }) {
         if (data.success) {
           setAgent(data.agent);
           setTenant(data.tenant);
+          // After a reload the in-memory token is gone while the cookie
+          // session lives on; /me returns a fresh token so API calls and
+          // the socket can authenticate again. Without this the socket
+          // connected with a null token and the "connection lost" banner
+          // never cleared.
+          if (data.token && (!token || tokenVersionOf(data.token) !== tokenVersionOf(token))) {
+            setToken(data.token);
+          }
         } else {
           setToken(null);
           setAgent(null);
@@ -31,8 +53,20 @@ export function AuthProvider({ children }) {
         setLoading(false);
       }
     }
+    verifySessionRef.current = verifySession;
     verifySession();
   }, [token]);
+
+  // The fetch wrapper in main.jsx asks for a silent revalidation when a
+  // data call answers 401: refresh the session from the cookie instead
+  // of logging the user out over a rotated/revoked access token.
+  useEffect(() => {
+    const onRevalidate = () => {
+      if (verifySessionRef.current) verifySessionRef.current();
+    };
+    window.addEventListener('auth:revalidate', onRevalidate);
+    return () => window.removeEventListener('auth:revalidate', onRevalidate);
+  }, []);
 
   const login = async (email, password, tenantSlug) => {
     const res = await fetch('/api/auth/login', {

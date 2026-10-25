@@ -16,18 +16,37 @@ const API_URL = import.meta.env.VITE_API_URL || '';
       url = `${API_URL.replace(/\/+$/, '')}${url}`;
     }
     const response = await originalFetch(url, { ...init, credentials: init?.credentials || 'include' });
-    // A 401 from any data endpoint means the session died server-side
-    // (expired, revoked, password changed). Broadcast it so AuthContext can
-    // return the user to the login screen instead of leaving a zombie UI.
+    // A 401 from a data endpoint usually means the ACCESS token died
+    // (rotated on password change, revoked, expired) — not necessarily
+    // the cookie session. Logging out instantly on any 401 kicked users
+    // out mid-work. Instead, silently revalidate the session once via
+    // /api/auth/me: if it is alive, AuthContext refreshes the token and
+    // work continues; only a failed revalidation logs the user out.
     try {
       const path = typeof url === 'string' ? url : url?.url || '';
       if (
         response.status === 401 &&
         path.includes('/api/') &&
         !path.includes('/api/auth/login') &&
-        !path.includes('/api/auth/me')
+        !path.includes('/api/auth/me') &&
+        !window.__teambeeRevalidating
       ) {
-        window.dispatchEvent(new Event('auth:unauthorized'));
+        window.__teambeeRevalidating = (async () => {
+          try {
+            const meRes = await originalFetch(`${API_URL.replace(/\/+$/, '')}/api/auth/me`, {
+              credentials: 'include',
+            });
+            if (meRes.ok) {
+              window.dispatchEvent(new Event('auth:revalidate'));
+            } else {
+              window.dispatchEvent(new Event('auth:unauthorized'));
+            }
+          } catch (revalError) {
+            window.dispatchEvent(new Event('auth:unauthorized'));
+          } finally {
+            window.__teambeeRevalidating = null;
+          }
+        })();
       }
     } catch (ignored) {}
     return response;
