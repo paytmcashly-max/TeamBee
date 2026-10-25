@@ -10,10 +10,12 @@ class TemplateController {
    */
   static async listTemplates(req, res) {
     try {
-      const templates = await prisma.template.findMany({
-        where: { tenantId: req.tenantId },
-        orderBy: { name: 'asc' },
-      });
+      const templates = await req.db((db) =>
+        db.template.findMany({
+          where: { tenantId: req.tenantId },
+          orderBy: { name: 'asc' },
+        })
+      );
       return res.json({ success: true, templates });
     } catch (error) {
       console.error('[List Templates Error]:', error);
@@ -26,7 +28,7 @@ class TemplateController {
    */
   static async syncTemplates(req, res) {
     try {
-      const tenant = await prisma.tenant.findUnique({ where: { id: req.tenantId } });
+      const tenant = await req.db((db) => db.tenant.findUnique({ where: { id: req.tenantId } }));
       if (!tenant) {
         return res.status(404).json({ success: false, error: 'Tenant not found' });
       }
@@ -47,14 +49,15 @@ class TemplateController {
         const footerComp = (tpl.components || []).find((c) => c.type === 'FOOTER');
         const buttonsComp = (tpl.components || []).find((c) => c.type === 'BUTTONS');
 
-        const record = await prisma.template.upsert({
-          where: {
-            tenantId_name_language: {
-              tenantId: tenant.id,
-              name: tpl.name,
-              language: tpl.language,
+        const record = await req.db((db) =>
+          db.template.upsert({
+            where: {
+              tenantId_name_language: {
+                tenantId: tenant.id,
+                name: tpl.name,
+                language: tpl.language,
+              },
             },
-          },
           update: {
             status: tpl.status,
             category: tpl.category,
@@ -74,24 +77,27 @@ class TemplateController {
             headerType: headerComp?.format || 'NONE',
             headerContent: headerComp?.text || null,
             footerText: footerComp?.text || null,
-            buttons: JSON.stringify(buttonsComp?.buttons || []),
-          },
-        });
+              buttons: JSON.stringify(buttonsComp?.buttons || []),
+            },
+          })
+        );
         synced.push(record);
       }
 
       // Prune local rows Meta no longer returns: a template deleted or
       // replaced on Meta must not linger in the picker and fail at send time.
       const metaKeys = new Set(metaRes.templates.map((tpl) => `${tpl.name}::${tpl.language}`));
-      const localTemplates = await prisma.template.findMany({
-        where: { tenantId: tenant.id },
-        select: { id: true, name: true, language: true },
-      });
+      const localTemplates = await req.db((db) =>
+        db.template.findMany({
+          where: { tenantId: tenant.id },
+          select: { id: true, name: true, language: true },
+        })
+      );
       const staleIds = localTemplates
         .filter((tpl) => !metaKeys.has(`${tpl.name}::${tpl.language}`))
         .map((tpl) => tpl.id);
       if (staleIds.length > 0) {
-        await prisma.template.deleteMany({ where: { id: { in: staleIds }, tenantId: tenant.id } });
+        await req.db((db) => db.template.deleteMany({ where: { id: { in: staleIds }, tenantId: tenant.id } }));
       }
 
       return res.json({ success: true, count: synced.length, removed: staleIds.length, templates: synced });
@@ -198,7 +204,7 @@ class TemplateController {
         components.push({ type: 'BUTTONS', buttons: metaButtons });
       }
 
-      const tenant = await prisma.tenant.findUnique({ where: { id: req.tenantId } });
+      const tenant = await req.db((db) => db.tenant.findUnique({ where: { id: req.tenantId } }));
       if (!tenant) {
         return res.status(404).json({ success: false, error: 'Tenant not found' });
       }
@@ -216,8 +222,9 @@ class TemplateController {
         });
       }
 
-      const record = await prisma.template.upsert({
-        where: { tenantId_name_language: { tenantId: tenant.id, name, language } },
+      const record = await req.db((db) =>
+        db.template.upsert({
+          where: { tenantId_name_language: { tenantId: tenant.id, name, language } },
         update: {
           status: metaRes.template?.status || 'PENDING',
           category,
@@ -237,9 +244,10 @@ class TemplateController {
           headerType: headerText.trim() ? 'TEXT' : 'NONE',
           headerContent: headerText.trim() || null,
           footerText: footerText.trim() || null,
-          buttons: JSON.stringify(metaButtons),
-        },
-      });
+            buttons: JSON.stringify(metaButtons),
+          },
+        })
+      );
 
       return res.status(201).json({ success: true, template: record });
     } catch (error) {
@@ -261,10 +269,12 @@ class TemplateController {
         return res.status(400).json({ success: false, error: 'chatId, templateId, and variables are required' });
       }
 
-      const chat = await prisma.chat.findUnique({
-        where: { id: chatId },
-        include: { contact: true, tenant: true },
-      });
+      const chat = await req.db((db) =>
+        db.chat.findUnique({
+          where: { id: chatId },
+          include: { contact: true, tenant: true },
+        })
+      );
 
        if (!chat || chat.tenantId !== tenantId || chat.contact?.tenantId !== tenantId || chat.tenant?.id !== tenantId) {
          return res.status(404).json({ success: false, error: 'Chat not found' });
@@ -273,9 +283,11 @@ class TemplateController {
          return res.status(403).json({ success: false, error: 'Access denied' });
        }
 
-      const template = await prisma.template.findUnique({
-        where: { id: templateId },
-      });
+      const template = await req.db((db) =>
+        db.template.findUnique({
+          where: { id: templateId },
+        })
+      );
 
       if (!template || template.tenantId !== tenantId) {
         return res.status(404).json({ success: false, error: 'Template not found' });
@@ -301,25 +313,27 @@ class TemplateController {
 
       // Persist before dispatch so provider failures remain visible in the
       // transcript instead of disappearing from the outbound history.
-      const pendingMessage = await prisma.message.create({
-        data: {
+      const pendingMessage = await req.db((db) =>
+        db.message.create({
+          data: {
           chatId: chat.id,
           tenantId: chat.tenantId,
           senderType: 'AGENT',
           senderId: agentId,
           messageType: 'TEMPLATE',
           content: renderedBody,
-          rawPayload: JSON.stringify({ template: template.name, variables }),
-          direction: 'OUTBOUND',
-          status: 'PENDING',
-          createdAt: now,
-        },
-        include: {
-          senderAgent: {
-            select: { id: true, name: true, avatarUrl: true },
+            rawPayload: JSON.stringify({ template: template.name, variables }),
+            direction: 'OUTBOUND',
+            status: 'PENDING',
+            createdAt: now,
           },
-        },
-      });
+          include: {
+            senderAgent: {
+              select: { id: true, name: true, avatarUrl: true },
+            },
+          },
+        })
+      );
 
       let apiResult;
       try {
@@ -335,19 +349,21 @@ class TemplateController {
       }
 
       if (!apiResult || !apiResult.success) {
-        const failedMessage = await prisma.message.update({
-          where: { id: pendingMessage.id },
-          data: {
-            status: 'FAILED',
-            errorCode: apiResult?.code || 'META_API_ERROR',
-            errorMessage: apiResult?.error || 'Template delivery failed',
-          },
-          include: {
-            senderAgent: {
-              select: { id: true, name: true, avatarUrl: true },
+        const failedMessage = await req.db((db) =>
+          db.message.update({
+            where: { id: pendingMessage.id },
+            data: {
+              status: 'FAILED',
+              errorCode: apiResult?.code || 'META_API_ERROR',
+              errorMessage: apiResult?.error || 'Template delivery failed',
             },
-          },
-        });
+            include: {
+              senderAgent: {
+                select: { id: true, name: true, avatarUrl: true },
+              },
+            },
+          })
+        );
         broadcastNewMessage(tenantId, chat.id, failedMessage, chat.assignedAgentId || agentId);
         return res.status(502).json({
           success: false,
@@ -356,31 +372,35 @@ class TemplateController {
         });
       }
 
-      const message = await prisma.message.update({
-        where: { id: pendingMessage.id },
-        data: {
-          waMessageId: apiResult.wamid,
-          status: 'SENT',
-          errorCode: null,
-          errorMessage: null,
-        },
-        include: {
-          senderAgent: {
-            select: { id: true, name: true, avatarUrl: true },
+      const message = await req.db((db) =>
+        db.message.update({
+          where: { id: pendingMessage.id },
+          data: {
+            waMessageId: apiResult.wamid,
+            status: 'SENT',
+            errorCode: null,
+            errorMessage: null,
           },
-        },
-      });
+          include: {
+            senderAgent: {
+              select: { id: true, name: true, avatarUrl: true },
+            },
+          },
+        })
+      );
 
       // Update chat session
-      await prisma.chat.update({
-        where: { id: chat.id },
-        data: {
-          lastMessagePreview: `📋 Template: ${template.name}`,
-          lastMessageAt: now,
-          status: chat.status === 'UNASSIGNED' ? 'OPEN' : chat.status,
-          assignedAgentId: chat.assignedAgentId || agentId,
-        },
-      });
+      await req.db((db) =>
+        db.chat.update({
+          where: { id: chat.id },
+          data: {
+            lastMessagePreview: `📋 Template: ${template.name}`,
+            lastMessageAt: now,
+            status: chat.status === 'UNASSIGNED' ? 'OPEN' : chat.status,
+            assignedAgentId: chat.assignedAgentId || agentId,
+          },
+        })
+      );
 
       // Broadcast real-time update
       broadcastNewMessage(tenantId, chat.id, message, chat.assignedAgentId || agentId);

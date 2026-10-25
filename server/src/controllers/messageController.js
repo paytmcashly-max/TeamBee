@@ -16,10 +16,12 @@ class MessageController {
          return res.status(400).json({ success: false, error: 'limit must be between 1 and 200' });
        }
 
-      const chat = await prisma.chat.findUnique({
-        where: { id: chatId },
-        include: { contact: true },
-      });
+      const chat = await req.db((db) =>
+        db.chat.findUnique({
+          where: { id: chatId },
+          include: { contact: true },
+        })
+      );
 
        if (!chat || chat.tenantId !== req.tenantId || chat.contact?.tenantId !== req.tenantId) {
         return res.status(404).json({ success: false, error: 'Chat not found' });
@@ -52,16 +54,18 @@ class MessageController {
          }
        }
 
-       const messageRows = await prisma.message.findMany({
-         where: messageWhere,
+       const messageRows = await req.db((db) =>
+         db.message.findMany({
+           where: messageWhere,
         include: {
           senderAgent: {
             select: { id: true, name: true, avatarUrl: true },
           },
         },
-         orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
-         take: requestedLimit + 1,
-       });
+           orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+           take: requestedLimit + 1,
+         })
+       );
        const hasMore = messageRows.length > requestedLimit;
        // Payload diet: a message's rawPayload is the full Meta webhook JSON
        // (kilobytes each). The client reads it only for INTERACTIVE button
@@ -187,10 +191,12 @@ class MessageController {
          return res.status(400).json({ success: false, error: 'Media messages require an HTTPS attachment URL' });
        }
 
-      const chat = await prisma.chat.findUnique({
-        where: { id: chatId },
-        include: { contact: true, tenant: true },
-      });
+      const chat = await req.db((db) =>
+        db.chat.findUnique({
+          where: { id: chatId },
+          include: { contact: true, tenant: true },
+        })
+      );
 
         if (!chat || chat.tenantId !== tenantId || chat.contact?.tenantId !== tenantId || chat.tenant?.id !== tenantId) {
          return res.status(404).json({ success: false, error: 'Chat session not found' });
@@ -200,14 +206,16 @@ class MessageController {
         }
 
        if (clientMessageId) {
-         const existingMessage = await prisma.message.findFirst({
-           where: { tenantId, clientMessageId },
-           include: {
-             senderAgent: {
-               select: { id: true, name: true, avatarUrl: true },
+         const existingMessage = await req.db((db) =>
+           db.message.findFirst({
+             where: { tenantId, clientMessageId },
+             include: {
+               senderAgent: {
+                 select: { id: true, name: true, avatarUrl: true },
+               },
              },
-           },
-         });
+           })
+         );
          if (existingMessage) {
            if (existingMessage.chatId !== chat.id) {
              return res.status(409).json({ success: false, error: 'clientMessageId was already used for another chat' });
@@ -231,15 +239,18 @@ class MessageController {
         // client can never mention another workspace's agent.
         let validMentionIds = [];
         if (mentions.length) {
-          const mentionedAgents = await prisma.agent.findMany({
-            where: { tenantId, id: { in: mentions } },
-            select: { id: true },
-          });
+          const mentionedAgents = await req.db((db) =>
+            db.agent.findMany({
+              where: { tenantId, id: { in: mentions } },
+              select: { id: true },
+            })
+          );
           validMentionIds = mentionedAgents.map((a) => a.id);
         }
 
-        const noteMessage = await prisma.message.create({
-          data: {
+        const noteMessage = await req.db((db) =>
+          db.message.create({
+            data: {
             chatId: chat.id,
             tenantId: chat.tenantId,
              senderType: 'NOTE',
@@ -247,26 +258,29 @@ class MessageController {
              clientMessageId,
              messageType: 'NOTE',
             content,
-            rawPayload: validMentionIds.length ? JSON.stringify({ mentions: validMentionIds }) : null,
-            direction: 'OUTBOUND',
-            status: 'DELIVERED',
-            createdAt: now,
-          },
-          include: {
-            senderAgent: {
-              select: { id: true, name: true, avatarUrl: true },
+              rawPayload: validMentionIds.length ? JSON.stringify({ mentions: validMentionIds }) : null,
+              direction: 'OUTBOUND',
+              status: 'DELIVERED',
+              createdAt: now,
             },
-          },
-        });
+            include: {
+              senderAgent: {
+                select: { id: true, name: true, avatarUrl: true },
+              },
+            },
+          })
+        );
 
         // Update chat preview with lock emoji
-        await prisma.chat.update({
-          where: { id: chat.id },
-          data: {
-            lastMessagePreview: `🔒 Internal Note: ${content.slice(0, 40)}`,
-            lastMessageAt: now,
-          },
-        });
+        await req.db((db) =>
+          db.chat.update({
+            where: { id: chat.id },
+            data: {
+              lastMessagePreview: `🔒 Internal Note: ${content.slice(0, 40)}`,
+              lastMessageAt: now,
+            },
+          })
+        );
 
         // Broadcast to active room. The non-persisted client ID lets the
         // browser reconcile this event with its optimistic note bubble.
@@ -320,8 +334,9 @@ class MessageController {
       // after a successful API call does not erase the attempted delivery.
       const outboundMessageType = buttons && buttons.length > 0 ? 'INTERACTIVE' : messageType;
       const outboundContent = content || (mediaFilename ? `Attachment: ${mediaFilename}` : `[${messageType}]`);
-      const pendingMessage = await prisma.message.create({
-        data: {
+      const pendingMessage = await req.db((db) =>
+        db.message.create({
+          data: {
           chatId: chat.id,
           tenantId: chat.tenantId,
            senderType: 'AGENT',
@@ -331,17 +346,18 @@ class MessageController {
           content: outboundContent,
           mediaUrl,
           mediaFilename,
-          rawPayload: buttons && buttons.length > 0 ? JSON.stringify({ buttons }) : null,
-          direction: 'OUTBOUND',
-          status: 'PENDING',
-          createdAt: now,
-        },
-        include: {
-          senderAgent: {
-            select: { id: true, name: true, avatarUrl: true },
+            rawPayload: buttons && buttons.length > 0 ? JSON.stringify({ buttons }) : null,
+            direction: 'OUTBOUND',
+            status: 'PENDING',
+            createdAt: now,
           },
-        },
-      });
+          include: {
+            senderAgent: {
+              select: { id: true, name: true, avatarUrl: true },
+            },
+          },
+        })
+      );
 
       // -------------------------------------------------------------
       // 3. DISPATCH OUTBOUND MESSAGE VIA META CLOUD API
@@ -369,19 +385,21 @@ class MessageController {
       }
 
       if (!apiResult || !apiResult.success) {
-        const failedMessage = await prisma.message.update({
-          where: { id: pendingMessage.id },
-          data: {
-            status: 'FAILED',
-            errorCode: apiResult?.code || 'META_API_ERROR',
-            errorMessage: apiResult?.error || 'Meta Cloud API delivery failure',
-          },
-          include: {
-            senderAgent: {
-              select: { id: true, name: true, avatarUrl: true },
+        const failedMessage = await req.db((db) =>
+          db.message.update({
+            where: { id: pendingMessage.id },
+            data: {
+              status: 'FAILED',
+              errorCode: apiResult?.code || 'META_API_ERROR',
+              errorMessage: apiResult?.error || 'Meta Cloud API delivery failure',
             },
-          },
-        });
+            include: {
+              senderAgent: {
+                select: { id: true, name: true, avatarUrl: true },
+              },
+            },
+          })
+        );
         const responseMessage = clientMessageId ? { ...failedMessage, clientMessageId } : failedMessage;
         broadcastNewMessage(tenantId, chat.id, responseMessage, chat.assignedAgentId || agentId);
         return res.status(502).json({
@@ -393,20 +411,22 @@ class MessageController {
       }
 
       // Complete the persisted record with the provider receipt.
-      const messageRecord = await prisma.message.update({
-        where: { id: pendingMessage.id },
-        data: {
-          waMessageId: apiResult.wamid,
-          status: 'SENT',
-          errorCode: null,
-          errorMessage: null,
-        },
-        include: {
-          senderAgent: {
-            select: { id: true, name: true, avatarUrl: true },
+      const messageRecord = await req.db((db) =>
+        db.message.update({
+          where: { id: pendingMessage.id },
+          data: {
+            waMessageId: apiResult.wamid,
+            status: 'SENT',
+            errorCode: null,
+            errorMessage: null,
           },
-        },
-      });
+          include: {
+            senderAgent: {
+              select: { id: true, name: true, avatarUrl: true },
+            },
+          },
+        })
+      );
       const message = clientMessageId ? { ...messageRecord, clientMessageId } : messageRecord;
 
       // Update chat preview; an outbound reply reopens UNASSIGNED/RESOLVED
@@ -414,15 +434,17 @@ class MessageController {
       const newStatus = chat.status === 'UNASSIGNED' || chat.status === 'RESOLVED' ? 'OPEN' : chat.status;
       const newAssignedAgentId = chat.assignedAgentId || agentId;
 
-      await prisma.chat.update({
-        where: { id: chat.id },
-        data: {
-          lastMessagePreview: message.content,
-          lastMessageAt: now,
-          status: newStatus,
-          assignedAgentId: newAssignedAgentId,
-        },
-      });
+      await req.db((db) =>
+        db.chat.update({
+          where: { id: chat.id },
+          data: {
+            lastMessagePreview: message.content,
+            lastMessageAt: now,
+            status: newStatus,
+            assignedAgentId: newAssignedAgentId,
+          },
+        })
+      );
 
       // Broadcast real-time message via Socket.io
       broadcastNewMessage(tenantId, chat.id, message, newAssignedAgentId);
@@ -435,14 +457,16 @@ class MessageController {
       });
     } catch (error) {
       if (error?.code === 'P2002' && clientMessageId) {
-        const existingMessage = await prisma.message.findFirst({
-          where: { tenantId, clientMessageId },
-          include: {
-            senderAgent: {
-              select: { id: true, name: true, avatarUrl: true },
+        const existingMessage = await req.db((db) =>
+          db.message.findFirst({
+            where: { tenantId, clientMessageId },
+            include: {
+              senderAgent: {
+                select: { id: true, name: true, avatarUrl: true },
+              },
             },
-          },
-        });
+          })
+        );
         if (existingMessage) {
           return res.status(200).json({
             success: true,
@@ -464,10 +488,12 @@ class MessageController {
   static async getMedia(req, res) {
     try {
       const { messageId } = req.params;
-      const message = await prisma.message.findUnique({
-        where: { id: messageId },
-        include: { chat: true, tenant: true },
-      });
+      const message = await req.db((db) =>
+        db.message.findUnique({
+          where: { id: messageId },
+          include: { chat: true, tenant: true },
+        })
+      );
       if (!message || message.tenantId !== req.tenantId || !message.mediaId) {
         return res.status(404).json({ success: false, error: 'Media not found' });
       }

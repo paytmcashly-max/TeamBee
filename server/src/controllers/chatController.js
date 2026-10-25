@@ -218,7 +218,7 @@ class ChatController {
          return res.status(400).json({ success: false, error: 'agentId must be a string or null' });
        }
 
-      const chat = await prisma.chat.findUnique({ where: { id } });
+      const chat = await req.db((db) => db.chat.findUnique({ where: { id } }));
       if (!chat || chat.tenantId !== req.tenantId) {
         return res.status(404).json({ success: false, error: 'Chat not found' });
       }
@@ -240,9 +240,11 @@ class ChatController {
       let newStatus = chat.status;
 
       if (targetAgentId) {
-       assignedAgent = await prisma.agent.findFirst({
+       assignedAgent = await req.db((db) =>
+         db.agent.findFirst({
            where: { id: targetAgentId, tenantId: req.tenantId, isActive: true },
-        });
+         })
+       );
 
         if (!assignedAgent) {
           return res.status(400).json({ success: false, error: 'Assigned agent does not exist in tenant' });
@@ -258,44 +260,50 @@ class ChatController {
 
       // Compare-and-swap on the state read above: two agents claiming the
       // same chat concurrently must not both succeed silently.
-      const claim = await prisma.chat.updateMany({
-        where: { id, assignedAgentId: chat.assignedAgentId, status: chat.status },
-        data: {
-          assignedAgentId: targetAgentId || null,
-          status: newStatus,
-        },
-      });
+      const claim = await req.db((db) =>
+        db.chat.updateMany({
+          where: { id, assignedAgentId: chat.assignedAgentId, status: chat.status },
+          data: {
+            assignedAgentId: targetAgentId || null,
+            status: newStatus,
+          },
+        })
+      );
       if (claim.count === 0) {
         return res.status(409).json({
           success: false,
           error: 'This conversation was just changed by someone else. Refresh and try again.',
         });
       }
-      const updatedChat = await prisma.chat.findUnique({
-        where: { id },
-        include: {
-          contact: true,
-          assignedAgent: {
-            select: { id: true, name: true, email: true, avatarUrl: true },
+      const updatedChat = await req.db((db) =>
+        db.chat.findUnique({
+          where: { id },
+          include: {
+            contact: true,
+            assignedAgent: {
+              select: { id: true, name: true, email: true, avatarUrl: true },
+            },
           },
-        },
-      });
+        })
+      );
 
       // Insert system message into chat transcript
       const systemNote = targetAgentId
         ? `Assigned to ${assignedAgent.name} by ${requesterName}`
         : `Unassigned by ${requesterName}`;
 
-      await prisma.message.create({
-        data: {
-          chatId: chat.id,
-          tenantId: req.tenantId,
-          senderType: 'SYSTEM',
-          content: systemNote,
-          direction: 'INBOUND',
-          status: 'DELIVERED',
-        },
-      });
+      await req.db((db) =>
+        db.message.create({
+          data: {
+            chatId: chat.id,
+            tenantId: req.tenantId,
+            senderType: 'SYSTEM',
+            content: systemNote,
+            direction: 'INBOUND',
+            status: 'DELIVERED',
+          },
+        })
+      );
 
       // Broadcast assignment via WebSockets
       broadcastChatAssignment(req.tenantId, chat.id, {
@@ -325,7 +333,7 @@ class ChatController {
         return res.status(400).json({ success: false, error: 'Invalid chat status' });
       }
 
-       const chat = await prisma.chat.findUnique({ where: { id } });
+       const chat = await req.db((db) => db.chat.findUnique({ where: { id } }));
        if (!chat || chat.tenantId !== req.tenantId) {
          return res.status(404).json({ success: false, error: 'Chat not found' });
        }
@@ -333,35 +341,41 @@ class ChatController {
          return res.status(403).json({ success: false, error: 'You do not have access to this conversation' });
        }
 
-      const transition = await prisma.chat.updateMany({
-        where: { id, status: chat.status },
-        data: { status },
-      });
+      const transition = await req.db((db) =>
+        db.chat.updateMany({
+          where: { id, status: chat.status },
+          data: { status },
+        })
+      );
       if (transition.count === 0) {
         return res.status(409).json({
           success: false,
           error: 'This conversation was just changed by someone else. Refresh and try again.',
         });
       }
-      const updatedChat = await prisma.chat.findUnique({
-        where: { id },
-        include: {
-          contact: true,
-          assignedAgent: true,
-        },
-      });
+      const updatedChat = await req.db((db) =>
+        db.chat.findUnique({
+          where: { id },
+          include: {
+            contact: true,
+            assignedAgent: true,
+          },
+        })
+      );
 
       // System message
-      await prisma.message.create({
-        data: {
-          chatId: chat.id,
-          tenantId: req.tenantId,
-          senderType: 'SYSTEM',
-          content: `Conversation marked as ${status} by ${agentName}`,
-          direction: 'INBOUND',
-          status: 'DELIVERED',
-        },
-      });
+      await req.db((db) =>
+        db.message.create({
+          data: {
+            chatId: chat.id,
+            tenantId: req.tenantId,
+            senderType: 'SYSTEM',
+            content: `Conversation marked as ${status} by ${agentName}`,
+            direction: 'INBOUND',
+            status: 'DELIVERED',
+          },
+        })
+      );
 
       // WebSocket broadcast
       broadcastChatStatusTransition(req.tenantId, chat.id, {
@@ -400,7 +414,7 @@ class ChatController {
         snoozedUntil = parsed;
       }
 
-      const chat = await prisma.chat.findUnique({ where: { id } });
+      const chat = await req.db((db) => db.chat.findUnique({ where: { id } }));
       if (!chat || chat.tenantId !== req.tenantId) {
         return res.status(404).json({ success: false, error: 'Chat not found' });
       }
@@ -408,14 +422,16 @@ class ChatController {
         return res.status(403).json({ success: false, error: 'You do not have access to this conversation' });
       }
 
-      const updated = await prisma.chat.update({
-        where: { id },
-        data: {
-          snoozedUntil,
-          snoozedById: snoozedUntil ? req.agent.id : null,
-        },
-        select: { id: true, snoozedUntil: true, snoozedById: true, assignedAgentId: true },
-      });
+      const updated = await req.db((db) =>
+        db.chat.update({
+          where: { id },
+          data: {
+            snoozedUntil,
+            snoozedById: snoozedUntil ? req.agent.id : null,
+          },
+          select: { id: true, snoozedUntil: true, snoozedById: true, assignedAgentId: true },
+        })
+      );
 
       broadcastChatSnoozeChanged(req.tenantId, id, updated.snoozedUntil, updated.assignedAgentId);
 
@@ -441,7 +457,7 @@ class ChatController {
          return res.status(400).json({ success: false, error: 'tags must be an array of short strings' });
        }
 
-      const chat = await prisma.chat.findUnique({ where: { id } });
+      const chat = await req.db((db) => db.chat.findUnique({ where: { id } }));
        if (!chat || chat.tenantId !== req.tenantId) {
          return res.status(404).json({ success: false, error: 'Chat not found' });
        }
@@ -449,12 +465,14 @@ class ChatController {
          return res.status(403).json({ success: false, error: 'You do not have access to this conversation' });
        }
 
-      const updated = await prisma.chat.update({
-        where: { id },
-        data: {
-          tags: JSON.stringify(tags || []),
-        },
-      });
+      const updated = await req.db((db) =>
+        db.chat.update({
+          where: { id },
+          data: {
+            tags: JSON.stringify(tags || []),
+          },
+        })
+      );
 
       return res.json({ success: true, tags: JSON.parse(updated.tags) });
     } catch (error) {
@@ -471,10 +489,12 @@ class ChatController {
       const { id } = req.params;
       const { name, email, customAttributes } = req.body;
 
-       const chat = await prisma.chat.findUnique({
-         where: { id },
-         include: { contact: true },
-       });
+       const chat = await req.db((db) =>
+         db.chat.findUnique({
+           where: { id },
+           include: { contact: true },
+         })
+       );
        if (!chat || chat.tenantId !== req.tenantId || chat.contact?.tenantId !== req.tenantId) {
         return res.status(404).json({ success: false, error: 'Chat not found' });
       }
@@ -516,10 +536,12 @@ class ChatController {
          }
        }
 
-      const updatedContact = await prisma.contact.update({
-        where: { id: chat.contactId },
-        data: updateData,
-      });
+      const updatedContact = await req.db((db) =>
+        db.contact.update({
+          where: { id: chat.contactId },
+          data: updateData,
+        })
+      );
 
       return res.json({ success: true, contact: updatedContact });
     } catch (error) {
