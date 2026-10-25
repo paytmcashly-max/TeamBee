@@ -19,6 +19,7 @@ import {
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { useChat } from '../../context/ChatContext';
+import { useToast } from '../../context/ToastContext';
 
 export default function ConversationList({
   onOpenSettings,
@@ -27,6 +28,7 @@ export default function ConversationList({
   onOpenAgents,
 }) {
   const { agent, tenant, isAdmin, logout } = useAuth();
+  const toast = useToast();
   const [menuOpen, setMenuOpen] = useState(false);
 
   // The header carries only the primary action (Broadcast) plus this menu:
@@ -635,7 +637,7 @@ export default function ConversationList({
                     onClick={() => {
                       setSwipedChatId(null);
                       snoozeChat(chat.id, new Date(Date.now() + 60 * 60 * 1000).toISOString()).catch((err) =>
-                        alert(err.message)
+                        toast.error(err.message)
                       );
                     }}
                     style={{
@@ -663,7 +665,7 @@ export default function ConversationList({
                     onClick={() => {
                       setSwipedChatId(null);
                       updateChatStatus(chat.id, chat.status === 'RESOLVED' ? 'OPEN' : 'RESOLVED').catch((err) =>
-                        alert(err.message)
+                        toast.error(err.message)
                       );
                     }}
                     style={{

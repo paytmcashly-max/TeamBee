@@ -25,7 +25,7 @@
   /* Typography Colors */
   --text-main: #f8fafc;
   --text-secondary: #94a3b8;
-  --text-muted: #64748b;
+  --text-muted: #7d92ad; /* was #64748b — only ~3.3-4.1:1 on our dark surfaces; #7d92ad clears WCAG AA 4.5:1 on all of them */
   --text-inverted: #0f172a;
 
   /* Message Bubbles */
@@ -874,4 +874,86 @@ h1, h2, h3, h4, h5, h6 {
   font-weight: 600;
   text-align: center;
   padding: 6px 12px;
+}
+
+/* Toast notifications — the app's feedback channel (replaces alert()).
+   Non-blocking, colour-coded, self-dismissing; stacked bottom-centre on
+   phones, bottom-right on desktop. */
+.toast-stack {
+  position: fixed;
+  left: 16px;
+  right: 16px;
+  bottom: calc(16px + env(safe-area-inset-bottom, 0px));
+  z-index: 400;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  pointer-events: none;
+}
+.toast {
+  pointer-events: auto;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  background: #101a2e;
+  border: 1px solid var(--border-medium);
+  border-left: 3px solid var(--text-secondary);
+  color: #e2e8f0;
+  border-radius: 12px;
+  padding: 11px 12px;
+  font-size: 13.5px;
+  box-shadow: 0 14px 34px rgba(0, 0, 0, 0.5);
+  animation: toast-in 0.22s ease;
+}
+.toast > svg {
+  flex-shrink: 0;
+}
+.toast-success {
+  border-left-color: #22c55e;
+}
+.toast-success > svg {
+  color: #4ade80;
+}
+.toast-error {
+  border-left-color: #ef4444;
+}
+.toast-error > svg {
+  color: #f87171;
+}
+.toast-info {
+  border-left-color: #38bdf8;
+}
+.toast-info > svg {
+  color: #38bdf8;
+}
+.toast-text {
+  flex: 1;
+  min-width: 0;
+}
+.toast-close {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  padding: 4px;
+  display: flex;
+  flex-shrink: 0;
+}
+@keyframes toast-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@media (min-width: 769px) {
+  .toast-stack {
+    left: auto;
+    right: 24px;
+    bottom: 24px;
+    width: 360px;
+  }
 }

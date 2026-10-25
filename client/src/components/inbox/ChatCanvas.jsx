@@ -30,6 +30,7 @@ import {
 import { useAuth } from '../../context/AuthContext';
 import { useChat } from '../../context/ChatContext';
 import { useSocket } from '../../context/SocketContext';
+import { useToast } from '../../context/ToastContext';
 
 const API_BASE = (import.meta.env.VITE_API_URL || '').replace(/\/+$/, '');
 
@@ -122,6 +123,7 @@ function AuthedMedia({ messageId, kind, token, filename }) {
 export default function ChatCanvas({ onOpenTemplatePicker, onToggleSidebar, isSidebarOpen, onBack }) {
   const { agent, isAdmin, token } = useAuth();
   const { emitTyping } = useSocket();
+  const toast = useToast();
   const {
     activeChat,
     messages,
@@ -176,7 +178,7 @@ export default function ChatCanvas({ onOpenTemplatePicker, onToggleSidebar, isSi
     try {
       await snoozeChat(activeChat.id, until ? until.toISOString() : null);
     } catch (err) {
-      alert(err.message);
+      toast.error(err.message);
     }
   };
 
@@ -373,7 +375,7 @@ export default function ChatCanvas({ onOpenTemplatePicker, onToggleSidebar, isSi
       // Never destroy the agent's text on a failed send: restore the draft
       // (unless they have already started typing something new).
       setInputContent((prev) => (prev.trim() ? prev : content));
-      alert(`Notice: ${err.message}`);
+      toast.info(err.message);
     } finally {
       setSending(false);
     }
@@ -403,7 +405,7 @@ export default function ChatCanvas({ onOpenTemplatePicker, onToggleSidebar, isSi
         mediaFilename: filename,
       });
     } catch (err) {
-      alert(`Attachment error: ${err.message}`);
+      toast.error(err.message);
     } finally {
       setSending(false);
     }
@@ -465,7 +467,7 @@ export default function ChatCanvas({ onOpenTemplatePicker, onToggleSidebar, isSi
       await qrApi('DELETE', `/${reply.id}`);
       await refreshQuickReplies();
     } catch (err) {
-      alert(err.message);
+      toast.error(err.message);
     }
   };
 
@@ -724,7 +726,7 @@ export default function ChatCanvas({ onOpenTemplatePicker, onToggleSidebar, isSi
               <div style={{ position: 'relative' }}>
                 <select
                   value={activeChat.assignedAgentId || ''}
-                  onChange={(e) => assignChat(activeChat.id, e.target.value || null).catch((err) => alert(err.message))}
+                  onChange={(e) => assignChat(activeChat.id, e.target.value || null).catch((err) => toast.error(err.message))}
                   style={{
                     background: 'var(--bg-surface)',
                     color: '#fff',
@@ -753,7 +755,7 @@ export default function ChatCanvas({ onOpenTemplatePicker, onToggleSidebar, isSi
               </div>
             ) : isUnassigned ? (
               <button
-                onClick={() => assignChat(activeChat.id, agent.id).catch((err) => alert(err.message))}
+                onClick={() => assignChat(activeChat.id, agent.id).catch((err) => toast.error(err.message))}
                 className="btn btn-primary"
                 style={{ padding: '5px 10px', fontSize: '11.5px' }}
               >
@@ -769,7 +771,7 @@ export default function ChatCanvas({ onOpenTemplatePicker, onToggleSidebar, isSi
           {/* Resolve / Reopen Button */}
           {isResolved ? (
             <button
-              onClick={() => updateChatStatus(activeChat.id, 'OPEN').catch((err) => alert(err.message))}
+              onClick={() => updateChatStatus(activeChat.id, 'OPEN').catch((err) => toast.error(err.message))}
               className="btn btn-secondary chat-header-action"
               style={{ width: '34px', height: '34px', padding: 0 }}
               title="Reopen Conversation"
@@ -778,7 +780,7 @@ export default function ChatCanvas({ onOpenTemplatePicker, onToggleSidebar, isSi
             </button>
           ) : (
             <button
-              onClick={() => updateChatStatus(activeChat.id, 'RESOLVED').catch((err) => alert(err.message))}
+              onClick={() => updateChatStatus(activeChat.id, 'RESOLVED').catch((err) => toast.error(err.message))}
               className="btn btn-secondary chat-header-action"
               style={{ width: '34px', height: '34px', padding: 0 }}
               title="Mark Resolved"
@@ -871,7 +873,7 @@ export default function ChatCanvas({ onOpenTemplatePicker, onToggleSidebar, isSi
         {messagePagination?.hasMore && (
           <button
             type="button"
-            onClick={() => loadOlderMessages().catch((error) => alert(error.message))}
+            onClick={() => loadOlderMessages().catch((error) => toast.error(error.message))}
             className="btn btn-secondary"
             style={{ alignSelf: 'center', fontSize: '11px', padding: '5px 10px' }}
           >
@@ -1423,7 +1425,7 @@ export default function ChatCanvas({ onOpenTemplatePicker, onToggleSidebar, isSi
               onClick={() => {
                 const url = attachUrl.trim();
                 if (!/^https:\/\//i.test(url)) {
-                  alert('Please paste a valid https:// file URL.');
+                  toast.error('Please paste a valid https:// file URL.');
                   return;
                 }
                 const fromUrl = url.split('/').pop().split('?')[0];

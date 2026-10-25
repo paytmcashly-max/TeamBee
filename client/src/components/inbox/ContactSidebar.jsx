@@ -19,9 +19,11 @@ import {
   Award,
 } from 'lucide-react';
 import { useChat } from '../../context/ChatContext';
+import { useToast } from '../../context/ToastContext';
 
 export default function ContactSidebar({ onOpenTemplatePicker, onClose }) {
   const { activeChat, updateChatTags, updateContact, messagingWindow } = useChat();
+  const toast = useToast();
 
   const [isEditingName, setIsEditingName] = useState(false);
   const [nameInput, setNameInput] = useState('');
@@ -56,12 +58,12 @@ export default function ContactSidebar({ onOpenTemplatePicker, onClose }) {
     try {
       const result = await updateContact(activeChat.id, { name: nameInput.trim() });
       if (!result?.success) {
-        alert(result?.error || 'Failed to save the contact name');
+        toast.error(result?.error || 'Failed to save the contact name');
         return;
       }
       setIsEditingName(false);
     } catch (err) {
-      alert(err.message || 'Failed to save the contact name');
+      toast.error(err.message || 'Failed to save the contact name');
     }
   };
 
@@ -72,11 +74,11 @@ export default function ContactSidebar({ onOpenTemplatePicker, onClose }) {
       try {
         const result = await updateChatTags(activeChat.id, [...tags, tag]);
         if (!result?.success) {
-          alert(result?.error || 'Failed to add the tag');
+          toast.error(result?.error || 'Failed to add the tag');
           return;
         }
       } catch (err) {
-        alert(err.message || 'Failed to add the tag');
+        toast.error(err.message || 'Failed to add the tag');
         return;
       }
     }
@@ -88,9 +90,9 @@ export default function ContactSidebar({ onOpenTemplatePicker, onClose }) {
     const updated = tags.filter((t) => t !== tagToRemove);
     try {
       const result = await updateChatTags(activeChat.id, updated);
-      if (!result?.success) alert(result?.error || 'Failed to remove the tag');
+      if (!result?.success) toast.error(result?.error || 'Failed to remove the tag');
     } catch (err) {
-      alert(err.message || 'Failed to remove the tag');
+      toast.error(err.message || 'Failed to remove the tag');
     }
   };
 
@@ -103,11 +105,11 @@ export default function ContactSidebar({ onOpenTemplatePicker, onClose }) {
     try {
       const result = await updateContact(activeChat.id, { customAttributes: updatedAttrs });
       if (!result?.success) {
-        alert(result?.error || 'Failed to save the field');
+        toast.error(result?.error || 'Failed to save the field');
         return;
       }
     } catch (err) {
-      alert(err.message || 'Failed to save the field');
+      toast.error(err.message || 'Failed to save the field');
       return;
     }
     setFieldKey('');
@@ -120,9 +122,9 @@ export default function ContactSidebar({ onOpenTemplatePicker, onClose }) {
     delete updatedAttrs[keyToRemove];
     try {
       const result = await updateContact(activeChat.id, { customAttributes: updatedAttrs });
-      if (!result?.success) alert(result?.error || 'Failed to remove the field');
+      if (!result?.success) toast.error(result?.error || 'Failed to remove the field');
     } catch (err) {
-      alert(err.message || 'Failed to remove the field');
+      toast.error(err.message || 'Failed to remove the field');
     }
   };
 

@@ -5,6 +5,7 @@ import './index.css';
 import { AuthProvider } from './context/AuthContext';
 import { SocketProvider } from './context/SocketContext';
 import { ChatProvider } from './context/ChatContext';
+import { ToastProvider } from './context/ToastContext';
 
 // Direct API calls to backend cloud service when configured
 const API_URL = import.meta.env.VITE_API_URL || '';
@@ -55,12 +56,14 @@ const API_URL = import.meta.env.VITE_API_URL || '';
 
 ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode>
-    <AuthProvider>
-      <SocketProvider>
-        <ChatProvider>
-          <App />
-        </ChatProvider>
-      </SocketProvider>
-    </AuthProvider>
+    <ToastProvider>
+      <AuthProvider>
+        <SocketProvider>
+          <ChatProvider>
+            <App />
+          </ChatProvider>
+        </SocketProvider>
+      </AuthProvider>
+    </ToastProvider>
   </React.StrictMode>
 );
