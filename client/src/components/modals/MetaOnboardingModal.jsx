@@ -184,7 +184,7 @@ export default function MetaOnboardingModal({ isOpen, onClose }) {
                 value={formData.webhookUrl}
                 style={{
                   flex: 1,
-                  background: '#090d16',
+                  background: 'var(--bg-app)',
                   border: '1px solid var(--border-medium)',
                   borderRadius: '6px',
                   padding: '7px 10px',

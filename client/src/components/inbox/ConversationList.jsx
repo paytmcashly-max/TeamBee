@@ -303,7 +303,7 @@ export default function ConversationList({
                       top: 'calc(100% + 6px)',
                       right: 0,
                       minWidth: '224px',
-                      background: '#111827',
+                      background: 'var(--bg-menu)',
                       border: '1px solid var(--border-subtle)',
                       borderRadius: '12px',
                       boxShadow: '0 18px 40px rgba(0, 0, 0, 0.55)',

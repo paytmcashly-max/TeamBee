@@ -4,7 +4,7 @@ import { useAuth } from '../../context/AuthContext';
 
 const inputStyle = {
   width: '100%',
-  background: '#0b1120',
+  background: 'var(--bg-input)',
   border: '1px solid rgba(255, 255, 255, 0.12)',
   borderRadius: '8px',
   padding: '12px 14px',
@@ -254,7 +254,7 @@ export default function LoginView() {
                     gap: '12px',
                     width: '100%',
                     textAlign: 'left',
-                    background: '#0b1120',
+                    background: 'var(--bg-input)',
                     border: '1px solid rgba(255, 255, 255, 0.12)',
                     borderRadius: '12px',
                     padding: '13px 14px',
@@ -268,7 +268,7 @@ export default function LoginView() {
                   }}
                   onMouseLeave={(e) => {
                     e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.12)';
-                    e.currentTarget.style.background = '#0b1120';
+                    e.currentTarget.style.background = 'var(--bg-input)';
                   }}
                 >
                   <span
@@ -389,7 +389,7 @@ export default function LoginView() {
                           gap: '11px',
                           width: '100%',
                           textAlign: 'left',
-                          background: selected ? 'rgba(37, 211, 102, 0.07)' : '#0b1120',
+                          background: selected ? 'rgba(37, 211, 102, 0.07)' : 'var(--bg-input)',
                           border: selected
                             ? '1px solid rgba(37, 211, 102, 0.6)'
                             : '1px solid rgba(255, 255, 255, 0.12)',

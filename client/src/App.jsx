@@ -117,7 +117,7 @@ export default function App() {
           alignItems: 'center',
           justifyContent: 'center',
           height: '100vh',
-          background: '#090d16',
+          background: 'var(--bg-app)',
           color: '#25D366',
           fontSize: '15px',
           fontWeight: '600',

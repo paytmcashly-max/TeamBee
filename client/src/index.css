@@ -13,6 +13,8 @@
 
   /* Theme: Slate / Dark Luxury Glassmorphism */
   --bg-app: #080c15;
+  --bg-input: #0b1120;
+  --bg-menu: #111827;
   --bg-sidebar: #0e1524;
   --bg-surface: #141f33;
   --bg-surface-hover: #1c2b46;
@@ -956,4 +958,18 @@ h1, h2, h3, h4, h5, h6 {
     bottom: 24px;
     width: 360px;
   }
+}
+
+/* Visible keyboard focus — before this, no :focus-visible style existed
+   anywhere, so Tab-key users navigated blind. Fields keep their border
+   glow instead of a double indicator. */
+:focus-visible {
+  outline: 2px solid var(--wa-primary);
+  outline-offset: 2px;
+  border-radius: 6px;
+}
+input:focus-visible,
+textarea:focus-visible,
+select:focus-visible {
+  outline: none;
 }

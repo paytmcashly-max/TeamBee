@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "prebuild": "node -e \"const fs=require('fs');fs.mkdirSync('public/icons',{recursive:true});for(const s of ['512','192','180']){fs.writeFileSync('public/icons/icon-'+s+'.png',Buffer.from(fs.readFileSync('public/icons-src/icon-'+s+'.b64','utf8').trim(),'base64'))}console.log('PWA icons decoded from icons-src')\"",
     "build": "vite build",
     "preview": "vite preview"
   },

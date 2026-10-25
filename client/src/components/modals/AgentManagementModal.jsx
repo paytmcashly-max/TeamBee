@@ -357,7 +357,7 @@ export default function AgentManagementModal({ isOpen, onClose }) {
                   value={automation.officeHoursStart}
                   disabled={!isAdmin}
                   onChange={(e) => setAutomation((p) => ({ ...p, officeHoursStart: e.target.value }))}
-                  style={{ width: '100%', background: '#0b1120', border: '1px solid var(--border-medium)', borderRadius: '7px', padding: '7px 9px', color: '#fff', fontSize: '12.5px' }}
+                  style={{ width: '100%', background: 'var(--bg-input)', border: '1px solid var(--border-medium)', borderRadius: '7px', padding: '7px 9px', color: '#fff', fontSize: '12.5px' }}
                 />
               </div>
               <div>
@@ -367,7 +367,7 @@ export default function AgentManagementModal({ isOpen, onClose }) {
                   value={automation.officeHoursEnd}
                   disabled={!isAdmin}
                   onChange={(e) => setAutomation((p) => ({ ...p, officeHoursEnd: e.target.value }))}
-                  style={{ width: '100%', background: '#0b1120', border: '1px solid var(--border-medium)', borderRadius: '7px', padding: '7px 9px', color: '#fff', fontSize: '12.5px' }}
+                  style={{ width: '100%', background: 'var(--bg-input)', border: '1px solid var(--border-medium)', borderRadius: '7px', padding: '7px 9px', color: '#fff', fontSize: '12.5px' }}
                 />
               </div>
             </div>
@@ -408,7 +408,7 @@ export default function AgentManagementModal({ isOpen, onClose }) {
                   value={automation.awayTemplateName}
                   disabled={!isAdmin}
                   onChange={(e) => setAutomation((p) => ({ ...p, awayTemplateName: e.target.value }))}
-                  style={{ width: '100%', background: '#0b1120', border: '1px solid var(--border-medium)', borderRadius: '7px', padding: '7px 9px', color: '#fff', fontSize: '12.5px' }}
+                  style={{ width: '100%', background: 'var(--bg-input)', border: '1px solid var(--border-medium)', borderRadius: '7px', padding: '7px 9px', color: '#fff', fontSize: '12.5px' }}
                 >
                   <option value="">None — no away reply</option>
                   {automationTemplates.map((t) => (
@@ -426,7 +426,7 @@ export default function AgentManagementModal({ isOpen, onClose }) {
                   disabled={!isAdmin}
                   onChange={(e) => setAutomation((p) => ({ ...p, officeHoursTimezone: e.target.value }))}
                   placeholder="Asia/Kolkata"
-                  style={{ width: '100%', background: '#0b1120', border: '1px solid var(--border-medium)', borderRadius: '7px', padding: '7px 9px', color: '#fff', fontSize: '12.5px' }}
+                  style={{ width: '100%', background: 'var(--bg-input)', border: '1px solid var(--border-medium)', borderRadius: '7px', padding: '7px 9px', color: '#fff', fontSize: '12.5px' }}
                 />
               </div>
             </div>
@@ -483,7 +483,7 @@ export default function AgentManagementModal({ isOpen, onClose }) {
                   onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                   required
                   style={{
-                    background: '#090d16',
+                    background: 'var(--bg-app)',
                     border: '1px solid var(--border-subtle)',
                     borderRadius: '6px',
                     padding: '8px 10px',
@@ -498,7 +498,7 @@ export default function AgentManagementModal({ isOpen, onClose }) {
                   onChange={(e) => setFormData({ ...formData, email: e.target.value })}
                   required
                   style={{
-                    background: '#090d16',
+                    background: 'var(--bg-app)',
                     border: '1px solid var(--border-subtle)',
                     borderRadius: '6px',
                     padding: '8px 10px',
@@ -515,7 +515,7 @@ export default function AgentManagementModal({ isOpen, onClose }) {
                   onChange={(e) => setFormData({ ...formData, password: e.target.value })}
                   required
                   style={{
-                    background: '#090d16',
+                    background: 'var(--bg-app)',
                     border: '1px solid var(--border-subtle)',
                     borderRadius: '6px',
                     padding: '8px 10px',
@@ -527,7 +527,7 @@ export default function AgentManagementModal({ isOpen, onClose }) {
                   value={formData.role}
                   onChange={(e) => setFormData({ ...formData, role: e.target.value })}
                   style={{
-                    background: '#090d16',
+                    background: 'var(--bg-app)',
                     border: '1px solid var(--border-subtle)',
                     borderRadius: '6px',
                     padding: '8px 10px',
@@ -652,7 +652,7 @@ export default function AgentManagementModal({ isOpen, onClose }) {
                       onChange={(e) => setResetPasswordValue(e.target.value)}
                       style={{
                         flex: 1,
-                        background: '#090d16',
+                        background: 'var(--bg-app)',
                         border: '1px solid var(--border-subtle)',
                         borderRadius: '6px',
                         padding: '7px 10px',
@@ -698,7 +698,7 @@ export default function AgentManagementModal({ isOpen, onClose }) {
                 onChange={(e) => setOwnPasswords({ ...ownPasswords, current: e.target.value })}
                 required
                 style={{
-                  background: '#090d16',
+                  background: 'var(--bg-app)',
                   border: '1px solid var(--border-subtle)',
                   borderRadius: '6px',
                   padding: '8px 10px',
@@ -714,7 +714,7 @@ export default function AgentManagementModal({ isOpen, onClose }) {
                 onChange={(e) => setOwnPasswords({ ...ownPasswords, next: e.target.value })}
                 required
                 style={{
-                  background: '#090d16',
+                  background: 'var(--bg-app)',
                   border: '1px solid var(--border-subtle)',
                   borderRadius: '6px',
                   padding: '8px 10px',

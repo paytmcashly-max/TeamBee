@@ -672,7 +672,7 @@ export default function ChatCanvas({ onOpenTemplatePicker, onToggleSidebar, isSi
                     top: 'calc(100% + 6px)',
                     right: 0,
                     minWidth: '190px',
-                    background: '#111827',
+                    background: 'var(--bg-menu)',
                     border: '1px solid var(--border-subtle)',
                     borderRadius: '10px',
                     boxShadow: '0 18px 40px rgba(0,0,0,0.55)',
@@ -1265,14 +1265,14 @@ export default function ChatCanvas({ onOpenTemplatePicker, onToggleSidebar, isSi
                 onChange={(e) => setQrForm({ ...qrForm, title: e.target.value })}
                 placeholder="Title, e.g. Price list"
                 maxLength={80}
-                style={{ background: '#0b1120', border: '1px solid var(--border-medium)', borderRadius: '7px', padding: '8px 10px', color: '#fff', fontSize: '12px' }}
+                style={{ background: 'var(--bg-input)', border: '1px solid var(--border-medium)', borderRadius: '7px', padding: '8px 10px', color: '#fff', fontSize: '12px' }}
               />
               <input
                 value={qrForm.shortcut || ''}
                 onChange={(e) => setQrForm({ ...qrForm, shortcut: e.target.value })}
                 placeholder="Shortcut (optional), e.g. price — type /price in the composer"
                 maxLength={40}
-                style={{ background: '#0b1120', border: '1px solid var(--border-medium)', borderRadius: '7px', padding: '8px 10px', color: '#fff', fontSize: '12px' }}
+                style={{ background: 'var(--bg-input)', border: '1px solid var(--border-medium)', borderRadius: '7px', padding: '8px 10px', color: '#fff', fontSize: '12px' }}
               />
               <textarea
                 value={qrForm.body}
@@ -1280,7 +1280,7 @@ export default function ChatCanvas({ onOpenTemplatePicker, onToggleSidebar, isSi
                 placeholder="The message text agents will insert…"
                 rows={3}
                 maxLength={1000}
-                style={{ background: '#0b1120', border: '1px solid var(--border-medium)', borderRadius: '7px', padding: '8px 10px', color: '#fff', fontSize: '12px', resize: 'vertical' }}
+                style={{ background: 'var(--bg-input)', border: '1px solid var(--border-medium)', borderRadius: '7px', padding: '8px 10px', color: '#fff', fontSize: '12px', resize: 'vertical' }}
               />
               {qrError && <div style={{ fontSize: '11.5px', color: '#fca5a5' }}>{qrError}</div>}
               <div style={{ display: 'flex', gap: '8px' }}>
@@ -1299,7 +1299,7 @@ export default function ChatCanvas({ onOpenTemplatePicker, onToggleSidebar, isSi
                 onChange={(e) => setQrSearch(e.target.value)}
                 placeholder="Search replies or shortcuts…"
                 autoFocus
-                style={{ width: '100%', background: '#0b1120', border: '1px solid var(--border-medium)', borderRadius: '7px', padding: '8px 10px', color: '#fff', fontSize: '12px', marginBottom: '9px' }}
+                style={{ width: '100%', background: 'var(--bg-input)', border: '1px solid var(--border-medium)', borderRadius: '7px', padding: '8px 10px', color: '#fff', fontSize: '12px', marginBottom: '9px' }}
               />
               {visibleQuickReplies.length === 0 ? (
                 <div style={{ fontSize: '12px', color: 'var(--text-muted)', padding: '6px 2px 10px 2px' }}>
@@ -1414,7 +1414,7 @@ export default function ChatCanvas({ onOpenTemplatePicker, onToggleSidebar, isSi
               onChange={(e) => setAttachUrl(e.target.value)}
               placeholder="Paste a public file URL (https://...)"
               aria-label="Attachment URL"
-              style={{ background: '#0b1120', border: '1px solid rgba(255,255,255,0.12)', borderRadius: '6px', padding: '7px 9px', color: '#fff', fontSize: '12px', width: '100%' }}
+              style={{ background: 'var(--bg-input)', border: '1px solid rgba(255,255,255,0.12)', borderRadius: '6px', padding: '7px 9px', color: '#fff', fontSize: '12px', width: '100%' }}
             />
             <input
               type="text"
@@ -1422,7 +1422,7 @@ export default function ChatCanvas({ onOpenTemplatePicker, onToggleSidebar, isSi
               onChange={(e) => setAttachName(e.target.value)}
               placeholder="File name (optional)"
               aria-label="Attachment file name"
-              style={{ background: '#0b1120', border: '1px solid rgba(255,255,255,0.12)', borderRadius: '6px', padding: '7px 9px', color: '#fff', fontSize: '12px', width: '100%' }}
+              style={{ background: 'var(--bg-input)', border: '1px solid rgba(255,255,255,0.12)', borderRadius: '6px', padding: '7px 9px', color: '#fff', fontSize: '12px', width: '100%' }}
             />
             <button
               onClick={() => {

@@ -342,7 +342,7 @@ export default function TemplateModal({ isOpen, onClose }) {
           <div
             style={{
               padding: '20px',
-              background: '#090d16',
+              background: 'var(--bg-app)',
               display: 'flex',
               flexDirection: 'column',
               justifyContent: 'space-between',
