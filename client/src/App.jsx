@@ -62,6 +62,53 @@ export default function App() {
     }
   };
 
+  // iOS Safari keyboard handling: the interactive-widget viewport keyword
+  // is not shipped in Safari, so there the layout viewport does NOT shrink
+  // when the keyboard opens and the in-flow composer can end up hidden
+  // behind the keyboard. Track the VisualViewport instead: while the
+  // keyboard is open, size the app shell to the visible area (its height
+  // + offsetTop). Android Chrome already resizes the layout viewport via
+  // interactive-widget=resizes-content, so this fallback runs on iOS only.
+  const appShellRef = useRef(null);
+  useEffect(() => {
+    const vv = window.visualViewport;
+    const el = appShellRef.current;
+    if (!vv || !el) return;
+    const isIOS =
+      /iPhone|iPad|iPod/.test(navigator.userAgent) ||
+      (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+    if (!isIOS) return;
+    let raf = 0;
+    const apply = () => {
+      cancelAnimationFrame(raf);
+      raf = requestAnimationFrame(() => {
+        if (vv.scale !== 1) {
+          el.style.height = '';
+          el.style.transform = '';
+          return;
+        }
+        const keyboardOpen = vv.height < window.innerHeight - 60;
+        if (keyboardOpen) {
+          el.style.height = `${Math.round(vv.height)}px`;
+          el.style.transform = `translateY(${Math.round(vv.offsetTop)}px)`;
+        } else {
+          el.style.height = '';
+          el.style.transform = '';
+        }
+      });
+    };
+    vv.addEventListener('resize', apply);
+    vv.addEventListener('scroll', apply);
+    apply();
+    return () => {
+      vv.removeEventListener('resize', apply);
+      vv.removeEventListener('scroll', apply);
+      cancelAnimationFrame(raf);
+      el.style.height = '';
+      el.style.transform = '';
+    };
+  }, [agent]);
+
   if (loading) {
     return (
       <div
@@ -87,7 +134,7 @@ export default function App() {
 
   return (
     <ErrorBoundary>
-    <div className="app-container">
+    <div className="app-container" ref={appShellRef}>
       {!connected && (
         <div className="connection-banner" role="alert">
           Connection lost — reconnecting to TeamBee… New messages will appear once the connection is back.

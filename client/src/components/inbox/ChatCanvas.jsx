@@ -25,6 +25,7 @@ import {
   MapPin,
   Flame,
   ArrowLeft,
+  Copy,
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { useChat } from '../../context/ChatContext';
@@ -103,13 +104,13 @@ function AuthedMedia({ messageId, kind, token, filename }) {
     );
   }
   if (kind === 'IMAGE') {
-    return <img src={objectUrl} alt="WhatsApp Attachment" style={{ maxWidth: '100%', maxHeight: '200px', borderRadius: '8px', display: 'block', objectFit: 'cover' }} />;
+    return <img src={objectUrl} alt="WhatsApp Attachment" loading="lazy" decoding="async" style={{ maxWidth: '100%', maxHeight: '200px', borderRadius: '8px', display: 'block', objectFit: 'cover' }} />;
   }
   if (kind === 'AUDIO') {
     return <audio controls src={objectUrl} style={{ maxWidth: '100%' }} />;
   }
   if (kind === 'VIDEO') {
-    return <video controls src={objectUrl} style={{ maxWidth: '100%', maxHeight: '220px', borderRadius: '8px', display: 'block' }} />;
+    return <video controls preload="metadata" src={objectUrl} style={{ maxWidth: '100%', maxHeight: '220px', borderRadius: '8px', display: 'block' }} />;
   }
   return (
     <a href={objectUrl} target="_blank" rel="noreferrer" style={{ color: '#38bdf8', fontSize: '11.5px', fontWeight: 500 }}>
@@ -203,6 +204,60 @@ export default function ChatCanvas({ onOpenTemplatePicker, onToggleSidebar, isSi
   const textareaRef = useRef(null);
   const stickToBottomRef = useRef(true);
   const typingTimeoutRef = useRef(null);
+
+  // Message actions (long-press on touch, right-click on desktop): a
+  // small action sheet for the message — today it offers Copy for any
+  // message that carries text. The send API has no reply-context support
+  // yet, so Reply is deliberately not offered rather than faked.
+  const [msgMenuMsg, setMsgMenuMsg] = useState(null);
+  const pressTimerRef = useRef(null);
+  const openMsgMenu = (msg) => {
+    if (navigator.vibrate) {
+      try {
+        navigator.vibrate(10);
+      } catch (err) {}
+    }
+    setMsgMenuMsg(msg);
+  };
+  const msgPressProps = (msg) => {
+    if (!msg?.content) return {};
+    return {
+      onTouchStart: () => {
+        clearTimeout(pressTimerRef.current);
+        pressTimerRef.current = setTimeout(() => openMsgMenu(msg), 500);
+      },
+      onTouchEnd: () => clearTimeout(pressTimerRef.current),
+      onTouchMove: () => clearTimeout(pressTimerRef.current),
+      onContextMenu: (e) => {
+        e.preventDefault();
+        openMsgMenu(msg);
+      },
+    };
+  };
+  const copyMsgText = async () => {
+    const text = msgMenuMsg?.content || '';
+    setMsgMenuMsg(null);
+    try {
+      await navigator.clipboard.writeText(text);
+    } catch (err) {
+      const ta = document.createElement('textarea');
+      ta.value = text;
+      document.body.appendChild(ta);
+      ta.select();
+      try {
+        document.execCommand('copy');
+      } catch (err2) {}
+      ta.remove();
+    }
+  };
+  useEffect(() => {
+    if (!msgMenuMsg) return undefined;
+    const onKey = (e) => {
+      if (e.key === 'Escape') setMsgMenuMsg(null);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [msgMenuMsg]);
 
   // Auto-scroll follows new messages ONLY while the agent is already near
   // the bottom — yanking the view down while they read history (or select
@@ -785,6 +840,8 @@ export default function ChatCanvas({ onOpenTemplatePicker, onToggleSidebar, isSi
       {/* 3. Messages Stream */}
       <div
         className="messages-stream"
+        role="log"
+        aria-label="Chat messages"
         ref={messagesContainerRef}
         onScroll={handleMessageScroll}
         style={{
@@ -925,6 +982,7 @@ export default function ChatCanvas({ onOpenTemplatePicker, onToggleSidebar, isSi
             return (
               <div
                 key={msg.id}
+                {...msgPressProps(msg)}
                 style={{
                   display: 'flex',
                   flexDirection: 'column',
@@ -946,6 +1004,8 @@ export default function ChatCanvas({ onOpenTemplatePicker, onToggleSidebar, isSi
                         <img
                           src={msg.mediaUrl}
                           alt="WhatsApp Attachment"
+                          loading="lazy"
+                          decoding="async"
                           style={{
                             maxWidth: '100%',
                             maxHeight: '200px',
@@ -984,7 +1044,7 @@ export default function ChatCanvas({ onOpenTemplatePicker, onToggleSidebar, isSi
                   {msg.messageType === 'VIDEO' && (
                     <div style={{ marginBottom: '6px' }}>
                       {msg.mediaUrl ? (
-                        <video controls src={msg.mediaUrl} style={{ maxWidth: '100%', maxHeight: '220px', borderRadius: '8px', display: 'block' }} />
+                        <video controls preload="metadata" src={msg.mediaUrl} style={{ maxWidth: '100%', maxHeight: '220px', borderRadius: '8px', display: 'block' }} />
                       ) : msg.mediaId ? (
                         <AuthedMedia messageId={msg.id} kind="VIDEO" token={token} filename={msg.mediaFilename} />
                       ) : (
@@ -1702,6 +1762,23 @@ export default function ChatCanvas({ onOpenTemplatePicker, onToggleSidebar, isSi
           </button>
         </form>
       </div>
+
+      {/* Message action sheet (long-press / right-click on a message) */}
+      {msgMenuMsg && (
+        <div className="msg-menu-backdrop" onClick={() => setMsgMenuMsg(null)}>
+          <div
+            className="msg-menu-sheet"
+            role="menu"
+            aria-label="Message actions"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="msg-menu-preview">{msgMenuMsg.content}</div>
+            <button type="button" className="msg-menu-action" onClick={copyMsgText}>
+              <Copy size={17} /> Copy text
+            </button>
+          </div>
+        </div>
+      )}
     </main>
   );
 }

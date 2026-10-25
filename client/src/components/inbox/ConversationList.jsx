@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   Search,
   Check,
@@ -15,6 +15,7 @@ import {
   LogOut,
   ArrowLeftRight,
   MoreVertical,
+  RotateCcw,
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { useChat } from '../../context/ChatContext';
@@ -80,8 +81,28 @@ export default function ConversationList({
     loadMoreChats,
     mentionAlert,
     clearMentionAlert,
+    snoozeChat,
+    updateChatStatus,
   } = useChat();
   const [selectedTag, setSelectedTag] = useState(null);
+
+  // Row swipe (touch): a left swipe on a conversation row reveals quick
+  // actions (Snooze 1h, Resolve/Reopen). The identical actions remain one
+  // tap away in the open chat's header, so nothing is swipe-only.
+  const SWIPE_RAIL_W = 148;
+  const [swipedChatId, setSwipedChatId] = useState(null);
+  const [dragState, setDragState] = useState(null); // {id, dx} while dragging
+  const swipeRef = useRef({ id: null });
+  const swallowClickRef = useRef(false);
+  const rowOffset = (chat) =>
+    dragState?.id === chat.id
+      ? dragState.dx
+      : swipedChatId === chat.id
+        ? -SWIPE_RAIL_W
+        : 0;
+  useEffect(() => {
+    setSwipedChatId(null);
+  }, [activeChatId]);
 
   const formatTime = (isoString) => {
     if (!isoString) return '';
@@ -573,7 +594,7 @@ export default function ConversationList({
       )}
 
       {/* Conversation Cards List */}
-      <div style={{ flex: 1, overflowY: 'auto' }}>
+      <div className="chat-list-scroll" style={{ flex: 1, overflowY: 'auto' }}>
         {loadingChats && chats.length === 0 ? (
           <div style={{ padding: '30px', textAlign: 'center', color: 'var(--text-muted)', fontSize: '13px' }}>
             Loading WhatsApp chats...
@@ -594,37 +615,161 @@ export default function ConversationList({
             const parsedTags = parseTags(chat.tags);
 
             return (
-              <div
-                key={chat.id}
-                role="button"
-                tabIndex={0}
-                aria-label={`Conversation with ${chat.contact?.name || chat.contact?.waId || 'customer'}`}
-                onClick={() => selectChat(chat.id)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter' || e.key === ' ') {
-                    e.preventDefault();
+              <div key={chat.id} style={{ position: 'relative', overflow: 'hidden' }}>
+                {/* Swipe action rail: revealed by a left swipe on the row */}
+                <div
+                  aria-hidden={swipedChatId !== chat.id}
+                  style={{
+                    position: 'absolute',
+                    top: 0,
+                    right: 0,
+                    bottom: 0,
+                    width: `${SWIPE_RAIL_W}px`,
+                    display: 'flex',
+                  }}
+                >
+                  <button
+                    type="button"
+                    tabIndex={swipedChatId === chat.id ? 0 : -1}
+                    aria-label={`Snooze conversation with ${chat.contact?.name || 'customer'} for 1 hour`}
+                    onClick={() => {
+                      setSwipedChatId(null);
+                      snoozeChat(chat.id, new Date(Date.now() + 60 * 60 * 1000).toISOString()).catch((err) =>
+                        alert(err.message)
+                      );
+                    }}
+                    style={{
+                      flex: 1,
+                      display: 'flex',
+                      flexDirection: 'column',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: '3px',
+                      border: 'none',
+                      background: 'rgba(245, 158, 11, 0.2)',
+                      color: '#fbbf24',
+                      fontSize: '10.5px',
+                      fontWeight: '600',
+                      cursor: 'pointer',
+                    }}
+                  >
+                    <Clock size={17} />
+                    Snooze 1h
+                  </button>
+                  <button
+                    type="button"
+                    tabIndex={swipedChatId === chat.id ? 0 : -1}
+                    aria-label={chat.status === 'RESOLVED' ? 'Reopen conversation' : 'Resolve conversation'}
+                    onClick={() => {
+                      setSwipedChatId(null);
+                      updateChatStatus(chat.id, chat.status === 'RESOLVED' ? 'OPEN' : 'RESOLVED').catch((err) =>
+                        alert(err.message)
+                      );
+                    }}
+                    style={{
+                      flex: 1,
+                      display: 'flex',
+                      flexDirection: 'column',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: '3px',
+                      border: 'none',
+                      background:
+                        chat.status === 'RESOLVED' ? 'rgba(59, 130, 246, 0.2)' : 'rgba(37, 211, 102, 0.18)',
+                      color: chat.status === 'RESOLVED' ? '#60a5fa' : '#4ade80',
+                      fontSize: '10.5px',
+                      fontWeight: '600',
+                      cursor: 'pointer',
+                    }}
+                  >
+                    {chat.status === 'RESOLVED' ? <RotateCcw size={17} /> : <CheckCheck size={17} />}
+                    {chat.status === 'RESOLVED' ? 'Reopen' : 'Resolve'}
+                  </button>
+                </div>
+                <div
+                  role="button"
+                  tabIndex={0}
+                  aria-label={`Conversation with ${chat.contact?.name || chat.contact?.waId || 'customer'}`}
+                  onClick={() => {
+                    if (swallowClickRef.current) {
+                      swallowClickRef.current = false;
+                      return;
+                    }
+                    if (swipedChatId) {
+                      setSwipedChatId(null);
+                      return;
+                    }
                     selectChat(chat.id);
-                  }
-                }}
-                style={{
-                  padding: '12px 16px',
-                  borderBottom: '1px solid var(--border-subtle)',
-                  background: isSelected ? 'var(--bg-surface-active)' : 'transparent',
-                  borderLeft: isSelected ? '3px solid var(--wa-primary)' : '3px solid transparent',
-                  cursor: 'pointer',
-                  transition: 'background 0.15s ease',
-                  position: 'relative',
-                  touchAction: 'manipulation',
-                  WebkitTapHighlightColor: 'transparent',
-                  userSelect: 'none',
-                }}
-                onMouseEnter={(e) => {
-                  if (!isSelected) e.currentTarget.style.background = 'var(--bg-surface)';
-                }}
-                onMouseLeave={(e) => {
-                  if (!isSelected) e.currentTarget.style.background = 'transparent';
-                }}
-              >
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault();
+                      selectChat(chat.id);
+                    }
+                  }}
+                  onTouchStart={(e) => {
+                    const t = e.touches[0];
+                    swipeRef.current = {
+                      id: chat.id,
+                      startX: t.clientX,
+                      startY: t.clientY,
+                      base: swipedChatId === chat.id ? -SWIPE_RAIL_W : 0,
+                      locked: null,
+                    };
+                  }}
+                  onTouchMove={(e) => {
+                    const s = swipeRef.current;
+                    if (s.id !== chat.id) return;
+                    const t = e.touches[0];
+                    const dx = t.clientX - s.startX;
+                    const dy = t.clientY - s.startY;
+                    if (!s.locked) {
+                      if (Math.abs(dy) > 10 && Math.abs(dy) > Math.abs(dx)) {
+                        s.locked = 'v';
+                        return;
+                      }
+                      if (Math.abs(dx) > 10) s.locked = 'h';
+                    }
+                    if (s.locked === 'h') {
+                      const next = Math.max(-SWIPE_RAIL_W, Math.min(0, s.base + dx));
+                      setDragState({ id: chat.id, dx: next });
+                    }
+                  }}
+                  onTouchEnd={() => {
+                    const s = swipeRef.current;
+                    if (s.id !== chat.id) return;
+                    if (s.locked === 'h') {
+                      const cur = dragState?.id === chat.id ? dragState.dx : s.base;
+                      setSwipedChatId(cur < -64 ? chat.id : null);
+                      swallowClickRef.current = true;
+                    }
+                    setDragState(null);
+                    swipeRef.current = { id: null };
+                  }}
+                  style={{
+                    padding: '12px 16px',
+                    borderBottom: '1px solid var(--border-subtle)',
+                    background: isSelected ? 'var(--bg-surface-active)' : 'var(--bg-sidebar)',
+                    borderLeft: isSelected ? '3px solid var(--wa-primary)' : '3px solid transparent',
+                    cursor: 'pointer',
+                    position: 'relative',
+                    zIndex: 1,
+                    transform: `translateX(${rowOffset(chat)}px)`,
+                    transition:
+                      dragState?.id === chat.id
+                        ? 'background 0.15s ease'
+                        : 'transform 0.2s ease, background 0.15s ease',
+                    touchAction: 'pan-y',
+                    WebkitTapHighlightColor: 'transparent',
+                    userSelect: 'none',
+                  }}
+                  onMouseEnter={(e) => {
+                    if (!isSelected) e.currentTarget.style.background = 'var(--bg-surface)';
+                  }}
+                  onMouseLeave={(e) => {
+                    if (!isSelected) e.currentTarget.style.background = 'var(--bg-sidebar)';
+                  }}
+                >
                 <div style={{ display: 'flex', gap: '12px', alignItems: 'flex-start' }}>
                   {/* Avatar with country code badge */}
                   <div style={{ position: 'relative' }}>
@@ -759,6 +904,7 @@ export default function ConversationList({
                         </span>
                       )}
                     </div>
+                  </div>
                   </div>
                 </div>
               </div>

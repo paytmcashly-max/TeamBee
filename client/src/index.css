@@ -112,6 +112,119 @@ input, textarea, select {
   overflow: hidden;
 }
 
+/* Scroll plumbing for an app shell: the page itself never rubber-bands,
+   chains or pull-to-refreshes; each inner scroller contains its own
+   chaining, so reaching the end of the list or thread never moves the
+   shell (the exact chat case in Chrome's overscroll-behavior guide). */
+html,
+body {
+  overscroll-behavior: none;
+}
+.messages-stream,
+.chat-list-scroll,
+.col-crm-sidebar,
+.modal-content {
+  overscroll-behavior: contain;
+}
+.messages-stream {
+  touch-action: pan-y;
+}
+
+/* Message action sheet (long-press / right-click): bottom sheet on
+   phones, a small centered card on larger screens. */
+.msg-menu-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(2, 6, 16, 0.55);
+  z-index: 200;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+}
+.msg-menu-sheet {
+  background: #10182b;
+  border: 1px solid var(--border-medium);
+  width: 100%;
+  border-radius: 16px 16px 0 0;
+  padding: 10px 12px calc(12px + env(safe-area-inset-bottom, 0px));
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.msg-menu-preview {
+  font-size: 12.5px;
+  color: var(--text-muted);
+  padding: 6px 8px;
+  max-height: 84px;
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+}
+.msg-menu-action {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 48px;
+  padding: 10px 8px;
+  border: none;
+  background: transparent;
+  color: #e2e8f0;
+  font-size: 14.5px;
+  border-radius: 10px;
+  cursor: pointer;
+  text-align: left;
+}
+.msg-menu-action:active {
+  background: rgba(255, 255, 255, 0.06);
+}
+@media (min-width: 769px) {
+  .msg-menu-backdrop {
+    align-items: center;
+  }
+  .msg-menu-sheet {
+    width: 340px;
+    border-radius: 14px;
+  }
+}
+
+/* Rendering performance for long threads: off-screen messages skip
+   layout and paint until they near the viewport; the intrinsic-size
+   estimate keeps the scrollbar honest and `auto` remembers each row's
+   real size after its first render. */
+.messages-stream > * {
+  content-visibility: auto;
+  contain-intrinsic-size: auto 72px;
+}
+
+/* Respect users who ask their system for less motion. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* Short viewports (landscape phones): slim the thread chrome so the
+   conversation keeps the room. */
+@media (max-height: 480px) {
+  .messages-stream {
+    padding-top: 8px !important;
+    padding-bottom: 8px !important;
+  }
+  .chat-composer-box {
+    padding-top: 6px !important;
+    padding-bottom: calc(6px + env(safe-area-inset-bottom, 0px)) !important;
+  }
+  .modal-content {
+    max-height: 100dvh;
+  }
+}
+
 /* 3-Column Layout Grid */
 .inbox-layout {
   display: flex;
