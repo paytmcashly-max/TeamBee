@@ -1,5 +1,9 @@
 const crypto = require('crypto');
 const prisma = require('../db/prisma');
+const { withSystemDb, rlsContextEnabled } = require('../db/withTenant');
+async function systemDb(fn) {
+  return rlsContextEnabled() ? withSystemDb((tx) => fn(tx)) : fn(prisma);
+}
 const {
   broadcastNewMessage,
   broadcastMessageStatus,
@@ -107,11 +111,11 @@ class WebhookParserService {
 
     let tenant = null;
     if (phoneNumberId) {
-      tenant = await prisma.tenant.findFirst({ where: { phoneNumberId } });
+      tenant = await systemDb((db) => db.tenant.findFirst({ where: { phoneNumberId } }));
       // When Meta supplies both identifiers they must identify the same tenant.
       if (tenant && wabaId && tenant.wabaId !== wabaId) return null;
     } else if (wabaId) {
-      tenant = await prisma.tenant.findFirst({ where: { wabaId } });
+      tenant = await systemDb((db) => db.tenant.findFirst({ where: { wabaId } }));
     }
 
     // Never route an unknown webhook to an arbitrary/primary tenant.

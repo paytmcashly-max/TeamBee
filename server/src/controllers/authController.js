@@ -6,6 +6,15 @@ const { getJwtSecret, verifyAccessToken, readCookie, invalidateAgentCache } = re
 const { hashSecret } = require('../services/credentialCrypto');
 const { logAuditEvent } = require('../services/auditLog');
 const { sendEmail, appBaseUrl } = require('../services/emailService');
+const { withSystemDb, rlsContextEnabled } = require('../db/withTenant');
+
+// Pre-auth data access (login, lookup, registration, password reset)
+// runs under the database 'system' RLS context once RLS_CONTEXT=on;
+// until then it uses the plain client, unchanged. `fn` receives a
+// client-like object (the transaction client or prisma itself).
+async function systemDb(fn) {
+  return rlsContextEnabled() ? withSystemDb((tx) => fn(tx)) : fn(prisma);
+}
 
 // Compared against when the account does not exist, so unknown-email and
 // wrong-password logins cost the same bcrypt time (no enumeration oracle).
@@ -110,11 +119,13 @@ class AuthController {
         return res.status(400).json({ success: false, error: 'A valid email is required' });
       }
 
-      const agents = await prisma.agent.findMany({
-        where: { email, isActive: true },
-        include: { tenant: true },
-        take: 25,
-      });
+      const agents = await systemDb((db) =>
+        db.agent.findMany({
+          where: { email, isActive: true },
+          include: { tenant: true },
+          take: 25,
+        })
+      );
 
       const byTenant = new Map();
       for (const agent of agents) {
@@ -150,9 +161,13 @@ class AuthController {
       // Resolve the account deterministically. The same email may exist in
       // several tenants; without a slug that is ambiguous, and findFirst
       // would silently pick an arbitrary workspace.
-      const matches = await prisma.agent.findMany({
-        where: { email },
-        include: { tenant: true },
+      const { matches, slugTenant } = await systemDb(async (db) => {
+        const found = await db.agent.findMany({
+          where: { email },
+          include: { tenant: true },
+        });
+        const tenant = tenantSlug ? await db.tenant.findUnique({ where: { slug: tenantSlug } }) : null;
+        return { matches: found, slugTenant: tenant };
       });
 
       // Account resolution. The same email may have an account in several
@@ -165,8 +180,7 @@ class AuthController {
       //    verified, so the picker cannot be used to enumerate workspaces).
       let agent = null;
       if (tenantSlug) {
-        const tenant = await prisma.tenant.findUnique({ where: { slug: tenantSlug } });
-        agent = tenant ? matches.find((candidate) => candidate.tenantId === tenant.id) || null : null;
+        agent = slugTenant ? matches.find((candidate) => candidate.tenantId === slugTenant.id) || null : null;
         const isValidPassword = await bcrypt.compare(password, agent ? agent.passwordHash : DUMMY_PASSWORD_HASH);
         if (!agent || !isValidPassword) {
           await logAuditEvent({ event: 'LOGIN_FAILED', req, metadata: { email } });
@@ -293,7 +307,7 @@ class AuthController {
       }
 
       // Check slug uniqueness
-      const existingTenant = await prisma.tenant.findUnique({ where: { slug: finalSlug } });
+      const existingTenant = await systemDb((db) => db.tenant.findUnique({ where: { slug: finalSlug } }));
       if (existingTenant) {
         return res.status(400).json({ success: false, error: 'A business with this slug or name already exists' });
       }
@@ -301,7 +315,10 @@ class AuthController {
       const passwordHash = await bcrypt.hash(password, 10);
 
       // Atomic creation of tenant + admin agent
-      const result = await prisma.$transaction(async (tx) => {
+      const runRegistrationTx = rlsContextEnabled()
+        ? (cb) => withSystemDb(cb)
+        : (cb) => prisma.$transaction(cb);
+      const result = await runRegistrationTx(async (tx) => {
         const tenant = await tx.tenant.create({
           data: {
             name: businessName,
@@ -473,11 +490,13 @@ class AuthController {
       if (!email || !EMAIL_PATTERN.test(email)) {
         return res.json(generic);
       }
-      const matches = await prisma.agent.findMany({
-        where: { email, isActive: true },
-        include: { tenant: true },
-        take: 3,
-      });
+      const matches = await systemDb((db) =>
+        db.agent.findMany({
+          where: { email, isActive: true },
+          include: { tenant: true },
+          take: 3,
+        })
+      );
       if (matches.length === 0) {
         return res.json(generic);
       }
@@ -486,13 +505,15 @@ class AuthController {
       for (const agent of matches) {
         const rawToken = crypto.randomBytes(32).toString('hex');
         const tokenHash = crypto.createHash('sha256').update(rawToken).digest('hex');
-        await prisma.agent.update({
-          where: { id: agent.id },
-          data: {
-            passwordResetTokenHash: tokenHash,
-            passwordResetExpiresAt: new Date(Date.now() + 60 * 60 * 1000),
-          },
-        });
+        await systemDb((db) =>
+          db.agent.update({
+            where: { id: agent.id },
+            data: {
+              passwordResetTokenHash: tokenHash,
+              passwordResetExpiresAt: new Date(Date.now() + 60 * 60 * 1000),
+            },
+          })
+        );
         await logAuditEvent({
           tenantId: agent.tenantId,
           agentId: agent.id,
@@ -541,23 +562,31 @@ class AuthController {
         return res.status(400).json({ success: false, error: 'Password is too long (maximum 72 bytes)' });
       }
       const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
-      const agent = await prisma.agent.findFirst({
-        where: { passwordResetTokenHash: tokenHash, isActive: true },
+      const passwordHash = await bcrypt.hash(password, 10);
+      // Find + consume atomically under the system context: the token
+      // hash is nulled in the same transaction that reads it, so a
+      // racing second request finds nothing.
+      const agent = await systemDb(async (db) => {
+        const found = await db.agent.findFirst({
+          where: { passwordResetTokenHash: tokenHash, isActive: true },
+        });
+        if (!found || !found.passwordResetExpiresAt || found.passwordResetExpiresAt.getTime() < Date.now()) {
+          return null;
+        }
+        await db.agent.update({
+          where: { id: found.id },
+          data: {
+            passwordHash,
+            passwordResetTokenHash: null,
+            passwordResetExpiresAt: null,
+            tokenVersion: { increment: 1 },
+          },
+        });
+        return found;
       });
-      if (!agent || !agent.passwordResetExpiresAt || agent.passwordResetExpiresAt.getTime() < Date.now()) {
+      if (!agent) {
         return res.status(400).json({ success: false, error: 'This reset link is invalid or has expired. Please request a new one.' });
       }
-
-      const passwordHash = await bcrypt.hash(password, 10);
-      await prisma.agent.update({
-        where: { id: agent.id },
-        data: {
-          passwordHash,
-          passwordResetTokenHash: null,
-          passwordResetExpiresAt: null,
-          tokenVersion: { increment: 1 },
-        },
-      });
       invalidateAgentCache(agent.id);
       await logAuditEvent({
         tenantId: agent.tenantId,

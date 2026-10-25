@@ -1,6 +1,10 @@
 const crypto = require('crypto');
 const WebhookParserService = require('../services/webhookParserService');
 const prisma = require('../db/prisma');
+const { withSystemDb, rlsContextEnabled } = require('../db/withTenant');
+async function systemDb(fn) {
+  return rlsContextEnabled() ? withSystemDb((tx) => fn(tx)) : fn(prisma);
+}
 const { decryptSecret, hashSecret } = require('../services/credentialCrypto');
 
 class WebhookController {
@@ -15,14 +19,14 @@ class WebhookController {
       const challenge = req.query['hub.challenge'];
 
        if (mode === 'subscribe' && typeof token === 'string' && typeof challenge === 'string' && challenge.length <= 2048) {
-         const tenant = await prisma.tenant.findFirst({
+         const tenant = await systemDb((db) => db.tenant.findFirst({
            where: {
              OR: [
                { webhookVerifyTokenHash: hashSecret(token) },
                { webhookVerifyToken: token },
              ],
            },
-         });
+         }));
          const configuredGlobalToken = process.env.META_WEBHOOK_VERIFY_TOKEN;
          const globalTokenMatches = configuredGlobalToken && timingSafeEqualStrings(token, configuredGlobalToken);
 

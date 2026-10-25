@@ -18,8 +18,16 @@ async function withTenantDb(tenantId, fn, options) {
   }, options);
 }
 
+// Phase 2 wiring is flag-gated: with RLS_CONTEXT=on, wrapped flows run
+// under their RLS context; with it off (the production default until
+// the Phase 3 cutover), call sites use the plain client exactly as
+// before — so shipping the wiring changes nothing until it is enabled.
+function rlsContextEnabled() {
+  return process.env.RLS_CONTEXT === 'on';
+}
+
 function withSystemDb(fn, options) {
   return withTenantDb('__system__', fn, options);
 }
 
-module.exports = { withTenantDb, withSystemDb };
+module.exports = { withTenantDb, withSystemDb, rlsContextEnabled };
