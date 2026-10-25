@@ -1,5 +1,6 @@
 const jwt = require('jsonwebtoken');
 const prisma = require('../db/prisma');
+const { withTenantDb, rlsContextEnabled } = require('../db/withTenant');
 
 // Secrets must be supplied by the runtime.  Keeping a fallback here would make a
 // deployment with a missing environment variable accept tokens signed with a
@@ -49,11 +50,17 @@ async function loadAgent(agentId, decoded) {
     return cached.agent;
   }
   if (!agentCacheInflight.has(agentId)) {
+    // Under RLS the agent row is only visible inside its tenant's
+    // context — the tenant id rides in the verified token claims.
+    const fetchAgent =
+      rlsContextEnabled() && decoded?.tenantId
+        ? withTenantDb(decoded.tenantId, (tx) =>
+            tx.agent.findUnique({ where: { id: agentId }, include: { tenant: true } })
+          )
+        : prisma.agent.findUnique({ where: { id: agentId }, include: { tenant: true } });
     agentCacheInflight.set(
       agentId,
-      prisma.agent
-        .findUnique({ where: { id: agentId }, include: { tenant: true } })
-        .finally(() => agentCacheInflight.delete(agentId))
+      fetchAgent.finally(() => agentCacheInflight.delete(agentId))
     );
   }
   const agent = await agentCacheInflight.get(agentId);
@@ -122,6 +129,10 @@ async function authenticateToken(req, res, next) {
     req.agent = agent;
     req.tenantId = agent.tenantId;
     req.tenant = agent.tenant;
+    // Request-scoped tenant DB accessor for handlers: runs the callback
+    // inside this tenant's RLS context when enabled, else on the plain
+    // client (today's behaviour).
+    req.db = (fn) => (rlsContextEnabled() ? withTenantDb(req.tenantId, fn) : fn(prisma));
 
     next();
   } catch (error) {

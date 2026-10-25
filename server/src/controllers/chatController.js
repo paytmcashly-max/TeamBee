@@ -114,17 +114,19 @@ class ChatController {
         }
       }
 
-      const rows = await prisma.chat.findMany({
-        where: whereClause,
-        include: {
-          contact: true,
-          assignedAgent: {
-            select: { id: true, name: true, email: true, avatarUrl: true, role: true },
+      const rows = await req.db((db) =>
+        db.chat.findMany({
+          where: whereClause,
+          include: {
+            contact: true,
+            assignedAgent: {
+              select: { id: true, name: true, email: true, avatarUrl: true, role: true },
+            },
           },
-        },
-        orderBy: [{ lastMessageAt: 'desc' }, { id: 'desc' }],
-        take: requestedLimit + 1,
-      });
+          orderBy: [{ lastMessageAt: 'desc' }, { id: 'desc' }],
+          take: requestedLimit + 1,
+        })
+      );
       const hasMore = rows.length > requestedLimit;
       const chats = hasMore ? rows.slice(0, requestedLimit) : rows;
       const lastRow = chats[chats.length - 1];
@@ -147,15 +149,17 @@ class ChatController {
       const { id } = req.params;
       const { role, id: agentId } = req.agent;
 
-      const chat = await prisma.chat.findUnique({
-        where: { id },
-        include: {
-          contact: true,
-          assignedAgent: {
-            select: { id: true, name: true, email: true, avatarUrl: true, role: true },
+      const chat = await req.db((db) =>
+        db.chat.findUnique({
+          where: { id },
+          include: {
+            contact: true,
+            assignedAgent: {
+              select: { id: true, name: true, email: true, avatarUrl: true, role: true },
+            },
           },
-        },
-      });
+        })
+      );
 
       if (!chat || chat.tenantId !== req.tenantId) {
         return res.status(404).json({ success: false, error: 'Conversation session not found' });
@@ -173,18 +177,22 @@ class ChatController {
       // was being opened (and one agent's view cleared everyone's badge).
       if (chat.unreadCount > 0) {
         const viewedCount = chat.unreadCount;
-        const cleared = await prisma.chat.updateMany({
-          where: { id: chat.id, unreadCount: viewedCount },
-          data: { unreadCount: 0 },
-        });
-        if (cleared.count === 0) {
-          await prisma.chat.update({
-            where: { id: chat.id },
-            data: { unreadCount: { decrement: viewedCount } },
-          });
-          await prisma.chat.updateMany({
-            where: { id: chat.id, unreadCount: { lt: 0 } },
+        const cleared = await req.db((db) =>
+          db.chat.updateMany({
+            where: { id: chat.id, unreadCount: viewedCount },
             data: { unreadCount: 0 },
+          })
+        );
+        if (cleared.count === 0) {
+          await req.db(async (db) => {
+            await db.chat.update({
+              where: { id: chat.id },
+              data: { unreadCount: { decrement: viewedCount } },
+            });
+            await db.chat.updateMany({
+              where: { id: chat.id, unreadCount: { lt: 0 } },
+              data: { unreadCount: 0 },
+            });
           });
         }
         chat.unreadCount = 0;
