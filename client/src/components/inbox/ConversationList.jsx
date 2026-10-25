@@ -7,6 +7,7 @@ import {
   MessageSquare,
   User,
   Users,
+  LayoutDashboard,
   Shield,
   Filter,
   Flame,
@@ -26,6 +27,7 @@ export default function ConversationList({
   onOpenTemplates,
   onOpenBroadcasts,
   onOpenAgents,
+  onOpenDashboard,
 }) {
   const { agent, tenant, isAdmin, logout } = useAuth();
   const toast = useToast();
@@ -316,6 +318,17 @@ export default function ConversationList({
                       zIndex: 50,
                     }}
                   >
+                    {isAdmin && onOpenDashboard && (
+                      <button
+                        type="button"
+                        role="menuitem"
+                        style={menuItemStyle(false)}
+                        onClick={() => { setMenuOpen(false); onOpenDashboard(); }}
+                      >
+                        <LayoutDashboard size={15} style={{ color: 'var(--text-secondary)', flexShrink: 0 }} />
+                        Dashboard
+                      </button>
+                    )}
                     <button
                       type="button"
                       role="menuitem"

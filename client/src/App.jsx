@@ -2,6 +2,10 @@ import React, { useState, useEffect, useRef, lazy, Suspense } from 'react';
 import { useAuth } from './context/AuthContext';
 import { useChat } from './context/ChatContext';
 import LoginView from './components/auth/LoginView';
+import SignupView from './components/auth/SignupView';
+import LandingPage from './components/landing/LandingPage';
+import { TermsView, PrivacyView } from './components/landing/LegalViews';
+const DashboardView = lazy(() => import('./components/dashboard/DashboardView'));
 import ConversationList from './components/inbox/ConversationList';
 import ChatCanvas from './components/inbox/ChatCanvas';
 import ContactSidebar from './components/inbox/ContactSidebar';
@@ -15,9 +19,23 @@ const AgentManagementModal = lazy(() => import('./components/modals/AgentManagem
 const BroadcastModal = lazy(() => import('./components/modals/BroadcastModal'));
 
 export default function App() {
-  const { agent, loading } = useAuth();
+  const { agent, loading, tenant, logout } = useAuth();
   const { activeChat, activeChatId, selectChat } = useChat();
   const { connected } = useSocket();
+
+  // Public (logged-out) views: the product's front door. A visitor now
+  // meets a landing page with pricing and a real signup — not a bare
+  // login form.
+  const [publicView, setPublicView] = useState('landing');
+  // Logged-in home: owners land on the dashboard, agents in the inbox.
+  const [mainView, setMainView] = useState(null);
+  useEffect(() => {
+    if (agent && mainView === null) {
+      setMainView(agent.role === 'ADMIN' || agent.role === 'SUPERVISOR' ? 'dashboard' : 'inbox');
+    }
+    if (!agent) setMainView(null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [agent]);
 
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isTemplateModalOpen, setIsTemplateModalOpen] = useState(false);
@@ -129,8 +147,42 @@ export default function App() {
   }
 
   if (!agent) {
-    return <LoginView />;
+    if (publicView === 'login') {
+      return (
+        <LoginView
+          onShowSignup={() => setPublicView('signup')}
+          onBack={() => setPublicView('landing')}
+        />
+      );
+    }
+    if (publicView === 'signup') {
+      return (
+        <SignupView
+          onBack={() => setPublicView('landing')}
+          onShowLogin={() => setPublicView('login')}
+        />
+      );
+    }
+    if (publicView === 'terms') return <TermsView onBack={() => setPublicView('landing')} />;
+    if (publicView === 'privacy') return <PrivacyView onBack={() => setPublicView('landing')} />;
+    return (
+      <LandingPage
+        onLogin={() => setPublicView('login')}
+        onSignup={() => setPublicView('signup')}
+        onShowTerms={() => setPublicView('terms')}
+        onShowPrivacy={() => setPublicView('privacy')}
+      />
+    );
   }
+
+  const trialDaysLeft =
+    tenant?.subscriptionStatus === 'TRIAL' && tenant?.trialEndsAt
+      ? Math.max(0, Math.ceil((new Date(tenant.trialEndsAt).getTime() - Date.now()) / 86400000))
+      : null;
+  const subscriptionExpired = tenant?.subscriptionStatus === 'EXPIRED';
+  // An expired workspace keeps its dashboard (and the upgrade path) but
+  // not the inbox — the trial's whole point.
+  const effectiveMainView = subscriptionExpired ? 'dashboard' : mainView || 'inbox';
 
   return (
     <ErrorBoundary>
@@ -140,7 +192,72 @@ export default function App() {
           Connection lost — reconnecting to TeamBee… New messages will appear once the connection is back.
         </div>
       )}
-      {/* 3-Column WhatsApp Shared Inbox Layout */}
+      {tenant?.subscriptionStatus === 'TRIAL' && trialDaysLeft !== null && (
+        <div
+          style={{
+            background: 'rgba(245, 158, 11, 0.12)',
+            borderBottom: '1px solid rgba(245, 158, 11, 0.35)',
+            color: '#fcd34d',
+            fontSize: '12.5px',
+            padding: '7px 14px',
+            display: 'flex',
+            gap: '10px',
+            alignItems: 'center',
+            justifyContent: 'center',
+            flexWrap: 'wrap',
+            flex: '0 0 auto',
+          }}
+          role="status"
+        >
+          <span>Free trial — {trialDaysLeft} day{trialDaysLeft === 1 ? '' : 's'} left on Pro.</span>
+          <button
+            type="button"
+            onClick={() => setMainView('dashboard')}
+            style={{ background: 'none', border: 'none', color: '#fde68a', fontWeight: 700, cursor: 'pointer', textDecoration: 'underline', fontSize: '12.5px', padding: 0 }}
+          >
+            See plans
+          </button>
+        </div>
+      )}
+      {subscriptionExpired && (
+        <div
+          style={{
+            background: 'rgba(239, 68, 68, 0.12)',
+            borderBottom: '1px solid rgba(239, 68, 68, 0.4)',
+            color: '#fca5a5',
+            fontSize: '12.5px',
+            padding: '7px 14px',
+            display: 'flex',
+            gap: '10px',
+            alignItems: 'center',
+            justifyContent: 'center',
+            flexWrap: 'wrap',
+            flex: '0 0 auto',
+          }}
+          role="alert"
+        >
+          <span>Your free trial has ended — the inbox is paused. Pick a plan below to continue.</span>
+          <button
+            type="button"
+            onClick={logout}
+            style={{ background: 'none', border: 'none', color: '#fecaca', fontWeight: 700, cursor: 'pointer', textDecoration: 'underline', fontSize: '12.5px', padding: 0 }}
+          >
+            Sign out
+          </button>
+        </div>
+      )}
+      {effectiveMainView === 'dashboard' ? (
+        <Suspense fallback={null}>
+          <DashboardView
+            onOpenInbox={() => setMainView('inbox')}
+            onOpenSettings={() => setIsSettingsOpen(true)}
+            onOpenTemplates={() => setIsTemplateModalOpen(true)}
+            onOpenBroadcasts={() => setIsBroadcastModalOpen(true)}
+            onOpenAgents={() => setIsAgentsModalOpen(true)}
+          />
+        </Suspense>
+      ) : (
+      /* 3-Column WhatsApp Shared Inbox Layout */
       <div className={`inbox-layout ${(activeChat || activeChatId) ? 'has-active-chat' : 'no-active-chat'}`}>
         {/* Column 1: Navigation & Conversation List */}
         <ConversationList
@@ -148,6 +265,7 @@ export default function App() {
           onOpenTemplates={() => setIsTemplateModalOpen(true)}
           onOpenBroadcasts={() => setIsBroadcastModalOpen(true)}
           onOpenAgents={() => setIsAgentsModalOpen(true)}
+          onOpenDashboard={() => setMainView('dashboard')}
         />
 
         {/* Column 2: Active Chat Canvas */}
@@ -174,6 +292,7 @@ export default function App() {
           />
         )}
       </div>
+      )}
 
       {/* Modals & Consoles */}
       <Suspense fallback={null}>

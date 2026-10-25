@@ -20,7 +20,7 @@ const labelStyle = {
   marginBottom: '4px',
 };
 
-export default function LoginView() {
+export default function LoginView({ onShowSignup, onBack } = {}) {
   const { login, lookupWorkspaces } = useAuth();
   const [email, setEmail] = useState(() => {
     try {
@@ -469,6 +469,22 @@ export default function LoginView() {
               Part of several workspaces? Enter your email and pick yours above — a single workspace is selected automatically.
             </p>
           </form>
+        )}
+        {(onShowSignup || onBack) && (
+          <p style={{ fontSize: '12.5px', color: 'var(--text-muted)', textAlign: 'center', marginTop: '16px' }}>
+            New to TeamBee?{' '}
+            <button type="button" onClick={onShowSignup} style={{ background: 'none', border: 'none', color: 'var(--wa-primary)', cursor: 'pointer', fontSize: '12.5px', fontWeight: 600, padding: 0 }}>
+              Start your free trial
+            </button>
+            {onBack && (
+              <>
+                {'  ·  '}
+                <button type="button" onClick={onBack} style={{ background: 'none', border: 'none', color: 'var(--text-secondary)', cursor: 'pointer', fontSize: '12.5px', padding: 0 }}>
+                  Back to home
+                </button>
+              </>
+            )}
+          </p>
         )}
       </div>
     </div>

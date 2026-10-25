@@ -95,6 +95,34 @@ export function AuthProvider({ children }) {
     return data;
   };
 
+  // Public self-serve signup: creates a new workspace (tenant) + its
+  // first ADMIN and adopts the returned session exactly like login.
+  const signup = async ({ businessName, adminName, email, password, inviteCode }) => {
+    const res = await fetch('/api/auth/register-tenant', {
+      method: 'POST',
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        businessName,
+        adminName,
+        email,
+        password,
+        inviteCode: inviteCode || undefined,
+      }),
+    });
+    const data = await res.json();
+    if (!data.success) {
+      throw new Error(data.error || 'Signup failed');
+    }
+    try {
+      sessionStorage.setItem('teambee:lastEmail', email);
+    } catch (storageError) {}
+    setToken(data.token);
+    setAgent(data.agent);
+    setTenant(data.tenant);
+    return data;
+  };
+
   // Global session-expiry hook (dispatched by the fetch wrapper in main.jsx)
   useEffect(() => {
     const handleUnauthorized = () => {
@@ -163,6 +191,7 @@ export function AuthProvider({ children }) {
         tenant,
         loading,
         login,
+        signup,
         lookupWorkspaces,
         logout,
         changePassword,

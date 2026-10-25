@@ -1020,3 +1020,10 @@ select:focus-visible {
     opacity: 1;
   }
 }
+
+/* Landing nav links collapse on small phones (logo + CTAs stay). */
+@media (max-width: 640px) {
+  .landing-nav-links {
+    display: none !important;
+  }
+}
