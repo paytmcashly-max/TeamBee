@@ -20,7 +20,7 @@ router.post('/simulate-inbound', authenticateToken, requireRole('ADMIN', 'SUPERV
       caption = 'Prescription / Report copy',
     } = req.body;
 
-     const tenant = await prisma.tenant.findUnique({ where: { id: req.tenantId } });
+     const tenant = await req.db((db) => db.tenant.findUnique({ where: { id: req.tenantId } }));
      if (!tenant) return res.status(404).json({ success: false, error: 'Tenant not found' });
      if (typeof senderPhone !== 'string' || typeof senderName !== 'string' || typeof messageType !== 'string' ||
        typeof text !== 'string' || typeof caption !== 'string' || typeof mediaUrl !== 'string') {
@@ -139,28 +139,32 @@ router.post('/simulate-status', authenticateToken, requireRole('ADMIN', 'SUPERVI
        return res.status(400).json({ success: false, error: 'waMessageId is required' });
      }
 
-     const tenant = await prisma.tenant.findUnique({ where: { id: req.tenantId } });
+     const tenant = await req.db((db) => db.tenant.findUnique({ where: { id: req.tenantId } }));
      if (!tenant) return res.status(404).json({ success: false, error: 'Tenant not found' });
 
      // Never use a hard-coded recipient or accept a WAMID from another
      // tenant. Resolve the actual persisted outbound target before creating
      // the simulated Meta callback.
-     const outboundMessage = await prisma.message.findFirst({
-       where: {
-         waMessageId,
-         tenantId: req.tenantId,
-         direction: 'OUTBOUND',
-       },
-       include: { chat: { include: { contact: true } } },
-     });
-     const broadcastRecipient = outboundMessage
-       ? null
-       : await prisma.broadcastRecipient.findFirst({
+     const outboundMessage = await req.db((db) =>
+       db.message.findFirst({
          where: {
            waMessageId,
-           broadcast: { tenantId: req.tenantId },
+           tenantId: req.tenantId,
+           direction: 'OUTBOUND',
          },
-       });
+         include: { chat: { include: { contact: true } } },
+       })
+     );
+     const broadcastRecipient = outboundMessage
+       ? null
+       : await req.db((db) =>
+           db.broadcastRecipient.findFirst({
+             where: {
+               waMessageId,
+               broadcast: { tenantId: req.tenantId },
+             },
+           })
+         );
      const recipientId = outboundMessage?.chat?.contact?.waId || broadcastRecipient?.phone;
      if (!recipientId) {
        return res.status(404).json({ success: false, error: 'Outbound message not found for this tenant' });

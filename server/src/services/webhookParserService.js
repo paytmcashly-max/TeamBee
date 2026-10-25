@@ -1,8 +1,16 @@
 const crypto = require('crypto');
 const prisma = require('../db/prisma');
-const { withSystemDb, rlsContextEnabled } = require('../db/withTenant');
+const { withSystemDb, withTenantDb, rlsContextEnabled } = require('../db/withTenant');
 async function systemDb(fn) {
   return rlsContextEnabled() ? withSystemDb((tx) => fn(tx)) : fn(prisma);
+}
+async function tenantDb(tenantId, fn) {
+  return rlsContextEnabled() ? withTenantDb(tenantId, (tx) => fn(tx)) : fn(prisma);
+}
+function tenantTx(tenantId) {
+  return rlsContextEnabled()
+    ? (cb) => withTenantDb(tenantId, cb)
+    : (cb) => prisma.$transaction(cb);
 }
 const {
   broadcastNewMessage,
@@ -15,62 +23,74 @@ const { applyInboundAutomation } = require('./automationService');
  */
 class WebhookParserService {
   static async processStoredWebhookEvent(eventId) {
-    const event = await prisma.webhookEvent.findUnique({ where: { id: eventId } });
+    const event = await systemDb((db) => db.webhookEvent.findUnique({ where: { id: eventId } }));
     if (!event || event.status === 'PROCESSED' || event.attempts >= 10) return event;
 
-    const claimed = await prisma.webhookEvent.updateMany({
-      where: {
-        id: eventId,
-        status: { in: ['RECEIVED', 'FAILED'] },
-      },
-      data: {
-        status: 'PROCESSING',
-        attempts: { increment: 1 },
-        lastError: null,
-      },
-    });
-    if (claimed.count === 0) return prisma.webhookEvent.findUnique({ where: { id: eventId } });
+    const claimed = await systemDb((db) =>
+      db.webhookEvent.updateMany({
+        where: {
+          id: eventId,
+          status: { in: ['RECEIVED', 'FAILED'] },
+        },
+        data: {
+          status: 'PROCESSING',
+          attempts: { increment: 1 },
+          lastError: null,
+        },
+      })
+    );
+    if (claimed.count === 0) return systemDb((db) => db.webhookEvent.findUnique({ where: { id: eventId } }));
 
     try {
       const result = await this.processWebhookPayload(JSON.parse(event.payload));
       if (!result.success || result.results.errors.length > 0) {
         const error = result.reason || result.results.errors[0]?.error || 'Webhook processing failed';
-        await prisma.webhookEvent.update({
-          where: { id: eventId },
-          data: { status: 'FAILED', lastError: error },
-        });
+        await systemDb((db) =>
+          db.webhookEvent.update({
+            where: { id: eventId },
+            data: { status: 'FAILED', lastError: error },
+          })
+        );
         return result;
       }
 
-      await prisma.webhookEvent.update({
-        where: { id: eventId },
-        data: { status: 'PROCESSED', processedAt: new Date(), lastError: null },
-      });
+      await systemDb((db) =>
+        db.webhookEvent.update({
+          where: { id: eventId },
+          data: { status: 'PROCESSED', processedAt: new Date(), lastError: null },
+        })
+      );
       return result;
     } catch (error) {
-      await prisma.webhookEvent.update({
-        where: { id: eventId },
-        data: { status: 'FAILED', lastError: error.message.slice(0, 1000) },
-      });
+      await systemDb((db) =>
+        db.webhookEvent.update({
+          where: { id: eventId },
+          data: { status: 'FAILED', lastError: error.message.slice(0, 1000) },
+        })
+      );
       throw error;
     }
   }
 
   static async drainPendingWebhookEvents(limit = 50) {
     const staleProcessingBefore = new Date(Date.now() - 5 * 60 * 1000);
-    await prisma.webhookEvent.updateMany({
-      where: {
-        status: 'PROCESSING',
-        updatedAt: { lt: staleProcessingBefore },
-      },
-      data: { status: 'RECEIVED', lastError: 'Recovered stale processing event' },
-    });
-    const events = await prisma.webhookEvent.findMany({
-      where: { status: { in: ['RECEIVED', 'FAILED'] }, attempts: { lt: 10 } },
-      orderBy: { receivedAt: 'asc' },
-      take: limit,
-      select: { id: true },
-    });
+    await systemDb((db) =>
+      db.webhookEvent.updateMany({
+        where: {
+          status: 'PROCESSING',
+          updatedAt: { lt: staleProcessingBefore },
+        },
+        data: { status: 'RECEIVED', lastError: 'Recovered stale processing event' },
+      })
+    );
+    const events = await systemDb((db) =>
+      db.webhookEvent.findMany({
+        where: { status: { in: ['RECEIVED', 'FAILED'] }, attempts: { lt: 10 } },
+        orderBy: { receivedAt: 'asc' },
+        take: limit,
+        select: { id: true },
+      })
+    );
     for (const event of events) {
       await this.processStoredWebhookEvent(event.id);
     }
@@ -167,27 +187,29 @@ class WebhookParserService {
                : `Customer ${waId.slice(-4)}`;
 
             // Upsert contact in local database
-            const contact = await prisma.contact.upsert({
-              where: {
-                tenantId_waId: {
-                  tenantId: tenant.id,
-                  waId,
+            const contact = await tenantDb(tenant.id, (db) =>
+              db.contact.upsert({
+                where: {
+                  tenantId_waId: {
+                    tenantId: tenant.id,
+                    waId,
+                  },
                 },
-              },
               // Name is set on create only: an agent may have renamed this
               // contact in the CRM, and the customer's next message must
               // not silently revert it to their WhatsApp profile name.
               update: {},
-              create: {
-                tenantId: tenant.id,
-                waId,
-                name: profileName,
-                customAttributes: JSON.stringify({
-                  source: 'WHATSAPP_INBOUND',
-                  phone: waId,
-                }),
-              },
-            });
+                create: {
+                  tenantId: tenant.id,
+                  waId,
+                  name: profileName,
+                  customAttributes: JSON.stringify({
+                    source: 'WHATSAPP_INBOUND',
+                    phone: waId,
+                  }),
+                },
+              })
+            );
             contactsMap.set(waId, contact);
           }
         }
@@ -354,7 +376,7 @@ class WebhookParserService {
       // Keep the duplicate check, chat counters, and message insert in one
       // transaction. A concurrent webhook retry can then lose on the unique
       // WAMID constraint without incrementing unreadCount twice.
-      result = await prisma.$transaction(async (tx) => {
+      result = await tenantTx(tenant.id)(async (tx) => {
         const existing = await tx.message.findUnique({ where: { waMessageId } });
         if (existing) {
           if (existing.tenantId !== tenant.id) throw new Error('Message belongs to another tenant');
@@ -443,7 +465,7 @@ class WebhookParserService {
       // If another retry won the unique insert race, return the committed
       // message as an idempotent duplicate instead of failing the webhook.
       if (error.code === 'P2002') {
-        const existing = await prisma.message.findUnique({ where: { waMessageId } });
+        const existing = await tenantDb(tenant.id, (db) => db.message.findUnique({ where: { waMessageId } }));
         if (existing && existing.tenantId === tenant.id) {
           console.log(`[Webhook Parser]: Duplicate message skipped (WAMID: ${waMessageId})`);
           return { created: false, message: existing };
@@ -497,9 +519,11 @@ class WebhookParserService {
     }
 
     // Lookup matching outbound message
-    const message = await prisma.message.findUnique({
-      where: { waMessageId },
-    });
+    const message = await tenantDb(tenant.id, (db) =>
+      db.message.findUnique({
+        where: { waMessageId },
+      })
+    );
 
     if (message && message.tenantId !== tenant.id) {
       return { updated: false, reason: 'Message belongs to another tenant' };
@@ -508,10 +532,12 @@ class WebhookParserService {
     // A broadcast send creates BOTH a Message row and a BroadcastRecipient
     // row carrying the same WAMID — a status callback must update both, or
     // campaign delivered/read counters never move.
-    const recipient = await prisma.broadcastRecipient.findFirst({
-      where: { waMessageId },
-      include: { broadcast: { select: { tenantId: true } } },
-    });
+    const recipient = await tenantDb(tenant.id, (db) =>
+      db.broadcastRecipient.findFirst({
+        where: { waMessageId },
+        include: { broadcast: { select: { tenantId: true } } },
+      })
+    );
 
     let recipientUpdated = false;
     if (recipient && recipient.broadcast.tenantId === tenant.id) {
@@ -527,7 +553,7 @@ class WebhookParserService {
           return { updated: false, reason: 'Status already applied' };
         }
 
-        const changed = await prisma.$transaction(async (tx) => {
+        const changed = await tenantTx(tenant.id)(async (tx) => {
           // Conditional update makes duplicate callbacks idempotent even when
           // two webhook workers process the same WAMID concurrently.
           const updateResult = await tx.broadcastRecipient.updateMany({
@@ -585,24 +611,26 @@ class WebhookParserService {
       return { updated: false, reason: 'Status already higher than update' };
     }
 
-    const updateResult = await prisma.message.updateMany({
-      where: {
-        id: message.id,
-        status: { in: previousStatuses },
-      },
-      data: {
-        status,
-        errorCode,
-        errorMessage,
-        // Never move updatedAt backwards for out-of-order callbacks.
-        updatedAt: message.updatedAt && timestamp < message.updatedAt ? message.updatedAt : timestamp,
-      },
-    });
+    const updateResult = await tenantDb(tenant.id, (db) =>
+      db.message.updateMany({
+        where: {
+          id: message.id,
+          status: { in: previousStatuses },
+        },
+        data: {
+          status,
+          errorCode,
+          errorMessage,
+          // Never move updatedAt backwards for out-of-order callbacks.
+          updatedAt: message.updatedAt && timestamp < message.updatedAt ? message.updatedAt : timestamp,
+        },
+      })
+    );
     if (updateResult.count === 0) {
       return { updated: false, reason: 'Status already higher than update' };
     }
 
-    const updatedMessage = await prisma.message.findUnique({ where: { id: message.id } });
+    const updatedMessage = await tenantDb(tenant.id, (db) => db.message.findUnique({ where: { id: message.id } }));
 
     // Real-time broadcast to active chat canvas
     broadcastMessageStatus(tenant.id, message.chatId, {

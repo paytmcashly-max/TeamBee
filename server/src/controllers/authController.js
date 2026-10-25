@@ -419,10 +419,16 @@ class AuthController {
         const decoded = verifyAccessToken(token);
         const agentId = decoded && (decoded.agentId || decoded.id);
         if (typeof agentId === 'string') {
-          await prisma.agent.update({
-            where: { id: agentId },
-            data: { tokenVersion: { increment: 1 } },
-          });
+          const bumpTokenVersion = (db) =>
+            db.agent.update({
+              where: { id: agentId },
+              data: { tokenVersion: { increment: 1 } },
+            });
+          if (rlsContextEnabled() && typeof decoded.tenantId === 'string') {
+            await withTenantDb(decoded.tenantId, bumpTokenVersion);
+          } else {
+            await bumpTokenVersion(prisma);
+          }
           invalidateAgentCache(agentId);
         }
       }
@@ -455,11 +461,13 @@ class AuthController {
       }
 
       const passwordHash = await bcrypt.hash(newPassword, 10);
-      const updated = await prisma.agent.update({
-        where: { id: req.agent.id },
-        data: { passwordHash, tokenVersion: { increment: 1 } },
-        include: { tenant: true },
-      });
+      const updated = await req.db((db) =>
+        db.agent.update({
+          where: { id: req.agent.id },
+          data: { passwordHash, tokenVersion: { increment: 1 } },
+          include: { tenant: true },
+        })
+      );
       invalidateAgentCache(req.agent.id);
 
       // Re-issue a session for THIS device on the new token version so the

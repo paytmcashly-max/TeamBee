@@ -1,6 +1,7 @@
 'use strict';
 
 const prisma = require('../db/prisma');
+const { withTenantDb, rlsContextEnabled } = require('../db/withTenant');
 const MetaApiService = require('./metaApiService');
 const { broadcastNewMessage, broadcastChatAssignment } = require('./socketService');
 
@@ -93,11 +94,14 @@ function shouldSendAwayReply(lastAwayReplyAt, now) {
 // ---------------------------------------------------------------------------
 
 async function applyInboundAutomation({ tenant, chatId }) {
+  const run = (fn) => (rlsContextEnabled() ? withTenantDb(tenant.id, fn) : fn(prisma));
   try {
-    const chat = await prisma.chat.findUnique({
-      where: { id: chatId },
-      include: { contact: true },
-    });
+    const chat = await run((db) =>
+      db.chat.findUnique({
+        where: { id: chatId },
+        include: { contact: true },
+      })
+    );
     if (!chat || chat.tenantId !== tenant.id) return;
     let current = chat;
 
@@ -105,28 +109,34 @@ async function applyInboundAutomation({ tenant, chatId }) {
     // counter is bumped atomically on the tenant row, so concurrent
     // webhooks (and multiple instances) can never pick from a stale count.
     if (tenant.autoAssignEnabled && !current.assignedAgentId) {
-      const agents = await prisma.agent.findMany({
-        where: { tenantId: tenant.id, isActive: true },
-        orderBy: { createdAt: 'asc' },
-        select: { id: true, name: true },
-      });
+      const agents = await run((db) =>
+        db.agent.findMany({
+          where: { tenantId: tenant.id, isActive: true },
+          orderBy: { createdAt: 'asc' },
+          select: { id: true, name: true },
+        })
+      );
       if (agents.length) {
-        const bumped = await prisma.tenant.update({
-          where: { id: tenant.id },
-          data: { assignmentCounter: { increment: 1 } },
-          select: { assignmentCounter: true },
-        });
+        const bumped = await run((db) =>
+          db.tenant.update({
+            where: { id: tenant.id },
+            data: { assignmentCounter: { increment: 1 } },
+            select: { assignmentCounter: true },
+          })
+        );
         const chosenId = pickRoundRobinAgent(
           bumped.assignmentCounter - 1,
           agents.map((a) => a.id)
         );
         const chosen = agents.find((a) => a.id === chosenId);
         if (chosen) {
-          current = await prisma.chat.update({
-            where: { id: current.id },
-            data: { assignedAgentId: chosen.id, status: 'OPEN' },
-            include: { contact: true },
-          });
+          current = await run((db) =>
+            db.chat.update({
+              where: { id: current.id },
+              data: { assignedAgentId: chosen.id, status: 'OPEN' },
+              include: { contact: true },
+            })
+          );
           broadcastChatAssignment(tenant.id, current.id, {
             assignedAgentId: chosen.id,
             previousAssignedAgentId: null,
@@ -148,9 +158,11 @@ async function applyInboundAutomation({ tenant, chatId }) {
         timezone: tenant.officeHoursTimezone,
       });
       if (outside && shouldSendAwayReply(current.lastAwayReplyAt, now) && current.contact?.waId) {
-        const template = await prisma.template.findFirst({
-          where: { tenantId: tenant.id, name: tenant.awayTemplateName, status: 'APPROVED' },
-        });
+        const template = await run((db) =>
+          db.template.findFirst({
+            where: { tenantId: tenant.id, name: tenant.awayTemplateName, status: 'APPROVED' },
+          })
+        );
         if (template) {
           const result = await MetaApiService.sendTemplateMessage(
             tenant,
@@ -161,28 +173,32 @@ async function applyInboundAutomation({ tenant, chatId }) {
           );
           if (result.success) {
             const sentAt = new Date();
-            await prisma.chat.update({
-              where: { id: current.id },
-              data: {
-                lastAwayReplyAt: sentAt,
-                lastMessagePreview: `Template: ${template.name}`,
-                lastMessageAt: sentAt,
-              },
-            });
-            const message = await prisma.message.create({
-              data: {
-                chatId: current.id,
-                tenantId: tenant.id,
+            await run((db) =>
+              db.chat.update({
+                where: { id: current.id },
+                data: {
+                  lastAwayReplyAt: sentAt,
+                  lastMessagePreview: `Template: ${template.name}`,
+                  lastMessageAt: sentAt,
+                },
+              })
+            );
+            const message = await run((db) =>
+              db.message.create({
+                data: {
+                  chatId: current.id,
+                  tenantId: tenant.id,
                 senderType: 'SYSTEM',
                 messageType: 'TEMPLATE',
                 content: template.bodyText || `Template: ${template.name}`,
                 rawPayload: JSON.stringify({ template: template.name, automation: 'away_reply' }),
                 direction: 'OUTBOUND',
                 status: 'SENT',
-                waMessageId: result.wamid || null,
-                createdAt: sentAt,
-              },
-            });
+                  waMessageId: result.wamid || null,
+                  createdAt: sentAt,
+                },
+              })
+            );
             broadcastNewMessage(tenant.id, current.id, message, current.assignedAgentId);
           } else {
             console.error('[Automation]: away template send failed:', result.error || result.code);

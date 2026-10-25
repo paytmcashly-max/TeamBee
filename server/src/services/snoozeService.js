@@ -2,6 +2,14 @@
 
 const prisma = require('../db/prisma');
 const { broadcastChatSnoozeChanged } = require('./socketService');
+const { withTenantDb, withSystemDb, rlsContextEnabled } = require('../db/withTenant');
+
+async function systemDb(fn) {
+  return rlsContextEnabled() ? withSystemDb((tx) => fn(tx)) : fn(prisma);
+}
+async function tenantDb(tenantId, fn) {
+  return rlsContextEnabled() ? withTenantDb(tenantId, (tx) => fn(tx)) : fn(prisma);
+}
 
 /**
  * Clears snoozes whose time has come and notifies every affected client so
@@ -11,16 +19,20 @@ const { broadcastChatSnoozeChanged } = require('./socketService');
  */
 async function expireSnoozedChats() {
   const now = new Date();
-  const expired = await prisma.chat.findMany({
-    where: { snoozedUntil: { not: null, lte: now } },
-    select: { id: true, tenantId: true, assignedAgentId: true },
-    take: 200,
-  });
+  const expired = await systemDb((db) =>
+    db.chat.findMany({
+      where: { snoozedUntil: { not: null, lte: now } },
+      select: { id: true, tenantId: true, assignedAgentId: true },
+      take: 200,
+    })
+  );
   for (const chat of expired) {
-    const cleared = await prisma.chat.updateMany({
-      where: { id: chat.id, snoozedUntil: { not: null, lte: now } },
-      data: { snoozedUntil: null, snoozedById: null },
-    });
+    const cleared = await tenantDb(chat.tenantId, (db) =>
+      db.chat.updateMany({
+        where: { id: chat.id, snoozedUntil: { not: null, lte: now } },
+        data: { snoozedUntil: null, snoozedById: null },
+      })
+    );
     if (cleared.count > 0) {
       broadcastChatSnoozeChanged(chat.tenantId, chat.id, null, chat.assignedAgentId);
     }

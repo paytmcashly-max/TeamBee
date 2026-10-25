@@ -2,6 +2,11 @@ const { Server } = require('socket.io');
 const { createAdapter } = require('@socket.io/redis-adapter');
 const { createClient } = require('redis');
 const prisma = require('../db/prisma');
+const { withTenantDb, rlsContextEnabled } = require('../db/withTenant');
+
+async function tenantDb(tenantId, fn) {
+  return rlsContextEnabled() ? withTenantDb(tenantId, (tx) => fn(tx)) : fn(prisma);
+}
 const { verifyAccessToken, canAccessChat, readCookie } = require('../middleware/authMiddleware');
 
 let io = null;
@@ -56,10 +61,12 @@ function initSocket(server) {
       if (typeof tokenAgentId !== 'string' || tokenAgentId.length > 100) {
         return next(new Error('AUTHENTICATION_ERROR: Invalid session claims'));
       }
-      const agent = await prisma.agent.findUnique({
-        where: { id: tokenAgentId },
-        include: { tenant: true },
-      });
+      const agent = await tenantDb(decoded.tenantId, (db) =>
+        db.agent.findUnique({
+          where: { id: tokenAgentId },
+          include: { tenant: true },
+        })
+      );
 
       if (!agent) {
         return next(new Error('AUTHENTICATION_ERROR: Agent account not found'));
@@ -123,14 +130,16 @@ function initSocket(server) {
       onlineAgents.set(agentId, new Set());
       // First connection marks the agent ONLINE — but only from OFFLINE.
       // A manually chosen BUSY must survive reconnects and new tabs.
-      const currentAgent = await prisma.agent
-        .findUnique({ where: { id: agentId }, select: { status: true } })
-        .catch(() => null);
+      const currentAgent = await tenantDb(tenantId, (db) =>
+        db.agent.findUnique({ where: { id: agentId }, select: { status: true } })
+      ).catch(() => null);
       if (currentAgent && currentAgent.status === 'OFFLINE') {
-        await prisma.agent.update({
-          where: { id: agentId },
-          data: { status: 'ONLINE' },
-        }).catch((e) => console.error('Agent presence update error:', e));
+        await tenantDb(tenantId, (db) =>
+          db.agent.update({
+            where: { id: agentId },
+            data: { status: 'ONLINE' },
+          })
+        ).catch((e) => console.error('Agent presence update error:', e));
 
         io.to(tenantRoom).emit('agent_presence_changed', {
           agentId,
@@ -153,9 +162,11 @@ function initSocket(server) {
         }
 
         // Query chat to verify tenant isolation and RBAC permission
-        const chat = await prisma.chat.findUnique({
-          where: { id: chatId },
-        });
+        const chat = await tenantDb(tenantId, (db) =>
+          db.chat.findUnique({
+            where: { id: chatId },
+          })
+        );
 
         if (!chat || chat.tenantId !== tenantId) {
           if (ack) ack({ success: false, error: 'Chat session not found' });
@@ -216,7 +227,7 @@ function initSocket(server) {
       // room probing through forged chat IDs.
       if (typeof chatId !== 'string' || chatId.length > 100 || !socket.rooms.has(`chat:${chatId}`) || typeof isTyping !== 'boolean') return;
       try {
-        const chat = await prisma.chat.findUnique({ where: { id: chatId } });
+        const chat = await tenantDb(tenantId, (db) => db.chat.findUnique({ where: { id: chatId } }));
         if (!canAccessChat(socket.agent, chat)) return;
         socket.to(`chat:${chatId}`).emit('agent_typing', {
           chatId,
@@ -240,10 +251,12 @@ function initSocket(server) {
         if (agentSockets.size === 0) {
           onlineAgents.delete(agentId);
           // Mark agent OFFLINE in database
-          await prisma.agent.update({
-            where: { id: agentId },
-            data: { status: 'OFFLINE' },
-          }).catch((e) => console.error('Agent offline update error:', e));
+          await tenantDb(tenantId, (db) =>
+            db.agent.update({
+              where: { id: agentId },
+              data: { status: 'OFFLINE' },
+            })
+          ).catch((e) => console.error('Agent offline update error:', e));
 
           io.to(tenantRoom).emit('agent_presence_changed', {
             agentId,
