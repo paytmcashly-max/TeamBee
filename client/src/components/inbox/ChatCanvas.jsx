@@ -684,7 +684,7 @@ export default function ChatCanvas({ onOpenTemplatePicker, onToggleSidebar, isSi
                       type="button"
                       onClick={() => applySnooze(preset.until)}
                       className="btn btn-ghost"
-                      style={{ display: 'block', width: '100%', textAlign: 'left', padding: '7px 8px', fontSize: '12.5px', color: '#e2e8f0' }}
+                      style={{ display: 'block', width: '100%', textAlign: 'left', padding: '10px 8px', fontSize: '12.5px', color: '#e2e8f0' }}
                     >
                       {preset.label}
                     </button>
@@ -1186,6 +1186,7 @@ export default function ChatCanvas({ onOpenTemplatePicker, onToggleSidebar, isSi
             boxShadow: 'var(--shadow-card)',
             zIndex: 20,
             minWidth: '210px',
+            maxWidth: 'calc(100vw - 24px)',
           }}
         >
           <div style={{ fontSize: '10.5px', fontWeight: '700', color: '#f59e0b', padding: '2px 6px 6px 6px', letterSpacing: '0.4px' }}>

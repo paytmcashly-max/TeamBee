@@ -246,6 +246,7 @@ export default function BroadcastModal({ isOpen, onClose }) {
       >
         {/* Header */}
         <div
+          className="broadcast-header"
           style={{
             padding: '16px 24px',
             borderBottom: '1px solid var(--border-subtle)',

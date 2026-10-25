@@ -277,8 +277,19 @@ body {
     max-height: 100dvh !important;
     border-radius: 0 !important;
   }
+  .broadcast-header {
+    padding: 14px 16px !important;
+  }
   .broadcast-body {
     padding: 14px !important;
+  }
+  /* List chrome: the tab row and status filter pills were ~30px and
+     ~22px tall — below comfortable tapping on a phone. */
+  .list-tabs-wrap button {
+    min-height: 36px;
+  }
+  .list-search-wrap button {
+    min-height: 32px;
   }
   .broadcast-card {
     flex-wrap: wrap;
