@@ -33,7 +33,7 @@ class AnalyticsController {
   static async overview(req, res) {
     try {
       const tenantId = req.tenantId;
-      const tenant = await prisma.tenant.findUnique({ where: { id: tenantId } });
+      const tenant = await req.db((db) => db.tenant.findUnique({ where: { id: tenantId } }));
       if (!tenant) {
         return res.status(404).json({ success: false, error: 'Tenant not found' });
       }
@@ -52,22 +52,24 @@ class AnalyticsController {
         templatesCustom,
         broadcastsTotal,
         outboundTotal,
-      ] = await Promise.all([
-        prisma.chat.count({ where: { tenantId, createdAt: { gte: todayStart } } }),
-        prisma.chat.count({ where: { tenantId, status: 'OPEN' } }),
-        prisma.chat.count({ where: { tenantId, status: 'UNASSIGNED' } }),
-        prisma.chat.count({ where: { tenantId, status: 'RESOLVED', updatedAt: { gte: todayStart } } }),
-        prisma.message.count({ where: { tenantId, direction: 'INBOUND', createdAt: { gte: todayStart } } }),
-        prisma.message.count({ where: { tenantId, direction: 'OUTBOUND', createdAt: { gte: todayStart } } }),
-        prisma.agent.count({ where: { tenantId } }),
-        prisma.agent.count({ where: { tenantId, status: 'ONLINE' } }),
-        prisma.template.count({ where: { tenantId, status: 'APPROVED' } }),
-        prisma.template.count({
+      ] = await req.db((db) =>
+        Promise.all([
+        db.chat.count({ where: { tenantId, createdAt: { gte: todayStart } } }),
+        db.chat.count({ where: { tenantId, status: 'OPEN' } }),
+        db.chat.count({ where: { tenantId, status: 'UNASSIGNED' } }),
+        db.chat.count({ where: { tenantId, status: 'RESOLVED', updatedAt: { gte: todayStart } } }),
+        db.message.count({ where: { tenantId, direction: 'INBOUND', createdAt: { gte: todayStart } } }),
+        db.message.count({ where: { tenantId, direction: 'OUTBOUND', createdAt: { gte: todayStart } } }),
+        db.agent.count({ where: { tenantId } }),
+        db.agent.count({ where: { tenantId, status: 'ONLINE' } }),
+        db.template.count({ where: { tenantId, status: 'APPROVED' } }),
+        db.template.count({
           where: { tenantId, status: 'APPROVED', name: { notIn: ['hello_world', '3p_direct_integration_test_template'] } },
         }),
-        prisma.broadcast.count({ where: { tenantId } }),
-        prisma.message.count({ where: { tenantId, direction: 'OUTBOUND' } }),
-      ]);
+        db.broadcast.count({ where: { tenantId } }),
+        db.message.count({ where: { tenantId, direction: 'OUTBOUND' } }),
+        ])
+      );
 
       return res.json({
         success: true,

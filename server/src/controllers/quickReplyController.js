@@ -26,11 +26,13 @@ class QuickReplyController {
   /** GET /api/quick-replies — every agent in the tenant can read. */
   static async list(req, res) {
     try {
-      const replies = await prisma.quickReply.findMany({
-        where: { tenantId: req.tenantId },
-        orderBy: [{ title: 'asc' }],
-        take: 200,
-      });
+      const replies = await req.db((db) =>
+        db.quickReply.findMany({
+          where: { tenantId: req.tenantId },
+          orderBy: [{ title: 'asc' }],
+          take: 200,
+        })
+      );
       return res.json({ success: true, quickReplies: replies.map(shape) });
     } catch (error) {
       console.error('[Quick Replies List Error]:', error);
@@ -47,9 +49,11 @@ class QuickReplyController {
       if (!title || !body) {
         return res.status(400).json({ success: false, error: 'Title and message text are required' });
       }
-      const reply = await prisma.quickReply.create({
-        data: { tenantId: req.tenantId, title, body, shortcut },
-      });
+      const reply = await req.db((db) =>
+        db.quickReply.create({
+          data: { tenantId: req.tenantId, title, body, shortcut },
+        })
+      );
       return res.status(201).json({ success: true, quickReply: shape(reply) });
     } catch (error) {
       if (error.code === 'P2002') {
@@ -63,9 +67,11 @@ class QuickReplyController {
   /** PUT /api/quick-replies/:id — ADMIN / SUPERVISOR, tenant-scoped. */
   static async update(req, res) {
     try {
-      const existing = await prisma.quickReply.findFirst({
-        where: { id: req.params.id, tenantId: req.tenantId },
-      });
+      const existing = await req.db((db) =>
+        db.quickReply.findFirst({
+          where: { id: req.params.id, tenantId: req.tenantId },
+        })
+      );
       if (!existing) {
         return res.status(404).json({ success: false, error: 'Quick reply not found' });
       }
@@ -74,10 +80,12 @@ class QuickReplyController {
       if (!title || !body) {
         return res.status(400).json({ success: false, error: 'Title and message text are required' });
       }
-      const reply = await prisma.quickReply.update({
-        where: { id: existing.id },
-        data: { title, body, shortcut: cleanShortcut(req.body?.shortcut) },
-      });
+      const reply = await req.db((db) =>
+        db.quickReply.update({
+          where: { id: existing.id },
+          data: { title, body, shortcut: cleanShortcut(req.body?.shortcut) },
+        })
+      );
       return res.json({ success: true, quickReply: shape(reply) });
     } catch (error) {
       if (error.code === 'P2002') {
@@ -91,13 +99,15 @@ class QuickReplyController {
   /** DELETE /api/quick-replies/:id — ADMIN / SUPERVISOR, tenant-scoped. */
   static async remove(req, res) {
     try {
-      const existing = await prisma.quickReply.findFirst({
-        where: { id: req.params.id, tenantId: req.tenantId },
-      });
+      const existing = await req.db((db) =>
+        db.quickReply.findFirst({
+          where: { id: req.params.id, tenantId: req.tenantId },
+        })
+      );
       if (!existing) {
         return res.status(404).json({ success: false, error: 'Quick reply not found' });
       }
-      await prisma.quickReply.delete({ where: { id: existing.id } });
+      await req.db((db) => db.quickReply.delete({ where: { id: existing.id } }));
       return res.json({ success: true });
     } catch (error) {
       console.error('[Quick Reply Delete Error]:', error);

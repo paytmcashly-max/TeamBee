@@ -7,8 +7,9 @@ class TenantController {
    */
   static async getSettings(req, res) {
     try {
-      const tenant = await prisma.tenant.findUnique({
-        where: { id: req.tenantId },
+      const tenant = await req.db((db) =>
+        db.tenant.findUnique({
+          where: { id: req.tenantId },
         select: {
           id: true,
           name: true,
@@ -24,9 +25,10 @@ class TenantController {
           officeHoursTimezone: true,
           awayTemplateName: true,
           createdAt: true,
-          updatedAt: true,
-        },
-      });
+            updatedAt: true,
+          },
+        })
+      );
 
       if (!tenant) {
         return res.status(404).json({ success: false, error: 'Tenant not found' });
@@ -160,10 +162,12 @@ class TenantController {
          updateData.accessToken = encryptSecret(accessToken.trim());
       }
 
-      const updated = await prisma.tenant.update({
-        where: { id: req.tenantId },
-        data: updateData,
-      });
+      const updated = await req.db((db) =>
+        db.tenant.update({
+          where: { id: req.tenantId },
+          data: updateData,
+        })
+      );
 
       return res.json({
         success: true,

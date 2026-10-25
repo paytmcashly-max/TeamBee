@@ -3,6 +3,11 @@ const axios = require('axios');
 const prisma = require('../db/prisma');
 
 const { PLANS } = require('../data/plans');
+const { withSystemDb, rlsContextEnabled } = require('../db/withTenant');
+
+async function systemDb(fn) {
+  return rlsContextEnabled() ? withSystemDb((tx) => fn(tx)) : fn(prisma);
+}
 
 function billingConfigured() {
   return Boolean(process.env.RAZORPAY_KEY_ID && process.env.RAZORPAY_KEY_SECRET);
@@ -12,7 +17,7 @@ class BillingController {
   /** GET /api/billing/status — plan state + whether payments are live. */
   static async status(req, res) {
     try {
-      const tenant = await prisma.tenant.findUnique({ where: { id: req.tenantId } });
+      const tenant = await req.db((db) => db.tenant.findUnique({ where: { id: req.tenantId } }));
       if (!tenant) return res.status(404).json({ success: false, error: 'Tenant not found' });
       return res.json({
         success: true,
@@ -99,14 +104,16 @@ class BillingController {
       const entity = req.body?.payload?.payment?.entity || req.body?.payload?.order?.entity;
       const notes = entity?.notes || req.body?.payload?.order?.entity?.notes || {};
       if (event === 'payment.captured' && notes.tenantId && PLANS[String(notes.plan || '').toUpperCase()]) {
-        await prisma.tenant.update({
-          where: { id: notes.tenantId },
-          data: {
-            plan: String(notes.plan).toUpperCase(),
-            subscriptionStatus: 'ACTIVE',
-            trialEndsAt: null,
-          },
-        });
+        await systemDb((db) =>
+          db.tenant.update({
+            where: { id: notes.tenantId },
+            data: {
+              plan: String(notes.plan).toUpperCase(),
+              subscriptionStatus: 'ACTIVE',
+              trialEndsAt: null,
+            },
+          })
+        );
       }
       return res.json({ success: true });
     } catch (error) {

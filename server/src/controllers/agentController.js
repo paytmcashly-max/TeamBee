@@ -9,8 +9,9 @@ class AgentController {
    */
   static async listAgents(req, res) {
     try {
-      const agents = await prisma.agent.findMany({
-        where: { tenantId: req.tenantId },
+      const agents = await req.db((db) =>
+        db.agent.findMany({
+          where: { tenantId: req.tenantId },
         select: {
           id: true,
           name: true,
@@ -28,8 +29,9 @@ class AgentController {
             },
           },
         },
-        orderBy: { name: 'asc' },
-      });
+          orderBy: { name: 'asc' },
+        })
+      );
 
       const includeEmail = req.agent.role !== 'AGENT';
       const formatted = agents.map((a) => ({
@@ -67,12 +69,14 @@ class AgentController {
 
       // Plan seat limit: the pricing page promises per-plan agent caps —
       // enforce them here, at the only door agents are created through.
-      const tenant = await prisma.tenant.findUnique({ where: { id: req.tenantId } });
+      const tenant = await req.db((db) => db.tenant.findUnique({ where: { id: req.tenantId } }));
       const { agentLimitForTenant, effectivePlanKey } = require('../services/planLimits');
       const seatLimit = agentLimitForTenant(tenant);
-      const activeAgents = await prisma.agent.count({
-        where: { tenantId: req.tenantId, isActive: true },
-      });
+      const activeAgents = await req.db((db) =>
+        db.agent.count({
+          where: { tenantId: req.tenantId, isActive: true },
+        })
+      );
       if (activeAgents >= seatLimit) {
         return res.status(403).json({
           success: false,
@@ -82,12 +86,14 @@ class AgentController {
       }
 
       // Check duplicate
-      const existing = await prisma.agent.findFirst({
-        where: {
-          tenantId: req.tenantId,
-          email,
-        },
-      });
+      const existing = await req.db((db) =>
+        db.agent.findFirst({
+          where: {
+            tenantId: req.tenantId,
+            email,
+          },
+        })
+      );
 
       if (existing) {
         return res.status(400).json({ success: false, error: 'An agent with this email already exists in your organization' });
@@ -95,8 +101,9 @@ class AgentController {
 
       const passwordHash = await bcrypt.hash(password, 10);
 
-      const agent = await prisma.agent.create({
-        data: {
+      const agent = await req.db((db) =>
+        db.agent.create({
+          data: {
           tenantId: req.tenantId,
           name,
           email,
@@ -112,9 +119,10 @@ class AgentController {
           role: true,
           status: true,
           isActive: true,
-          createdAt: true,
-        },
-      });
+            createdAt: true,
+          },
+        })
+      );
 
       await logAuditEvent({ tenantId: req.tenantId, agentId: req.agent.id, event: 'AGENT_CREATED', req, metadata: { createdAgentId: agent.id, role: agent.role } });
       return res.status(201).json({ success: true, agent });
@@ -161,10 +169,12 @@ class AgentController {
         if (isActive !== undefined) updateData.isActive = isActive;
       }
 
-      const target = await prisma.agent.findFirst({
-        where: { id, tenantId: req.tenantId },
-        select: { id: true, role: true, isActive: true },
-      });
+      const target = await req.db((db) =>
+        db.agent.findFirst({
+          where: { id, tenantId: req.tenantId },
+          select: { id: true, role: true, isActive: true },
+        })
+      );
       if (!target) {
         return res.status(404).json({ success: false, error: 'Agent not found' });
       }
@@ -177,9 +187,11 @@ class AgentController {
       const demotesAdmin = target.role === 'ADMIN' && updateData.role && updateData.role !== 'ADMIN';
       const deactivatesAdmin = target.role === 'ADMIN' && updateData.isActive === false;
       if (demotesAdmin || deactivatesAdmin) {
-        const otherAdmins = await prisma.agent.count({
-          where: { tenantId: req.tenantId, role: 'ADMIN', isActive: true, id: { not: target.id } },
-        });
+        const otherAdmins = await req.db((db) =>
+          db.agent.count({
+            where: { tenantId: req.tenantId, role: 'ADMIN', isActive: true, id: { not: target.id } },
+          })
+        );
         if (otherAdmins === 0) {
           return res.status(400).json({
             success: false,
@@ -207,18 +219,20 @@ class AgentController {
         updateData.tokenVersion = { increment: 1 };
       }
 
-      const updated = await prisma.agent.update({
-        where: { id: target.id },
-        data: updateData,
-        select: {
-          id: true,
-          name: true,
-          email: true,
-          role: true,
-          status: true,
-          isActive: true,
-        },
-      });
+      const updated = await req.db((db) =>
+        db.agent.update({
+          where: { id: target.id },
+          data: updateData,
+          select: {
+            id: true,
+            name: true,
+            email: true,
+            role: true,
+            status: true,
+            isActive: true,
+          },
+        })
+      );
 
       // Role/status/password edits take effect immediately, not at cache TTL.
       invalidateAgentCache(target.id);
@@ -235,11 +249,11 @@ class AgentController {
    */
   static async getAnalytics(req, res) {
     try {
-      const totalChats = await prisma.chat.count({ where: { tenantId: req.tenantId } });
-      const openChats = await prisma.chat.count({ where: { tenantId: req.tenantId, status: 'OPEN' } });
-      const unassignedChats = await prisma.chat.count({ where: { tenantId: req.tenantId, status: 'UNASSIGNED' } });
-      const resolvedChats = await prisma.chat.count({ where: { tenantId: req.tenantId, status: 'RESOLVED' } });
-      const totalMessages = await prisma.message.count({ where: { tenantId: req.tenantId } });
+      const totalChats = await req.db((db) => db.chat.count({ where: { tenantId: req.tenantId } }));
+      const openChats = await req.db((db) => db.chat.count({ where: { tenantId: req.tenantId, status: 'OPEN' } }));
+      const unassignedChats = await req.db((db) => db.chat.count({ where: { tenantId: req.tenantId, status: 'UNASSIGNED' } }));
+      const resolvedChats = await req.db((db) => db.chat.count({ where: { tenantId: req.tenantId, status: 'RESOLVED' } }));
+      const totalMessages = await req.db((db) => db.message.count({ where: { tenantId: req.tenantId } }));
 
       // Average response time computed IN SQL over the last 30 days — the
       // previous version loaded up to 10,000 message rows into JS and paired
@@ -249,7 +263,7 @@ class AgentController {
       // the first outbound that follows an inbound; the metric averages
       // (answered_at - burst_start) over all answered bursts.
       const windowStart = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
-      const slaRows = await prisma.$queryRaw`
+      const slaRows = await req.db((db) => db.$queryRaw`
         WITH ordered AS (
           SELECT id, chat_id, direction, created_at,
                  LAG(direction) OVER (PARTITION BY chat_id ORDER BY created_at, id) AS prev_dir
@@ -275,7 +289,7 @@ class AgentController {
         )
         SELECT CAST(AVG(EXTRACT(EPOCH FROM (responded_at - burst_start))) AS double precision) AS avg_sec
         FROM pairs
-      `;
+      `);
       const averageResponse =
         slaRows.length && slaRows[0].avg_sec != null ? Math.round(slaRows[0].avg_sec) : null;
       const resolutionRate = totalChats ? `${((resolvedChats / totalChats) * 100).toFixed(1)}%` : '0.0%';
