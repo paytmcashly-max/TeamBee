@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import {
   Send,
   Paperclip,
+  Zap,
   Smile,
   Clock,
   Check,
@@ -31,6 +32,8 @@ import { useAuth } from '../../context/AuthContext';
 import { useChat } from '../../context/ChatContext';
 import { useSocket } from '../../context/SocketContext';
 import { useToast } from '../../context/ToastContext';
+import ClosedWindowBar from './ClosedWindowBar';
+import MessageActionSheet from './MessageActionSheet';
 
 const API_BASE = (import.meta.env.VITE_API_URL || '').replace(/\/+$/, '');
 
@@ -1245,7 +1248,7 @@ export default function ChatCanvas({ onOpenTemplatePicker, onToggleSidebar, isSi
           }}
         >
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
-            <span style={{ fontSize: '12px', fontWeight: '600', color: '#fff' }}>⚡ Quick Replies</span>
+            <span style={{ fontSize: '12px', fontWeight: '600', color: '#fff', display: 'inline-flex', alignItems: 'center', gap: '6px' }}><Zap size={13} /> Quick Replies</span>
             <button
               onClick={() => { setShowQuickReplies(false); setQrForm(null); setQrError(null); }}
               className="btn btn-ghost"
@@ -1395,7 +1398,7 @@ export default function ChatCanvas({ onOpenTemplatePicker, onToggleSidebar, isSi
           }}
         >
           <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px', alignItems: 'center' }}>
-            <span style={{ fontSize: '11.5px', fontWeight: '600', color: '#fff' }}>📎 Attach Media / Doc</span>
+            <span style={{ fontSize: '11.5px', fontWeight: '600', color: '#fff', display: 'inline-flex', alignItems: 'center', gap: '6px' }}><Paperclip size={13} /> Attach Media / Doc</span>
             <button
               onClick={() => setShowAttachmentMenu(false)}
               className="btn btn-ghost"
@@ -1568,6 +1571,12 @@ export default function ChatCanvas({ onOpenTemplatePicker, onToggleSidebar, isSi
           </div>
         </div>
 
+        {/* Closed 24h window: no fake input — a template CTA instead.
+            Team Notes are exempt (internal, no window needed). */}
+        {composeMode !== 'NOTE' && !messagingWindow.isOpen ? (
+          <ClosedWindowBar onSendTemplate={onOpenTemplatePicker} />
+        ) : (
+          <>
         {/* 6.2 Interactive Buttons Config Bar (Visible only when in INTERACTIVE mode) */}
         {composeMode === 'INTERACTIVE' && (
           <div
@@ -1667,7 +1676,7 @@ export default function ChatCanvas({ onOpenTemplatePicker, onToggleSidebar, isSi
               style={{ color: showQuickReplies ? 'var(--wa-primary)' : 'var(--text-secondary)' }}
               title="Canned Quick Responses"
             >
-              ⚡
+              <Zap size={17} />
             </button>
 
             <button
@@ -1710,12 +1719,10 @@ export default function ChatCanvas({ onOpenTemplatePicker, onToggleSidebar, isSi
               onKeyDown={handleKeyDown}
               placeholder={
                 composeMode === 'NOTE'
-                  ? '🔒 Private staff note...'
+                  ? 'Write a private staff note...'
                   : composeMode === 'INTERACTIVE'
                   ? 'Question with buttons...'
-                  : messagingWindow.isOpen
-                  ? 'WhatsApp reply...'
-                  : '⚠️ 24-hr window expired'
+                  : 'WhatsApp reply...'
               }
               className="chat-textarea"
               style={{
@@ -1782,24 +1789,16 @@ export default function ChatCanvas({ onOpenTemplatePicker, onToggleSidebar, isSi
             {composeMode === 'NOTE' ? <Lock size={16} /> : <Send size={16} />}
           </button>
         </form>
+          </>
+        )}
       </div>
 
       {/* Message action sheet (long-press / right-click on a message) */}
-      {msgMenuMsg && (
-        <div className="msg-menu-backdrop" onClick={() => setMsgMenuMsg(null)}>
-          <div
-            className="msg-menu-sheet"
-            role="menu"
-            aria-label="Message actions"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="msg-menu-preview">{msgMenuMsg.content}</div>
-            <button type="button" className="msg-menu-action" onClick={copyMsgText}>
-              <Copy size={17} /> Copy text
-            </button>
-          </div>
-        </div>
-      )}
+      <MessageActionSheet
+        msg={msgMenuMsg}
+        onCopy={copyMsgText}
+        onClose={() => setMsgMenuMsg(null)}
+      />
     </main>
   );
 }
