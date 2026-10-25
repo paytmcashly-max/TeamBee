@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import {
   Send,
   Paperclip,
@@ -32,6 +32,7 @@ import { useAuth } from '../../context/AuthContext';
 import { useChat } from '../../context/ChatContext';
 import { useSocket } from '../../context/SocketContext';
 import { useToast } from '../../context/ToastContext';
+import AuthedMedia from './AuthedMedia';
 import ClosedWindowBar from './ClosedWindowBar';
 import MessageActionSheet from './MessageActionSheet';
 
@@ -61,66 +62,6 @@ function withDateSeparators(list) {
     out.push(message);
   }
   return out;
-}
-
-// Inbound media lives behind Meta's expiring URLs, so it is streamed through
-// the authenticated backend proxy. The JWT travels in a header, so the binary
-// is fetched as a blob and rendered from an object URL.
-function AuthedMedia({ messageId, kind, token, filename }) {
-  const [objectUrl, setObjectUrl] = useState(null);
-  const [failed, setFailed] = useState(false);
-
-  useEffect(() => {
-    let revoked = false;
-    let createdUrl = null;
-    (async () => {
-      try {
-        const res = await fetch(`${API_BASE}/api/messages/media/${messageId}`, {
-          credentials: 'include',
-          headers: token ? { Authorization: `Bearer ${token}` } : {},
-        });
-        if (!res.ok) throw new Error('media fetch failed');
-        const blob = await res.blob();
-        createdUrl = URL.createObjectURL(blob);
-        if (!revoked) setObjectUrl(createdUrl);
-      } catch (err) {
-        if (!revoked) setFailed(true);
-      }
-    })();
-    return () => {
-      revoked = true;
-      if (createdUrl) URL.revokeObjectURL(createdUrl);
-    };
-  }, [messageId, token]);
-
-  if (failed) {
-    return (
-      <div style={{ padding: '18px 12px', borderRadius: '8px', background: 'rgba(255,255,255,0.06)', color: 'var(--text-muted)', fontSize: '12px', textAlign: 'center' }}>
-        Media unavailable
-      </div>
-    );
-  }
-  if (!objectUrl) {
-    return (
-      <div style={{ padding: '18px 12px', borderRadius: '8px', background: 'rgba(255,255,255,0.06)', color: 'var(--text-muted)', fontSize: '12px', textAlign: 'center' }}>
-        Loading media…
-      </div>
-    );
-  }
-  if (kind === 'IMAGE') {
-    return <img src={objectUrl} alt="WhatsApp Attachment" loading="lazy" decoding="async" style={{ maxWidth: '100%', maxHeight: '200px', borderRadius: '8px', display: 'block', objectFit: 'cover' }} />;
-  }
-  if (kind === 'AUDIO') {
-    return <audio controls src={objectUrl} style={{ maxWidth: '100%' }} />;
-  }
-  if (kind === 'VIDEO') {
-    return <video controls preload="metadata" src={objectUrl} style={{ maxWidth: '100%', maxHeight: '220px', borderRadius: '8px', display: 'block' }} />;
-  }
-  return (
-    <a href={objectUrl} target="_blank" rel="noreferrer" style={{ color: '#38bdf8', fontSize: '11.5px', fontWeight: 500 }}>
-      {filename || 'Open document'}
-    </a>
-  );
 }
 
 export default function ChatCanvas({ onOpenTemplatePicker, onToggleSidebar, isSidebarOpen, onBack }) {
@@ -484,6 +425,10 @@ export default function ChatCanvas({ onOpenTemplatePicker, onToggleSidebar, isSi
       (qr.shortcut || '').includes(q)
     );
   });
+
+  // Date-separated stream items, recomputed only when the messages
+  // themselves change — not on every keystroke/socket tick re-render.
+  const streamItems = useMemo(() => withDateSeparators(messages), [messages]);
 
   if (!activeChat) {
     return (
@@ -884,15 +829,18 @@ export default function ChatCanvas({ onOpenTemplatePicker, onToggleSidebar, isSi
           </button>
         )}
         {loadingMessages && messages.length === 0 ? (
-          <div style={{ textAlign: 'center', color: 'var(--text-muted)', padding: '20px' }}>
-            Fetching WhatsApp message logs...
+          <div aria-hidden="true">
+            <div className="skel skel-bubble" style={{ width: '46%' }} />
+            <div className="skel skel-bubble right" style={{ width: '58%' }} />
+            <div className="skel skel-bubble" style={{ width: '38%' }} />
+            <div className="skel skel-bubble right" style={{ width: '42%' }} />
           </div>
         ) : messages.length === 0 ? (
           <div style={{ textAlign: 'center', color: 'var(--text-muted)', padding: '40px 0' }}>
             No messages logged in this session yet.
           </div>
         ) : (
-          withDateSeparators(messages).map((msg) => {
+          streamItems.map((msg) => {
             if (msg._separator) {
               return (
                 <div key={msg.id} className="msg-date-separator">

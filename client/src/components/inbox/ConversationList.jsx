@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import {
   Search,
   Check,
@@ -136,15 +136,20 @@ export default function ConversationList({
     a.localeCompare(b)
   );
 
-  const filteredChats = chats.filter((c) => {
-    if (selectedTag && !parseTags(c.tags).includes(selectedTag)) return false;
-    if (!searchQuery.trim()) return true;
-    const q = searchQuery.toLowerCase();
-    const nameMatch = c.contact?.name?.toLowerCase().includes(q);
-    const phoneMatch = c.contact?.waId?.includes(q);
-    const previewMatch = c.lastMessagePreview?.toLowerCase().includes(q);
-    return nameMatch || phoneMatch || previewMatch;
-  });
+  // Recomputed only when its actual inputs change (was: every render).
+  const filteredChats = useMemo(
+    () =>
+      chats.filter((c) => {
+        if (selectedTag && !parseTags(c.tags).includes(selectedTag)) return false;
+        if (!searchQuery.trim()) return true;
+        const q = searchQuery.toLowerCase();
+        const nameMatch = c.contact?.name?.toLowerCase().includes(q);
+        const phoneMatch = c.contact?.waId?.includes(q);
+        const previewMatch = c.lastMessagePreview?.toLowerCase().includes(q);
+        return nameMatch || phoneMatch || previewMatch;
+      }),
+    [chats, selectedTag, searchQuery]
+  );
 
   return (
     <aside className="col-conversations">
@@ -598,8 +603,16 @@ export default function ConversationList({
       {/* Conversation Cards List */}
       <div className="chat-list-scroll" style={{ flex: 1, overflowY: 'auto' }}>
         {loadingChats && chats.length === 0 ? (
-          <div style={{ padding: '30px', textAlign: 'center', color: 'var(--text-muted)', fontSize: '13px' }}>
-            Loading WhatsApp chats...
+          <div aria-hidden="true">
+            {[0, 1, 2, 3, 4].map((i) => (
+              <div key={i} className="skel-row">
+                <div className="skel skel-avatar" />
+                <div className="skel-lines">
+                  <div className="skel skel-line" style={{ width: '55%' }} />
+                  <div className="skel skel-line" style={{ width: '82%' }} />
+                </div>
+              </div>
+            ))}
           </div>
         ) : filteredChats.length === 0 ? (
           <div style={{ padding: '40px 20px', textAlign: 'center' }}>
