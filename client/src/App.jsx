@@ -1,4 +1,4 @@
-import React, { useState, lazy, Suspense } from 'react';
+import React, { useState, useEffect, useRef, lazy, Suspense } from 'react';
 import { useAuth } from './context/AuthContext';
 import { useChat } from './context/ChatContext';
 import LoginView from './components/auth/LoginView';
@@ -24,6 +24,43 @@ export default function App() {
   const [isBroadcastModalOpen, setIsBroadcastModalOpen] = useState(false);
   const [isAgentsModalOpen, setIsAgentsModalOpen] = useState(false);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+
+  // Mobile drill-in history: on a phone, opening a chat pushes one history
+  // entry so the device/browser Back button returns to the conversation
+  // list instead of leaving the app. Desktop keeps plain state navigation.
+  const chatHistoryArmedRef = useRef(false);
+  useEffect(() => {
+    const chatOpen = Boolean(activeChat || activeChatId);
+    if (
+      chatOpen &&
+      !chatHistoryArmedRef.current &&
+      typeof window !== 'undefined' &&
+      window.matchMedia('(max-width: 768px)').matches
+    ) {
+      window.history.pushState({ teambeeChat: true }, '');
+      chatHistoryArmedRef.current = true;
+    }
+    if (!chatOpen) chatHistoryArmedRef.current = false;
+  }, [activeChat, activeChatId]);
+
+  useEffect(() => {
+    const onPopState = () => {
+      if (chatHistoryArmedRef.current) {
+        chatHistoryArmedRef.current = false;
+        selectChat(null);
+      }
+    };
+    window.addEventListener('popstate', onPopState);
+    return () => window.removeEventListener('popstate', onPopState);
+  }, [selectChat]);
+
+  const handleMobileBack = () => {
+    if (chatHistoryArmedRef.current) {
+      window.history.back(); // the popstate handler closes the chat
+    } else {
+      selectChat(null);
+    }
+  };
 
   if (loading) {
     return (
@@ -71,7 +108,7 @@ export default function App() {
           onOpenTemplatePicker={() => setIsTemplateModalOpen(true)}
           onToggleSidebar={() => setIsSidebarOpen(!isSidebarOpen)}
           isSidebarOpen={isSidebarOpen}
-          onBack={() => selectChat(null)}
+          onBack={handleMobileBack}
         />
 
         {/* Backdrop for Mobile/Tablet CRM drawer */}

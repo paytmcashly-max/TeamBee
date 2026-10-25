@@ -451,22 +451,12 @@ h1, h2, h3, h4, h5, h6 {
    RESPONSIVE MEDIA QUERIES (DESKTOP, TABLET, MOBILE)
    ========================================================================== */
 
-/* 1. Laptops & Small Desktops (max-width: 1200px) */
+/* 1. Laptops & Small Desktops (max-width: 1200px) — Material canonical
+   layouts justify a pinned third column only at >=1200px; below that the
+   CRM panel is a slide-out drawer over the chat (2026-10-25, was 1024px). */
 @media (max-width: 1200px) {
   .col-conversations {
     width: 320px;
-    min-width: 300px;
-  }
-  .col-crm-sidebar {
-    width: 300px;
-    min-width: 280px;
-  }
-}
-
-/* 2. Tablets & Laptops (max-width: 1024px) */
-@media (max-width: 1024px) {
-  .col-conversations {
-    width: 330px;
     min-width: 300px;
   }
 
@@ -492,6 +482,14 @@ h1, h2, h3, h4, h5, h6 {
     backdrop-filter: blur(4px);
     z-index: 85;
     animation: fadeIn 0.2s ease-out;
+  }
+}
+
+/* 2. Tablets & Laptops (max-width: 1024px) */
+@media (max-width: 1024px) {
+  .col-conversations {
+    width: 330px;
+    min-width: 300px;
   }
 }
 
@@ -614,17 +612,22 @@ h1, h2, h3, h4, h5, h6 {
     padding-right: 10px !important;
   }
   .chat-header-action {
-    min-width: 38px !important;
-    height: 38px !important;
+    min-width: 44px !important;
+    height: 44px !important;
   }
   button.chat-header-action.btn-ghost {
-    padding: 9px !important;
+    padding: 12px !important;
+  }
+  .btn-mobile-back {
+    width: 44px !important;
+    height: 44px !important;
+    min-width: 44px !important;
   }
 
   /* Composer tools (quick replies / attach) up to target size */
   .btn-tool {
-    min-width: 38px;
-    min-height: 38px;
+    min-width: 44px;
+    min-height: 44px;
   }
 
   /* Message stream: reclaim the side gutters */
