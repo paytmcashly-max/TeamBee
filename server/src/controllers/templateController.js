@@ -102,6 +102,153 @@ class TemplateController {
   }
 
   /**
+   * POST /api/templates: Create a template on Meta for review (ADMIN).
+   * Meta decides approval; the local row is stored immediately with the
+   * status Meta returns (usually PENDING) and reconciled by /sync.
+   */
+  static async createTemplate(req, res) {
+    try {
+      const {
+        name,
+        language = 'en_US',
+        category = 'UTILITY',
+        bodyText,
+        bodyExamples = [],
+        headerText = '',
+        footerText = '',
+        quickReplies = [],
+        urlButton = null,
+      } = req.body || {};
+
+      // ---- Validation (mirror Meta's rules so failures are caught here
+      // with a readable message instead of a cryptic Graph error) ----
+      if (!name || !/^[a-z0-9_]+$/.test(name)) {
+        return res.status(400).json({
+          success: false,
+          error: 'Template name must use only lowercase letters, numbers and underscores (e.g. demo_class_reminder).',
+        });
+      }
+      if (!/^[a-z]{2,3}(_[A-Z]{2})?$/.test(language)) {
+        return res.status(400).json({ success: false, error: 'Invalid language code (e.g. en_US, hi).' });
+      }
+      if (!['UTILITY', 'MARKETING', 'AUTHENTICATION'].includes(category)) {
+        return res.status(400).json({ success: false, error: 'Category must be UTILITY, MARKETING or AUTHENTICATION.' });
+      }
+      if (!bodyText || !bodyText.trim()) {
+        return res.status(400).json({ success: false, error: 'Template body text is required.' });
+      }
+      if (bodyText.length > 1024) {
+        return res.status(400).json({ success: false, error: 'Template body must be 1024 characters or fewer.' });
+      }
+      if (/\{\{|\}\}/.test(headerText) || /\{\{|\}\}/.test(footerText)) {
+        return res.status(400).json({ success: false, error: 'Variables are not supported in the header or footer in this form.' });
+      }
+      if (footerText.length > 60) {
+        return res.status(400).json({ success: false, error: 'Footer must be 60 characters or fewer.' });
+      }
+      if (headerText.length > 60) {
+        return res.status(400).json({ success: false, error: 'Header text must be 60 characters or fewer.' });
+      }
+
+      // Variables must be sequential {{1}}..{{n}} and every one needs an
+      // example value — Meta rejects the submission otherwise.
+      const varNumbers = [...new Set([...bodyText.matchAll(/\{\{(\d+)\}\}/g)].map((m) => Number(m[1])))].sort((a, b) => a - b);
+      const sequential = varNumbers.every((n, i) => n === i + 1);
+      if (!sequential) {
+        return res.status(400).json({
+          success: false,
+          error: 'Body variables must be sequential: {{1}}, {{2}}, {{3}}… with no gaps or repeats out of order.',
+        });
+      }
+      if (varNumbers.length > 0 && (!Array.isArray(bodyExamples) || bodyExamples.length !== varNumbers.length || bodyExamples.some((e) => !String(e).trim()))) {
+        return res.status(400).json({
+          success: false,
+          error: `This body has ${varNumbers.length} variable(s) — provide one example value for each (Meta needs them for review).`,
+        });
+      }
+
+      const cleanQuickReplies = (Array.isArray(quickReplies) ? quickReplies : [])
+        .map((t) => String(t || '').trim())
+        .filter(Boolean)
+        .slice(0, 3);
+      if (cleanQuickReplies.some((t) => t.length > 25)) {
+        return res.status(400).json({ success: false, error: 'Quick-reply button text must be 25 characters or fewer.' });
+      }
+
+      // ---- Build Meta components ----
+      const components = [];
+      if (headerText.trim()) {
+        components.push({ type: 'HEADER', format: 'TEXT', text: headerText.trim() });
+      }
+      const bodyComponent = { type: 'BODY', text: bodyText.trim() };
+      if (varNumbers.length > 0) {
+        bodyComponent.example = { body_text: [bodyExamples.map((e) => String(e).trim())] };
+      }
+      components.push(bodyComponent);
+      if (footerText.trim()) {
+        components.push({ type: 'FOOTER', text: footerText.trim() });
+      }
+      const metaButtons = [
+        ...cleanQuickReplies.map((text) => ({ type: 'QUICK_REPLY', text })),
+        ...(urlButton?.text && urlButton?.url
+          ? [{ type: 'URL', text: String(urlButton.text).trim().slice(0, 25), url: String(urlButton.url).trim() }]
+          : []),
+      ];
+      if (metaButtons.length > 0) {
+        components.push({ type: 'BUTTONS', buttons: metaButtons });
+      }
+
+      const tenant = await prisma.tenant.findUnique({ where: { id: req.tenantId } });
+      if (!tenant) {
+        return res.status(404).json({ success: false, error: 'Tenant not found' });
+      }
+
+      const metaRes = await MetaApiService.createMetaTemplate(tenant, {
+        name,
+        language,
+        category,
+        components,
+      });
+      if (!metaRes.success) {
+        return res.status(400).json({
+          success: false,
+          error: `Meta rejected the template: ${metaRes.error || metaRes.reason}`,
+        });
+      }
+
+      const record = await prisma.template.upsert({
+        where: { tenantId_name_language: { tenantId: tenant.id, name, language } },
+        update: {
+          status: metaRes.template?.status || 'PENDING',
+          category,
+          bodyText: bodyText.trim(),
+          headerType: headerText.trim() ? 'TEXT' : 'NONE',
+          headerContent: headerText.trim() || null,
+          footerText: footerText.trim() || null,
+          buttons: JSON.stringify(metaButtons),
+        },
+        create: {
+          tenantId: tenant.id,
+          name,
+          language,
+          status: metaRes.template?.status || 'PENDING',
+          category,
+          bodyText: bodyText.trim(),
+          headerType: headerText.trim() ? 'TEXT' : 'NONE',
+          headerContent: headerText.trim() || null,
+          footerText: footerText.trim() || null,
+          buttons: JSON.stringify(metaButtons),
+        },
+      });
+
+      return res.status(201).json({ success: true, template: record });
+    } catch (error) {
+      console.error('[Create Template Error]:', error);
+      return res.status(500).json({ success: false, error: 'Failed to create template' });
+    }
+  }
+
+  /**
    * POST /api/templates/send: Send a single template message to contact/chat with dynamic variable mapping
    */
   static async sendTemplate(req, res) {

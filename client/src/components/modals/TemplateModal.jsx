@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Sparkles, X, CheckCheck, Send, RefreshCw } from 'lucide-react';
+import { Sparkles, X, CheckCheck, Send, RefreshCw, Plus } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { useChat } from '../../context/ChatContext';
 
@@ -30,6 +30,76 @@ export default function TemplateModal({ isOpen, onClose }) {
   const [sending, setSending] = useState(false);
   const [message, setMessage] = useState(null);
   const [syncing, setSyncing] = useState(false);
+
+  // Create-template form (ADMIN): submits to Meta for review via the
+  // backend; approval itself is Meta's decision.
+  const [showCreate, setShowCreate] = useState(false);
+  const [creating, setCreating] = useState(false);
+  const [createForm, setCreateForm] = useState({
+    name: '',
+    language: 'en_US',
+    category: 'UTILITY',
+    headerText: '',
+    bodyText: '',
+    footerText: '',
+    qr1: '',
+    qr2: '',
+    urlText: '',
+    urlValue: '',
+  });
+  const [createExamples, setCreateExamples] = useState({});
+  const setField = (key, value) => setCreateForm((prev) => ({ ...prev, [key]: value }));
+
+  const handleCreate = async () => {
+    setCreating(true);
+    setMessage(null);
+    try {
+      const varIdx = getVariableIndexes(createForm.bodyText);
+      const res = await fetch('/api/templates', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: createForm.name.trim(),
+          language: createForm.language,
+          category: createForm.category,
+          bodyText: createForm.bodyText,
+          bodyExamples: varIdx.map((n) => createExamples[n] || ''),
+          headerText: createForm.headerText,
+          footerText: createForm.footerText,
+          quickReplies: [createForm.qr1, createForm.qr2].filter((t) => t.trim()),
+          urlButton:
+            createForm.urlText.trim() && createForm.urlValue.trim()
+              ? { text: createForm.urlText, url: createForm.urlValue }
+              : null,
+        }),
+      });
+      const data = await res.json();
+      if (!data.success) throw new Error(data.error || 'Template creation failed');
+      setMessage({
+        type: 'success',
+        text: `Template "${data.template.name}" submitted to Meta — status: ${data.template.status}. Approval is Meta's decision; it will appear in this list, and Sync refreshes its status.`,
+      });
+      setShowCreate(false);
+      setCreateForm({
+        name: '',
+        language: 'en_US',
+        category: 'UTILITY',
+        headerText: '',
+        bodyText: '',
+        footerText: '',
+        qr1: '',
+        qr2: '',
+        urlText: '',
+        urlValue: '',
+      });
+      setCreateExamples({});
+      await loadTemplates();
+    } catch (err) {
+      setMessage({ type: 'error', text: err.message });
+    } finally {
+      setCreating(false);
+    }
+  };
 
   const loadTemplates = async () => {
     setLoading(true);
@@ -227,11 +297,174 @@ export default function TemplateModal({ isOpen, onClose }) {
                 {syncing ? 'Syncing...' : 'Sync from Meta'}
               </button>
             )}
+            {agent?.role === 'ADMIN' && (
+              <button
+                onClick={() => setShowCreate((v) => !v)}
+                className="btn btn-secondary"
+                style={{ padding: '6px 10px', fontSize: '11.5px', gap: '6px' }}
+                title="Create a new template and submit it to Meta for approval"
+              >
+                <Plus size={13} />
+                New Template
+              </button>
+            )}
             <button onClick={onClose} className="btn btn-ghost" style={{ padding: '6px' }} aria-label="Close templates">
               <X size={18} />
             </button>
           </div>
         </div>
+
+        {/* Create Template (ADMIN): submits to Meta for review */}
+        {showCreate && agent?.role === 'ADMIN' && (
+          <div style={{ padding: '16px 20px', borderBottom: '1px solid var(--border-subtle)', background: 'rgba(37, 211, 102, 0.04)' }}>
+            <div style={{ fontSize: '13px', fontWeight: 600, color: '#fff', marginBottom: '4px' }}>Create a new template</div>
+            <p style={{ fontSize: '11.5px', color: 'var(--text-secondary)', marginBottom: '12px', lineHeight: 1.5 }}>
+              This is submitted to Meta for review — approval is Meta's decision and can take minutes to hours.
+              Utility templates (reminders, confirmations) are reviewed lighter and cost less than Marketing ones.
+            </p>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '10px' }}>
+              <div>
+                <label style={{ display: 'block', fontSize: '11px', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '4px' }}>Template name *</label>
+                <input
+                  value={createForm.name}
+                  onChange={(e) => setField('name', e.target.value)}
+                  placeholder="demo_class_reminder"
+                  style={{ width: '100%', background: 'var(--bg-input)', border: '1px solid var(--border-medium)', borderRadius: '8px', color: '#fff', padding: '8px 10px', fontSize: '13px', outline: 'none', fontFamily: 'var(--font-mono)' }}
+                />
+                <div style={{ fontSize: '10.5px', color: 'var(--text-muted)', marginTop: '3px' }}>Lowercase, numbers, underscores only</div>
+              </div>
+              <div>
+                <label style={{ display: 'block', fontSize: '11px', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '4px' }}>Language</label>
+                <select
+                  value={createForm.language}
+                  onChange={(e) => setField('language', e.target.value)}
+                  style={{ width: '100%', background: 'var(--bg-input)', border: '1px solid var(--border-medium)', borderRadius: '8px', color: '#fff', padding: '8px 10px', fontSize: '13px', outline: 'none' }}
+                >
+                  <option value="en_US">English (en_US)</option>
+                  <option value="en">English (en)</option>
+                  <option value="hi">Hindi (hi)</option>
+                </select>
+              </div>
+              <div>
+                <label style={{ display: 'block', fontSize: '11px', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '4px' }}>Category</label>
+                <select
+                  value={createForm.category}
+                  onChange={(e) => setField('category', e.target.value)}
+                  style={{ width: '100%', background: 'var(--bg-input)', border: '1px solid var(--border-medium)', borderRadius: '8px', color: '#fff', padding: '8px 10px', fontSize: '13px', outline: 'none' }}
+                >
+                  <option value="UTILITY">Utility — reminder / confirmation</option>
+                  <option value="MARKETING">Marketing — offer / promotion</option>
+                  <option value="AUTHENTICATION">Authentication — OTP</option>
+                </select>
+              </div>
+              <div>
+                <label style={{ display: 'block', fontSize: '11px', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '4px' }}>Header text (optional)</label>
+                <input
+                  value={createForm.headerText}
+                  onChange={(e) => setField('headerText', e.target.value)}
+                  placeholder="e.g. Class Reminder"
+                  maxLength={60}
+                  style={{ width: '100%', background: 'var(--bg-input)', border: '1px solid var(--border-medium)', borderRadius: '8px', color: '#fff', padding: '8px 10px', fontSize: '13px', outline: 'none' }}
+                />
+              </div>
+            </div>
+            <div style={{ marginTop: '10px' }}>
+              <label style={{ display: 'block', fontSize: '11px', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '4px' }}>Message body *</label>
+              <textarea
+                value={createForm.bodyText}
+                onChange={(e) => setField('bodyText', e.target.value)}
+                placeholder={'Hello {{1}}, your demo class is scheduled on {{2}} at {{3}}. Please reply to confirm.'}
+                rows={4}
+                maxLength={1024}
+                style={{ width: '100%', background: 'var(--bg-input)', border: '1px solid var(--border-medium)', borderRadius: '8px', color: '#fff', padding: '8px 10px', fontSize: '13px', outline: 'none', resize: 'vertical', lineHeight: 1.5 }}
+              />
+              <div style={{ fontSize: '10.5px', color: 'var(--text-muted)', marginTop: '3px' }}>
+                Use {'{{1}}'}, {'{{2}}'}… for values that change per customer — keep them in order.
+              </div>
+            </div>
+            {getVariableIndexes(createForm.bodyText).length > 0 && (
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: '10px', marginTop: '10px' }}>
+                {getVariableIndexes(createForm.bodyText).map((n) => (
+                  <div key={n}>
+                    <label style={{ display: 'block', fontSize: '11px', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '4px' }}>
+                      Example for {'{{' + n + '}}'} *
+                    </label>
+                    <input
+                      value={createExamples[n] || ''}
+                      onChange={(e) => setCreateExamples((prev) => ({ ...prev, [n]: e.target.value }))}
+                      placeholder={n === 1 ? 'e.g. Aarav' : 'e.g. value'}
+                      style={{ width: '100%', background: 'var(--bg-input)', border: '1px solid var(--border-medium)', borderRadius: '8px', color: '#fff', padding: '8px 10px', fontSize: '13px', outline: 'none' }}
+                    />
+                  </div>
+                ))}
+              </div>
+            )}
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '10px', marginTop: '10px' }}>
+              <div>
+                <label style={{ display: 'block', fontSize: '11px', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '4px' }}>Footer text (optional)</label>
+                <input
+                  value={createForm.footerText}
+                  onChange={(e) => setField('footerText', e.target.value)}
+                  placeholder="e.g. Apex EduCare Academy"
+                  maxLength={60}
+                  style={{ width: '100%', background: 'var(--bg-input)', border: '1px solid var(--border-medium)', borderRadius: '8px', color: '#fff', padding: '8px 10px', fontSize: '13px', outline: 'none' }}
+                />
+              </div>
+              <div>
+                <label style={{ display: 'block', fontSize: '11px', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '4px' }}>Quick-reply button 1 (optional)</label>
+                <input
+                  value={createForm.qr1}
+                  onChange={(e) => setField('qr1', e.target.value)}
+                  placeholder="e.g. Confirm"
+                  maxLength={25}
+                  style={{ width: '100%', background: 'var(--bg-input)', border: '1px solid var(--border-medium)', borderRadius: '8px', color: '#fff', padding: '8px 10px', fontSize: '13px', outline: 'none' }}
+                />
+              </div>
+              <div>
+                <label style={{ display: 'block', fontSize: '11px', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '4px' }}>Quick-reply button 2 (optional)</label>
+                <input
+                  value={createForm.qr2}
+                  onChange={(e) => setField('qr2', e.target.value)}
+                  placeholder="e.g. Reschedule"
+                  maxLength={25}
+                  style={{ width: '100%', background: 'var(--bg-input)', border: '1px solid var(--border-medium)', borderRadius: '8px', color: '#fff', padding: '8px 10px', fontSize: '13px', outline: 'none' }}
+                />
+              </div>
+              <div>
+                <label style={{ display: 'block', fontSize: '11px', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '4px' }}>Website button text (optional)</label>
+                <input
+                  value={createForm.urlText}
+                  onChange={(e) => setField('urlText', e.target.value)}
+                  placeholder="e.g. Visit Website"
+                  maxLength={25}
+                  style={{ width: '100%', background: 'var(--bg-input)', border: '1px solid var(--border-medium)', borderRadius: '8px', color: '#fff', padding: '8px 10px', fontSize: '13px', outline: 'none' }}
+                />
+              </div>
+              <div>
+                <label style={{ display: 'block', fontSize: '11px', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '4px' }}>Website URL</label>
+                <input
+                  value={createForm.urlValue}
+                  onChange={(e) => setField('urlValue', e.target.value)}
+                  placeholder="https://…"
+                  style={{ width: '100%', background: 'var(--bg-input)', border: '1px solid var(--border-medium)', borderRadius: '8px', color: '#fff', padding: '8px 10px', fontSize: '13px', outline: 'none' }}
+                />
+              </div>
+            </div>
+            <div style={{ display: 'flex', gap: '8px', marginTop: '14px', flexWrap: 'wrap' }}>
+              <button
+                onClick={handleCreate}
+                disabled={creating || !createForm.name.trim() || !createForm.bodyText.trim()}
+                className="btn btn-primary"
+                style={{ padding: '9px 16px', fontSize: '12.5px' }}
+              >
+                {creating ? 'Submitting…' : 'Submit for Meta review'}
+              </button>
+              <button onClick={() => setShowCreate(false)} className="btn btn-ghost" style={{ padding: '9px 12px', fontSize: '12.5px' }}>
+                Cancel
+              </button>
+            </div>
+          </div>
+        )}
 
         {/* Content Body: Responsive Split view (Template selector + Live Preview) */}
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', minHeight: '380px' }}>

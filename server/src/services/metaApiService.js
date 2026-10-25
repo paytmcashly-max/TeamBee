@@ -250,6 +250,40 @@ class MetaApiService {
   }
 
   /**
+   * Create a message template on Meta for review. Approval is Meta's
+   * decision — a successful call returns the template with status
+   * PENDING (or APPROVED when Meta auto-approves).
+   */
+  static async createMetaTemplate(tenant, { name, language, category, components }) {
+    const accessToken = resolveAccessToken(tenant);
+    if (!tenant?.wabaId || !accessToken) {
+      return { success: false, reason: 'WABA ID or Access Token not configured' };
+    }
+
+    try {
+      const url = `${META_GRAPH_URL}/${API_VERSION}/${tenant.wabaId}/message_templates`;
+      const response = await axios.post(
+        url,
+        { name, language, category, components },
+        {
+          headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+          timeout: 15000,
+        }
+      );
+
+      return { success: true, template: response.data };
+    } catch (err) {
+      const metaErr = err.response?.data?.error;
+      console.error('[Meta API Create Template Error]:', err.response?.data || err.message);
+      return {
+        success: false,
+        error: metaErr?.error_user_msg || metaErr?.message || err.message,
+        code: metaErr?.code,
+      };
+    }
+  }
+
+  /**
    * Send WhatsApp Interactive Button Message (Quick Action Buttons)
    */
   static async sendInteractiveButtons(tenant, toPhoneNumber, bodyText, buttons = []) {

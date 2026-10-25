@@ -5,6 +5,7 @@ const BroadcastController = require('../controllers/broadcastController');
 const { authenticateToken, requireRole } = require('../middleware/authMiddleware');
 
 router.get('/', authenticateToken, TemplateController.listTemplates);
+router.post('/', authenticateToken, requireRole('ADMIN'), TemplateController.createTemplate);
 router.post('/sync', authenticateToken, requireRole('ADMIN'), TemplateController.syncTemplates);
 router.post('/send', authenticateToken, TemplateController.sendTemplate);
 
