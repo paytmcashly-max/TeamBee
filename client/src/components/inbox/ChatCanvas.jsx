@@ -274,6 +274,20 @@ export default function ChatCanvas({ onOpenTemplatePicker, onToggleSidebar, isSi
     stickToBottomRef.current = el.scrollHeight - el.scrollTop - el.clientHeight < 140;
   };
 
+  // Auto-grow the composer with the draft (up to the .chat-textarea
+  // max-height of 120px, then it scrolls inside). The textarea is
+  // rows={1} and nothing ever resized it, so a long message was edited
+  // inside a one-line window and wrapped text looked clipped.
+  useEffect(() => {
+    const ta = textareaRef.current;
+    if (!ta) return;
+    ta.style.height = 'auto';
+    const borderY = ta.offsetHeight - ta.clientHeight;
+    const full = ta.scrollHeight + borderY;
+    ta.style.height = `${Math.min(full, 120)}px`;
+    ta.style.overflowY = full > 120 ? 'auto' : 'hidden';
+  }, [inputContent, activeChat?.id, composeMode]);
+
   // Debounced staff typing indicator (the socket event existed but the
   // composer never emitted it, so "Staff member is typing" could never show)
   const signalTyping = () => {
@@ -1698,7 +1712,7 @@ export default function ChatCanvas({ onOpenTemplatePicker, onToggleSidebar, isSi
                   ? 'Question with buttons...'
                   : messagingWindow.isOpen
                   ? 'WhatsApp reply...'
-                  : '⚠️ 24-hr window expired. Use Template...'
+                  : '⚠️ 24-hr window expired'
               }
               className="chat-textarea"
               style={{
