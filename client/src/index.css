@@ -1027,3 +1027,80 @@ select:focus-visible {
     display: none !important;
   }
 }
+
+/* Reply quote inside a message bubble */
+.msg-quote {
+  border-left: 3px solid rgba(52, 211, 153, 0.9);
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 6px;
+  padding: 5px 8px;
+  margin-bottom: 6px;
+}
+.msg-quote-name {
+  font-size: 10.5px;
+  font-weight: 700;
+  color: #34d399;
+  margin-bottom: 1px;
+}
+.msg-bubble-inbound .msg-quote {
+  background: rgba(4, 120, 87, 0.08);
+}
+.msg-bubble-inbound .msg-quote-name {
+  color: #059669;
+}
+.msg-quote-text {
+  font-size: 11.5px;
+  line-height: 1.35;
+  opacity: 0.85;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+/* Armed-reply chip above the composer */
+.reply-chip {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border-left: 3px solid rgba(52, 211, 153, 0.9);
+  background: rgba(52, 211, 153, 0.08);
+  border-radius: 8px;
+  padding: 6px 8px 6px 10px;
+  margin-bottom: 8px;
+}
+.reply-chip-body {
+  flex: 1;
+  min-width: 0;
+}
+.reply-chip-name {
+  font-size: 10.5px;
+  font-weight: 700;
+  color: #34d399;
+}
+.reply-chip-text {
+  font-size: 12px;
+  color: var(--text-main);
+  opacity: 0.85;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.reply-chip-close {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+}
+.reply-chip-close:active {
+  background: rgba(255, 255, 255, 0.1);
+}

@@ -3,6 +3,7 @@ const MetaApiService = require('../services/metaApiService');
 const { decryptSecret } = require('../services/credentialCrypto');
 const { broadcastNewMessage, broadcastNoteMentions } = require('../services/socketService');
 const { canAccessChat } = require('../middleware/authMiddleware');
+const { resolveReplySnapshot, parseRawPayload } = require('../services/replyContext');
 
 class MessageController {
   /**
@@ -67,16 +68,56 @@ class MessageController {
          })
        );
        const hasMore = messageRows.length > requestedLimit;
+       const pageRows = (hasMore ? messageRows.slice(0, requestedLimit) : messageRows).reverse();
+       // Reply quotes: outbound sends carry a stored snapshot in rawPayload;
+       // inbound customer replies carry Meta's context.id pointing at the
+       // quoted WAMID — resolve those in ONE lookup for the whole page.
+       const parsedPayloads = pageRows.map((message) => parseRawPayload(message.rawPayload));
+       const contextIds = [
+         ...new Set(
+           parsedPayloads
+             .map((parsed) => (parsed && !parsed.replyTo ? parsed.context?.id : null))
+             .filter((id) => typeof id === 'string' && id)
+         ),
+       ];
+       const quotedByWamid = new Map();
+       if (contextIds.length) {
+         const quotedRows = await req.db((db) =>
+           db.message.findMany({
+             where: { chatId, tenantId: req.tenantId, waMessageId: { in: contextIds } },
+             include: { senderAgent: { select: { name: true } } },
+           })
+         );
+         for (const quoted of quotedRows) quotedByWamid.set(quoted.waMessageId, quoted);
+       }
+       const withReplyTo = pageRows.map((message, index) => {
+         const parsed = parsedPayloads[index];
+         let replyTo = null;
+         if (parsed?.replyTo?.waMessageId) {
+           replyTo = parsed.replyTo;
+         } else if (parsed?.context?.id && quotedByWamid.has(parsed.context.id)) {
+           const quoted = quotedByWamid.get(parsed.context.id);
+           replyTo = {
+             waMessageId: quoted.waMessageId,
+             messageId: quoted.id,
+             content: String(quoted.content || '').slice(0, 200),
+             senderType: quoted.senderType,
+             senderName:
+               quoted.senderType === 'CUSTOMER'
+                 ? chat.contact?.name || 'Customer'
+                 : quoted.senderAgent?.name || 'Team',
+           };
+         }
+         return { ...message, replyTo };
+       });
        // Payload diet: a message's rawPayload is the full Meta webhook JSON
        // (kilobytes each). The client reads it only for INTERACTIVE button
        // pills and NOTE @mentions — strip it for every other type.
-       const messages = (hasMore ? messageRows.slice(0, requestedLimit) : messageRows)
-         .reverse()
-         .map((message) =>
-           message.messageType === 'INTERACTIVE' || message.messageType === 'NOTE'
-             ? message
-             : { ...message, rawPayload: undefined }
-         );
+       const messages = withReplyTo.map((message) =>
+         message.messageType === 'INTERACTIVE' || message.messageType === 'NOTE'
+           ? message
+           : { ...message, rawPayload: undefined }
+       );
        const nextBefore = hasMore && messages[0]
          ? `${messages[0].createdAt.toISOString()}|${messages[0].id}`
          : null;
@@ -124,6 +165,7 @@ class MessageController {
         isInternal = false,
         buttons = [],
         mentions = [],
+        replyToMessageId = null,
         clientMessageId: rawClientMessageId,
       } = req.body;
       const { id: agentId, name: agentName, tenantId } = req.agent;
@@ -170,6 +212,13 @@ class MessageController {
        }
        if (!Array.isArray(mentions) || mentions.length > 10 || mentions.some((m) => typeof m !== 'string')) {
          return res.status(400).json({ success: false, error: 'Invalid mentions' });
+       }
+       if (replyToMessageId !== null && replyToMessageId !== undefined &&
+         (typeof replyToMessageId !== 'string' || !replyToMessageId || replyToMessageId.length > 100)) {
+         return res.status(400).json({ success: false, error: 'Invalid reply target' });
+       }
+       if (replyToMessageId && (isInternal || messageType === 'NOTE')) {
+         return res.status(400).json({ success: false, error: 'Internal notes cannot quote a message' });
        }
        if (buttons.length > 3 || buttons.some((button) => !button || typeof button !== 'object' ||
          (button.id !== undefined && (typeof button.id !== 'string' || button.id.length > 100)) ||
@@ -327,6 +376,24 @@ class MessageController {
         console.warn(`[Send Message]: forceSend override by agent ${agentId} (${req.agent.role}) on chat ${chat.id} outside the 24h window`);
       }
 
+      // Reply (quote): validate the target inside this chat and snapshot
+      // it for display; Meta receives the target's WAMID as context.
+      let replySnapshot = null;
+      if (replyToMessageId) {
+        const resolved = await req.db((db) =>
+          resolveReplySnapshot(db, {
+            tenantId,
+            chatId: chat.id,
+            replyToMessageId,
+            contactName: chat.contact?.name,
+          })
+        );
+        if (resolved.error) {
+          return res.status(400).json({ success: false, error: resolved.error });
+        }
+        replySnapshot = resolved.snapshot;
+      }
+
       // -------------------------------------------------------------
       // 2. PERSIST A PENDING OUTBOUND MESSAGE BEFORE DISPATCH
       // -------------------------------------------------------------
@@ -346,7 +413,14 @@ class MessageController {
           content: outboundContent,
           mediaUrl,
           mediaFilename,
-            rawPayload: buttons && buttons.length > 0 ? JSON.stringify({ buttons }) : null,
+            rawPayload:
+            buttons && buttons.length > 0 && replySnapshot
+              ? JSON.stringify({ buttons, replyTo: replySnapshot })
+              : buttons && buttons.length > 0
+                ? JSON.stringify({ buttons })
+                : replySnapshot
+                  ? JSON.stringify({ replyTo: replySnapshot })
+                  : null,
             direction: 'OUTBOUND',
             status: 'PENDING',
             createdAt: now,
@@ -364,17 +438,18 @@ class MessageController {
       // -------------------------------------------------------------
       let apiResult;
       try {
+        const contextMessageId = replySnapshot?.waMessageId || null;
         if (buttons && Array.isArray(buttons) && buttons.length > 0) {
-          apiResult = await MetaApiService.sendInteractiveButtons(chat.tenant, chat.contact.waId, content, buttons);
+          apiResult = await MetaApiService.sendInteractiveButtons(chat.tenant, chat.contact.waId, content, buttons, contextMessageId);
         } else if (messageType === 'TEXT') {
-          apiResult = await MetaApiService.sendTextMessage(chat.tenant, chat.contact.waId, content);
+          apiResult = await MetaApiService.sendTextMessage(chat.tenant, chat.contact.waId, content, contextMessageId);
         } else {
           apiResult = await MetaApiService.sendMediaMessage(chat.tenant, chat.contact.waId, {
             type: messageType,
             mediaUrl,
             caption: content,
             filename: mediaFilename,
-          });
+          }, contextMessageId);
         }
       } catch (dispatchError) {
         apiResult = {

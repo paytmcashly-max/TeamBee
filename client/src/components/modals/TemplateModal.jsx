@@ -21,7 +21,7 @@ function parseTemplateButtons(value) {
 
 export default function TemplateModal({ isOpen, onClose }) {
   const { token, agent } = useAuth();
-  const { activeChat } = useChat();
+  const { activeChat, replyingTo, setReplyingTo } = useChat();
 
   const [templates, setTemplates] = useState([]);
   const [selectedTemplate, setSelectedTemplate] = useState(null);
@@ -223,11 +223,15 @@ export default function TemplateModal({ isOpen, onClose }) {
           chatId: activeChat.id,
           templateId: selectedTemplate.id,
           variables,
+          ...(replyingTo && replyingTo.chatId === activeChat.id
+            ? { replyToMessageId: replyingTo.messageId }
+            : {}),
         }),
       });
 
       const data = await res.json();
       if (data.success) {
+        if (replyingTo && replyingTo.chatId === activeChat.id) setReplyingTo(null);
         setMessage({ type: 'success', text: 'WhatsApp template delivered successfully!' });
         setTimeout(() => {
           onClose();

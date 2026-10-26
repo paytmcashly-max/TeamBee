@@ -80,6 +80,8 @@ export default function ChatCanvas({ onOpenTemplatePicker, onToggleSidebar, isSi
     messagePagination,
     loadOlderMessages,
     snoozeChat,
+    replyingTo,
+    setReplyingTo,
   } = useChat();
   const [showSnoozeMenu, setShowSnoozeMenu] = useState(false);
   const [pendingMentions, setPendingMentions] = useState([]); // [{id, name}]
@@ -273,6 +275,49 @@ export default function ChatCanvas({ onOpenTemplatePicker, onToggleSidebar, isSi
     loadAgents();
   }, []);
 
+  // Build the display snapshot stored with an outgoing reply. The server
+  // re-validates the target and derives the same shape, so this is purely
+  // for instant (optimistic) rendering.
+  const buildReplySnapshot = (msg) => ({
+    messageId: msg.id,
+    chatId: activeChat?.id,
+    waMessageId: msg.waMessageId,
+    content: String(msg.content || '').slice(0, 200),
+    senderType: msg.senderType,
+    senderName:
+      msg.senderType === 'CUSTOMER'
+        ? activeChat?.contact?.name || 'Customer'
+        : msg.senderAgent?.name || 'Team',
+  });
+
+  const startReply = (msg) => {
+    if (!msg?.waMessageId) return;
+    setReplyingTo(buildReplySnapshot(msg));
+    setMsgMenuMsg(null);
+    // Notes cannot quote; if the agent was composing a note, switch back
+    // to the WhatsApp composer so the reply actually goes to the customer.
+    if (composeMode === 'NOTE') setComposeMode('WHATSAPP');
+  };
+
+  // Resolve the quote to render inside a bubble: server-attached replyTo
+  // (history), a stored snapshot in rawPayload (live socket records), or
+  // Meta's context pointer on an inbound reply resolved against the
+  // messages already on screen.
+  const resolveReplyTo = (msg) => {
+    if (msg.replyTo?.waMessageId) return msg.replyTo;
+    if (!msg.rawPayload) return null;
+    try {
+      const parsed = JSON.parse(msg.rawPayload);
+      if (parsed?.replyTo?.waMessageId) return parsed.replyTo;
+      const contextId = parsed?.context?.id;
+      if (contextId) {
+        const quoted = messages.find((m) => m.waMessageId === contextId);
+        if (quoted) return buildReplySnapshot(quoted);
+      }
+    } catch (parseError) {}
+    return null;
+  };
+
   const handleSend = async (e) => {
     if (e) e.preventDefault();
     if (!inputContent.trim()) return;
@@ -281,6 +326,13 @@ export default function ChatCanvas({ onOpenTemplatePicker, onToggleSidebar, isSi
     // ⚡ Clear input immediately so user feels 0ms latency
     setInputContent('');
     setSending(true);
+    // An armed reply belongs to exactly one send; take it now and clear
+    // the chip. Restored below if the send fails.
+    const replyForSend =
+      composeMode !== 'NOTE' && replyingTo && activeChat && replyingTo.chatId === activeChat.id
+        ? replyingTo
+        : null;
+    if (replyForSend) setReplyingTo(null);
 
     try {
       if (composeMode === 'NOTE') {
@@ -308,17 +360,20 @@ export default function ChatCanvas({ onOpenTemplatePicker, onToggleSidebar, isSi
         await sendMessage(content, {
           messageType: 'INTERACTIVE',
           buttons: formattedButtons,
+          ...(replyForSend ? { replyTo: replyForSend } : {}),
         });
       } else {
         // Standard WhatsApp Outbound Message
         await sendMessage(content, {
           messageType: 'TEXT',
+          ...(replyForSend ? { replyTo: replyForSend } : {}),
         });
       }
     } catch (err) {
       // Never destroy the agent's text on a failed send: restore the draft
       // (unless they have already started typing something new).
       setInputContent((prev) => (prev.trim() ? prev : content));
+      if (replyForSend) setReplyingTo((prev) => prev || replyForSend);
       toast.info(err.message);
     } finally {
       setSending(false);
@@ -957,6 +1012,17 @@ export default function ChatCanvas({ onOpenTemplatePicker, onToggleSidebar, isSi
                 }}
               >
                 <div className={isInbound ? 'msg-bubble-inbound' : 'msg-bubble-outbound'}>
+                  {/* Quoted message (reply context) */}
+                  {(() => {
+                    const replyTo = resolveReplyTo(msg);
+                    return replyTo ? (
+                      <div className="msg-quote">
+                        <div className="msg-quote-name">{replyTo.senderName}</div>
+                        <div className="msg-quote-text">{replyTo.content}</div>
+                      </div>
+                    ) : null;
+                  })()}
+
                   {/* Sender label if outbound agent */}
                   {!isInbound && msg.senderAgent && (
                     <div style={{ fontSize: '10.5px', color: '#a7f3d0', fontWeight: '600', marginBottom: '2px' }}>
@@ -1613,6 +1679,24 @@ export default function ChatCanvas({ onOpenTemplatePicker, onToggleSidebar, isSi
           </div>
         )}
 
+        {/* 6.25 Armed reply chip: the message this send will quote */}
+        {replyingTo && activeChat && replyingTo.chatId === activeChat.id && composeMode !== 'NOTE' && (
+          <div className="reply-chip">
+            <div className="reply-chip-body">
+              <div className="reply-chip-name">Replying to {replyingTo.senderName}</div>
+              <div className="reply-chip-text">{replyingTo.content}</div>
+            </div>
+            <button
+              type="button"
+              className="reply-chip-close"
+              aria-label="Cancel reply"
+              onClick={() => setReplyingTo(null)}
+            >
+              <X size={14} />
+            </button>
+          </div>
+        )}
+
         {/* 6.3 Input Box & Action Buttons */}
         <form onSubmit={handleSend} style={{ display: 'flex', alignItems: 'flex-end', gap: '8px' }}>
           {/* Quick Action Tools */}
@@ -1745,6 +1829,7 @@ export default function ChatCanvas({ onOpenTemplatePicker, onToggleSidebar, isSi
       <MessageActionSheet
         msg={msgMenuMsg}
         onCopy={copyMsgText}
+        onReply={() => msgMenuMsg && startReply(msgMenuMsg)}
         onClose={() => setMsgMenuMsg(null)}
       />
     </main>

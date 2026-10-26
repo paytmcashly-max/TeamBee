@@ -3,6 +3,7 @@ const MetaApiService = require('../services/metaApiService');
 const { broadcastNewMessage } = require('../services/socketService');
 const { canAccessChat } = require('../middleware/authMiddleware');
 const { prepareTemplateMessage } = require('../services/templateService');
+const { resolveReplySnapshot } = require('../services/replyContext');
 
 class TemplateController {
   /**
@@ -261,12 +262,16 @@ class TemplateController {
    */
   static async sendTemplate(req, res) {
     try {
-      const { chatId, templateId, variables = {} } = req.body;
+      const { chatId, templateId, variables = {}, replyToMessageId = null } = req.body;
       const { id: agentId, tenantId } = req.agent;
 
       if (typeof chatId !== 'string' || typeof templateId !== 'string' ||
         !variables || typeof variables !== 'object' || Array.isArray(variables)) {
         return res.status(400).json({ success: false, error: 'chatId, templateId, and variables are required' });
+      }
+      if (replyToMessageId !== null && replyToMessageId !== undefined &&
+        (typeof replyToMessageId !== 'string' || !replyToMessageId || replyToMessageId.length > 100)) {
+        return res.status(400).json({ success: false, error: 'Invalid reply target' });
       }
 
       const chat = await req.db((db) =>
@@ -300,6 +305,23 @@ class TemplateController {
         });
       }
 
+      // Reply (quote): a template send can also quote an earlier message.
+      let replySnapshot = null;
+      if (replyToMessageId) {
+        const resolved = await req.db((db) =>
+          resolveReplySnapshot(db, {
+            tenantId,
+            chatId: chat.id,
+            replyToMessageId,
+            contactName: chat.contact?.name,
+          })
+        );
+        if (resolved.error) {
+          return res.status(400).json({ success: false, error: resolved.error });
+        }
+        replySnapshot = resolved.snapshot;
+      }
+
       const variableValues = {};
       for (const [key, rawValue] of Object.entries(variables)) {
         if (rawValue !== undefined && rawValue !== null && typeof rawValue !== 'string' && typeof rawValue !== 'number') {
@@ -322,7 +344,11 @@ class TemplateController {
           senderId: agentId,
           messageType: 'TEMPLATE',
           content: renderedBody,
-            rawPayload: JSON.stringify({ template: template.name, variables }),
+            rawPayload: JSON.stringify({
+            template: template.name,
+            variables,
+            ...(replySnapshot ? { replyTo: replySnapshot } : {}),
+          }),
             direction: 'OUTBOUND',
             status: 'PENDING',
             createdAt: now,
@@ -342,7 +368,8 @@ class TemplateController {
           chat.contact.waId,
           template.name,
           template.language,
-          components
+          components,
+          replySnapshot?.waMessageId || null
         );
       } catch (dispatchError) {
         apiResult = { success: false, error: dispatchError.message, code: 'META_API_ERROR' };

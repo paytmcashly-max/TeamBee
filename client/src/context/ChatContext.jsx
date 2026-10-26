@@ -57,6 +57,11 @@ export function ChatProvider({ children }) {
   const [activeChatId, setActiveChatId] = useState(null);
   const [activeChat, setActiveChat] = useState(null);
   const [mentionAlert, setMentionAlert] = useState(null);
+  // Armed reply (quote) target: a display snapshot of the message being
+  // answered — { messageId, chatId, waMessageId, content, senderType,
+  // senderName }. Shared so the composer AND the template modal (which
+  // lives outside the canvas) can both honour it.
+  const [replyingTo, setReplyingTo] = useState(null);
   const [messages, setMessages] = useState([]);
   const [messagingWindow, setMessagingWindow] = useState({ isOpen: true, hoursRemaining: 24 });
   const [loadingChats, setLoadingChats] = useState(false);
@@ -262,6 +267,7 @@ export function ChatProvider({ children }) {
     if (!chatId) {
       setActiveChatId(null);
       activeChatIdRef.current = null;
+      setReplyingTo(null);
       setActiveChat(null);
       setMessages([]);
       setMessagePagination({ hasMore: false, nextBefore: null });
@@ -269,6 +275,7 @@ export function ChatProvider({ children }) {
     }
 
     // 1. Immediately update activeChatId & activeChat from in-memory chats list (0ms UI latency)
+    setReplyingTo(null);
     setActiveChatId(chatId);
     activeChatIdRef.current = chatId;
 
@@ -493,6 +500,9 @@ export function ChatProvider({ children }) {
       payload.isInternal = !!options.isInternal;
       payload.buttons = options.buttons || [];
       payload.mentions = Array.isArray(options.mentions) ? options.mentions : [];
+      if (options.replyTo?.messageId) {
+        payload.replyToMessageId = options.replyTo.messageId;
+      }
     }
 
     // ⚡ Instant Optimistic UI (0ms latency): Append bubble immediately with PENDING clock
@@ -515,6 +525,7 @@ export function ChatProvider({ children }) {
       mediaFilename: payload.mediaFilename,
       buttons: payload.buttons ? (typeof payload.buttons === 'string' ? payload.buttons : JSON.stringify(payload.buttons)) : null,
       status: 'PENDING',
+      replyTo: options && typeof options === 'object' ? options.replyTo || null : null,
       isInternal: payload.isInternal,
       clientMessageId,
       createdAt: nowIso,
@@ -780,6 +791,8 @@ export function ChatProvider({ children }) {
         typingUsers,
         selectChat,
         sendMessage,
+        replyingTo,
+        setReplyingTo,
         assignChat,
         updateChatStatus,
         updateChatTags,

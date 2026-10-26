@@ -52,7 +52,7 @@ class MetaApiService {
   /**
    * Send outbound text message via Meta Cloud API
    */
-  static async sendTextMessage(tenant, toPhoneNumber, text) {
+  static async sendTextMessage(tenant, toPhoneNumber, text, contextMessageId = null) {
     const cleanPhone = toPhoneNumber.replace(/\D/g, '');
     if (!/^\d{3,32}$/.test(cleanPhone) || typeof text !== 'string' || !text.trim()) {
       return { success: false, error: 'Invalid WhatsApp text message', code: 'INVALID_MESSAGE' };
@@ -70,6 +70,7 @@ class MetaApiService {
             recipient_type: 'individual',
             to: cleanPhone,
             type: 'text',
+            ...(contextMessageId ? { context: { message_id: contextMessageId } } : {}),
             text: { preview_url: false, body: text },
           },
           {
@@ -109,7 +110,7 @@ class MetaApiService {
   /**
    * Send outbound media message (image, video, document, audio)
    */
-  static async sendMediaMessage(tenant, toPhoneNumber, { type, mediaUrl, caption, filename }) {
+  static async sendMediaMessage(tenant, toPhoneNumber, { type, mediaUrl, caption, filename }, contextMessageId = null) {
     const cleanPhone = toPhoneNumber.replace(/\D/g, '');
     const normalizedType = String(type || '').toLowerCase();
     if (!/^\d{3,32}$/.test(cleanPhone) || !['image', 'video', 'audio', 'document'].includes(normalizedType) || !/^https:\/\//i.test(mediaUrl || '')) {
@@ -133,6 +134,7 @@ class MetaApiService {
             recipient_type: 'individual',
             to: cleanPhone,
             type: normalizedType,
+            ...(contextMessageId ? { context: { message_id: contextMessageId } } : {}),
             [normalizedType]: mediaPayload,
           },
           {
@@ -167,7 +169,7 @@ class MetaApiService {
   /**
    * Send WhatsApp Template Message (for initiating outbound conversations outside 24-hr window)
    */
-  static async sendTemplateMessage(tenant, toPhoneNumber, templateName, languageCode = 'en', components = []) {
+  static async sendTemplateMessage(tenant, toPhoneNumber, templateName, languageCode = 'en', components = [], contextMessageId = null) {
     const cleanPhone = toPhoneNumber.replace(/\D/g, '');
     if (!/^\d{3,32}$/.test(cleanPhone) || typeof templateName !== 'string' || !/^[a-z0-9_]{1,512}$/i.test(templateName)) {
       return { success: false, error: 'Invalid WhatsApp template message', code: 'INVALID_MESSAGE' };
@@ -184,6 +186,7 @@ class MetaApiService {
             recipient_type: 'individual',
             to: cleanPhone,
             type: 'template',
+            ...(contextMessageId ? { context: { message_id: contextMessageId } } : {}),
             template: {
               name: templateName,
               language: { code: languageCode },
@@ -286,7 +289,7 @@ class MetaApiService {
   /**
    * Send WhatsApp Interactive Button Message (Quick Action Buttons)
    */
-  static async sendInteractiveButtons(tenant, toPhoneNumber, bodyText, buttons = []) {
+  static async sendInteractiveButtons(tenant, toPhoneNumber, bodyText, buttons = [], contextMessageId = null) {
     const cleanPhone = toPhoneNumber.replace(/\D/g, '');
     if (!/^\d{3,32}$/.test(cleanPhone) || typeof bodyText !== 'string' || !bodyText.trim() || !Array.isArray(buttons) || buttons.length < 1) {
       return { success: false, error: 'Invalid WhatsApp interactive message', code: 'INVALID_MESSAGE' };
@@ -303,6 +306,7 @@ class MetaApiService {
             recipient_type: 'individual',
             to: cleanPhone,
             type: 'interactive',
+            ...(contextMessageId ? { context: { message_id: contextMessageId } } : {}),
             interactive: {
               type: 'button',
               body: { text: bodyText },

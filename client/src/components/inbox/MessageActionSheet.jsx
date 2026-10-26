@@ -1,12 +1,13 @@
 import React from 'react';
-import { Copy } from 'lucide-react';
+import { Copy, Reply } from 'lucide-react';
 
 // Bottom action sheet for a message (long-press on touch, right-click
-// on desktop). Extracted from ChatCanvas; today it carries Copy only —
-// the send API has no reply-context support, so no Reply action is
-// offered until the backend can honour it.
-export default React.memo(function MessageActionSheet({ msg, onCopy, onClose }) {
+// on desktop). Reply is offered only for messages Meta can quote —
+// i.e. those carrying a WAMID (inbound customer messages and outbound
+// ones that actually reached Meta). Notes/system rows have none.
+export default React.memo(function MessageActionSheet({ msg, onCopy, onReply, onClose }) {
   if (!msg) return null;
+  const canReply = Boolean(msg.waMessageId);
   return (
     <div className="msg-menu-backdrop" onClick={onClose}>
       <div
@@ -16,6 +17,11 @@ export default React.memo(function MessageActionSheet({ msg, onCopy, onClose }) 
         onClick={(e) => e.stopPropagation()}
       >
         <div className="msg-menu-preview">{msg.content}</div>
+        {canReply && onReply && (
+          <button type="button" className="msg-menu-action" onClick={onReply}>
+            <Reply size={17} /> Reply
+          </button>
+        )}
         <button type="button" className="msg-menu-action" onClick={onCopy}>
           <Copy size={17} /> Copy text
         </button>
