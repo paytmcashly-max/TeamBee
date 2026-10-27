@@ -134,89 +134,48 @@ export default function ContactSidebar({ onOpenTemplatePicker, onClose }) {
   return (
     <aside className="col-crm-sidebar">
       {/* 1. Top Profile Summary */}
-      <div style={{ padding: '20px', borderBottom: '1px solid var(--border-subtle)', textAlign: 'center', position: 'relative' }}>
+      <div className="side-profile">
         {/* Close Button for Drawer (Tablet / Mobile) */}
         {onClose && (
           <button
             onClick={onClose}
-            className="btn btn-ghost"
-            style={{
-              position: 'absolute',
-              top: '12px',
-              right: '12px',
-              padding: '6px',
-              color: 'var(--text-secondary)',
-            }}
+            className="btn btn-ghost btn-sm drawer-close"
             title="Close CRM Sidebar"
           >
             <X size={18} />
           </button>
         )}
-        <div
-          style={{
-            width: '64px',
-            height: '64px',
-            borderRadius: '50%',
-            background: 'linear-gradient(135deg, #1e293b 0%, #334155 100%)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            fontSize: '24px',
-            fontWeight: '700',
-            color: '#34d399',
-            margin: '0 auto 12px auto',
-            border: '2px solid rgba(16, 185, 129, 0.3)',
-          }}
-        >
+        <div className="profile-avatar">
           {contact?.name ? contact.name.charAt(0).toUpperCase() : 'C'}
         </div>
 
         {/* Name with inline editing */}
         {isEditingName ? (
-          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', justifyContent: 'center', marginBottom: '6px' }}>
+          <div className="name-row" style={{ marginBottom: 'var(--space-2)' }}>
             <input
               type="text"
               value={nameInput}
               onChange={(e) => setNameInput(e.target.value)}
               onKeyDown={(e) => e.key === 'Enter' && handleSaveName()}
               autoFocus
-              style={{
-                background: 'var(--bg-surface)',
-                border: '1px solid var(--border-medium)',
-                borderRadius: '4px',
-                color: '#fff',
-                padding: '4px 8px',
-                fontSize: '14px',
-                textAlign: 'center',
-                outline: 'none',
-              }}
+              className="name-input"
             />
             <button
               onClick={handleSaveName}
-              className="btn btn-primary"
-              style={{ padding: '4px 8px', fontSize: '11px' }}
+              className="btn btn-primary btn-xs"
             >
               <Check size={13} />
             </button>
             <button
               onClick={() => setIsEditingName(false)}
-              className="btn btn-ghost"
-              style={{ padding: '4px 6px', fontSize: '11px' }}
+              className="btn btn-ghost btn-xs"
             >
               ✕
             </button>
           </div>
         ) : (
-          <div
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              gap: '6px',
-              marginBottom: '4px',
-            }}
-          >
-            <h3 style={{ fontSize: '16px', color: '#fff', fontWeight: '700' }}>
+          <div className="name-row">
+            <h3 className="profile-name">
               {contact?.name || 'Customer'}
             </h3>
             <button
@@ -224,8 +183,7 @@ export default function ContactSidebar({ onOpenTemplatePicker, onClose }) {
                 setNameInput(contact?.name || '');
                 setIsEditingName(true);
               }}
-              className="btn btn-ghost"
-              style={{ padding: '2px', color: 'var(--text-muted)' }}
+              className="btn btn-ghost btn-xs"
               title="Edit contact name"
             >
               <Edit2 size={12} />
@@ -233,16 +191,7 @@ export default function ContactSidebar({ onOpenTemplatePicker, onClose }) {
           </div>
         )}
 
-        <div
-          style={{
-            display: 'inline-flex',
-            alignItems: 'center',
-            gap: '6px',
-            fontSize: '13px',
-            color: 'var(--text-secondary)',
-            marginBottom: '12px',
-          }}
-        >
+        <div className="phone-line">
           <Phone size={13} style={{ color: 'var(--wa-primary)' }} />
           <span>+{contact?.waId}</span>
         </div>
@@ -252,8 +201,8 @@ export default function ContactSidebar({ onOpenTemplatePicker, onClose }) {
             href={`https://wa.me/${contact?.waId}?text=${encodeURIComponent('Namaste! Connecting regarding your query on TeamBee.')}`}
             target="_blank"
             rel="noopener noreferrer"
-            className="btn btn-secondary"
-            style={{ width: '100%', fontSize: '12px', padding: '6px 10px', textDecoration: 'none' }}
+            className="btn btn-secondary btn-block btn-sm"
+            style={{ textDecoration: 'none' }}
           >
             <ExternalLink size={13} /> Direct WhatsApp Web
           </a>
@@ -261,9 +210,9 @@ export default function ContactSidebar({ onOpenTemplatePicker, onClose }) {
       </div>
 
       {/* 2. Meta 24-Hour SLA Window Progress Meter */}
-      <div style={{ padding: '16px 20px', borderBottom: '1px solid var(--border-subtle)' }}>
+      <div className="side-section">
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
-          <span style={{ fontSize: '11px', fontWeight: '700', color: 'var(--text-muted)', textTransform: 'uppercase' }}>
+          <span className="side-label">
             24h WhatsApp SLA Window
           </span>
           <span
@@ -307,7 +256,7 @@ export default function ContactSidebar({ onOpenTemplatePicker, onClose }) {
       </div>
 
       {/* 3. CRM Intelligence / Custom Attributes */}
-      <div style={{ padding: '16px 20px', borderBottom: '1px solid var(--border-subtle)' }}>
+      <div className="side-section">
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
           <span
             style={{
@@ -322,8 +271,7 @@ export default function ContactSidebar({ onOpenTemplatePicker, onClose }) {
           </span>
           <button
             onClick={() => setIsAddingField(true)}
-            className="btn btn-ghost"
-            style={{ padding: '2px 6px', fontSize: '11px' }}
+            className="btn btn-ghost btn-xs"
           >
             <Plus size={13} /> Field
           </button>
@@ -408,15 +356,13 @@ export default function ContactSidebar({ onOpenTemplatePicker, onClose }) {
               <div style={{ display: 'flex', gap: '4px', justifyContent: 'flex-end' }}>
                 <button
                   onClick={handleSaveCustomField}
-                  className="btn btn-primary"
-                  style={{ padding: '2px 8px', fontSize: '11px' }}
+                  className="btn btn-primary btn-xs"
                 >
                   Save
                 </button>
                 <button
                   onClick={() => setIsAddingField(false)}
-                  className="btn btn-ghost"
-                  style={{ padding: '2px 6px', fontSize: '11px' }}
+                  className="btn btn-ghost btn-xs"
                 >
                   Cancel
                 </button>
@@ -440,7 +386,7 @@ export default function ContactSidebar({ onOpenTemplatePicker, onClose }) {
       </div>
 
       {/* 4. Dynamic Tags Manager */}
-      <div style={{ padding: '16px 20px', borderBottom: '1px solid var(--border-subtle)' }}>
+      <div className="side-section">
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
           <span
             style={{
@@ -455,8 +401,7 @@ export default function ContactSidebar({ onOpenTemplatePicker, onClose }) {
           </span>
           <button
             onClick={() => setIsAddingTag(true)}
-            className="btn btn-ghost"
-            style={{ padding: '2px 6px', fontSize: '11px' }}
+            className="btn btn-ghost btn-xs"
           >
             <Plus size={13} /> Add
           </button>
@@ -515,10 +460,10 @@ export default function ContactSidebar({ onOpenTemplatePicker, onClose }) {
                   outline: 'none',
                 }}
               />
-              <button onClick={handleAddTag} className="btn btn-primary" style={{ padding: '4px 8px', fontSize: '11px' }}>
+              <button onClick={handleAddTag} className="btn btn-primary btn-xs">
                 Save
               </button>
-              <button onClick={() => setIsAddingTag(false)} className="btn btn-ghost" style={{ padding: '4px 6px' }}>
+              <button onClick={() => setIsAddingTag(false)} className="btn btn-ghost btn-xs">
                 ✕
               </button>
             </div>
@@ -527,7 +472,7 @@ export default function ContactSidebar({ onOpenTemplatePicker, onClose }) {
       </div>
 
       {/* 5. Meta WhatsApp Quick Template Launcher */}
-      <div style={{ padding: '16px 20px', borderBottom: '1px solid var(--border-subtle)' }}>
+      <div className="side-section">
         <div
           style={{
             fontSize: '11px',
@@ -553,7 +498,7 @@ export default function ContactSidebar({ onOpenTemplatePicker, onClose }) {
       </div>
 
       {/* 6. Operational Audit */}
-      <div style={{ padding: '16px 20px' }}>
+      <div className="side-section" style={{ borderBottom: 'none' }}>
         <div
           style={{
             fontSize: '11px',

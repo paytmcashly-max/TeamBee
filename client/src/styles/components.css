@@ -451,3 +451,27 @@ button.action-card:hover { border-color: var(--border-medium); background: var(-
 .chip-row { display: flex; gap: 6px; overflow-x: auto; padding-bottom: 2px; }
 .empty-state { padding: var(--space-10) var(--space-5); text-align: center; }
 .icon-muted { color: var(--text-secondary); flex-shrink: 0; }
+
+/* ---------- Inbox: contact sidebar ---------- */
+.side-section { padding: var(--space-4) var(--space-5); border-bottom: 1px solid var(--border-subtle); }
+.side-profile { padding: var(--space-5); border-bottom: 1px solid var(--border-subtle); text-align: center; position: relative; }
+.profile-avatar {
+  width: 64px; height: 64px; border-radius: var(--radius-full);
+  background: var(--bg-raised); border: 1px solid var(--border-medium);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 24px; font-weight: 700; color: #34d399; margin: 0 auto var(--space-3);
+}
+.side-label { font-size: 11px; font-weight: 700; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.04em; }
+.side-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: var(--space-2); }
+.btn-xs { min-height: 26px; padding: 3px var(--space-2); font-size: 11.5px; border-radius: var(--radius-sm); }
+.kv-row { display: flex; justify-content: space-between; align-items: center; }
+.name-row { display: flex; align-items: center; gap: 6px; justify-content: center; margin-bottom: var(--space-1); }
+.profile-name { font-size: 16px; color: var(--text-main); font-weight: 700; }
+.name-input {
+  background: var(--bg-surface); border: 1px solid var(--border-medium);
+  border-radius: var(--radius-sm); color: var(--text-main);
+  padding: var(--space-1) var(--space-2); font-size: var(--fs-body-sm);
+  text-align: center; outline: none;
+}
+.phone-line { display: inline-flex; align-items: center; gap: 6px; font-size: var(--fs-small); color: var(--text-secondary); margin-bottom: var(--space-3); }
+.drawer-close { position: absolute; top: var(--space-3); right: var(--space-3); }
