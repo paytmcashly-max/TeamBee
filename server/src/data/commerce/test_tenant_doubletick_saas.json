@@ -1,0 +1,49 @@
+{
+  "tenantId": "test_tenant_doubletick_saas",
+  "settings": {
+    "upiId": "mybrand@okaxis",
+    "merchantName": "TeamBee WhatsApp Store",
+    "currency": "INR",
+    "razorpayKeyId": ""
+  },
+  "products": [
+    {
+      "id": "prod_starter_suite",
+      "title": "WhatsApp Growth Starter Kit",
+      "description": "Automated broadcast campaigns, 500 template credits, interactive quick buttons & fast WABA setup.",
+      "price": 999,
+      "currency": "INR",
+      "category": "Software & SaaS",
+      "sku": "TB-START-01",
+      "imageUrl": "https://images.unsplash.com/photo-1551288049-bebda4e38f71?w=600&auto=format&fit=crop&q=80",
+      "inStock": true,
+      "createdAt": "2026-10-27T23:34:59.770Z"
+    },
+    {
+      "id": "prod_vip_concierge",
+      "title": "Omnichannel VIP Concierge",
+      "description": "Dedicated account manager, customized keyword bot flows, multi-agent round robin & 24/7 SLA.",
+      "price": 2499,
+      "currency": "INR",
+      "category": "Services",
+      "sku": "TB-VIP-02",
+      "imageUrl": "https://images.unsplash.com/photo-1556742049-0a67e5572263?w=600&auto=format&fit=crop&q=80",
+      "inStock": true,
+      "createdAt": "2026-10-27T23:34:59.771Z"
+    },
+    {
+      "id": "prod_broadcast_pack",
+      "title": "High-Speed Broadcast Credits (5,000)",
+      "description": "Ultra-low latency delivery queue with real-time delivery, read-rate and button click analytics.",
+      "price": 1899,
+      "currency": "INR",
+      "category": "Add-ons",
+      "sku": "TB-BC-5000",
+      "imageUrl": "https://images.unsplash.com/photo-1526374965328-7f61d4dc18c5?w=600&auto=format&fit=crop&q=80",
+      "inStock": true,
+      "createdAt": "2026-10-27T23:34:59.771Z"
+    }
+  ],
+  "orders": [],
+  "updatedAt": "2026-10-27T23:44:57.993Z"
+}

@@ -1,0 +1,57 @@
+{
+  "tenantId": "test_tenant_doubletick_saas",
+  "botEnabled": true,
+  "autoAssignEnabled": true,
+  "welcomeMessage": "Custom welcome message test",
+  "agentHandoffKeywords": [
+    "agent",
+    "human",
+    "support",
+    "help",
+    "representative",
+    "executive",
+    "talk to human"
+  ],
+  "catalogKeywords": [
+    "catalog",
+    "products",
+    "shop",
+    "pricing",
+    "price list",
+    "items",
+    "menu",
+    "services"
+  ],
+  "paymentKeywords": [
+    "pay",
+    "payment",
+    "upi",
+    "googlepay",
+    "phonepe",
+    "paytm",
+    "qr code"
+  ],
+  "customRules": [
+    {
+      "id": "rule_hours",
+      "trigger": "timings",
+      "matchType": "contains",
+      "response": "⏰ Our customer support is active Monday to Saturday from 9:00 AM to 8:00 PM IST.",
+      "buttons": [
+        "💬 Leave Message",
+        "🛍️ View Catalog"
+      ]
+    },
+    {
+      "id": "rule_location",
+      "trigger": "address",
+      "matchType": "contains",
+      "response": "📍 We are headquartered in Bengaluru, India. We ship and provide digital services pan-India.",
+      "buttons": [
+        "🛍️ View Catalog",
+        "💬 Talk to Human"
+      ]
+    }
+  ],
+  "updatedAt": "2026-10-27T23:44:57.998Z"
+}

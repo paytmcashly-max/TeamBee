@@ -18,6 +18,8 @@ import {
   ArrowLeftRight,
   MoreVertical,
   RotateCcw,
+  ShoppingBag,
+  Bot,
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { useChat } from '../../context/ChatContext';
@@ -30,6 +32,9 @@ export default function ConversationList({
   onOpenAgents,
   onOpenDashboard,
   onOpenHelp,
+  onOpenCommerce,
+  onOpenAutomation,
+  onOpenCampaigns,
 }) {
   const { agent, tenant, isAdmin, logout } = useAuth();
   const toast = useToast();
@@ -216,6 +221,39 @@ export default function ConversationList({
                       >
                         <LayoutDashboard size={15} className="icon-muted" />
                         Dashboard
+                      </button>
+                    )}
+                    {onOpenCampaigns && (
+                      <button
+                        type="button"
+                        role="menuitem"
+                        className="menu-item"
+                        onClick={() => { setMenuOpen(false); onOpenCampaigns(); }}
+                      >
+                        <Radio size={15} className="icon-muted" />
+                        Campaigns Hub
+                      </button>
+                    )}
+                    {onOpenCommerce && (
+                      <button
+                        type="button"
+                        role="menuitem"
+                        className="menu-item"
+                        onClick={() => { setMenuOpen(false); onOpenCommerce(); }}
+                      >
+                        <ShoppingBag size={15} className="icon-muted" />
+                        Commerce &amp; Catalog
+                      </button>
+                    )}
+                    {onOpenAutomation && (
+                      <button
+                        type="button"
+                        role="menuitem"
+                        className="menu-item"
+                        onClick={() => { setMenuOpen(false); onOpenAutomation(); }}
+                      >
+                        <Bot size={15} className="icon-muted" />
+                        AI Bot &amp; Automations
                       </button>
                     )}
                     <button

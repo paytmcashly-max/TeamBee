@@ -14,7 +14,7 @@ const MIGRATIONS = [
   '202610240002_chat_snooze',
   '202610240005_automation',
 ];
-const BASE = '/home/hatch/workspace/projects/teambee-deployed-audit/server/prisma/migrations';
+const BASE = path.join(__dirname, '..', 'prisma', 'migrations');
 
 let passed = 0;
 let failed = 0;

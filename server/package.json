@@ -11,7 +11,7 @@
     "prisma:migrate:deploy": "prisma migrate deploy",
     "prisma:push": "prisma db push",
     "seed": "node src/db/seed.js",
-    "test": "node tests/test-automation-units.js && node tests/test-feature-controllers.js && node tests/test-migrations.pg-mem.js",
+    "test": "node tests/test-automation-units.js && node tests/test-feature-controllers.js && node tests/test-migrations.pg-mem.js && node tests/test-commerce-automation.js",
     "postinstall": "prisma generate"
   },
   "dependencies": {

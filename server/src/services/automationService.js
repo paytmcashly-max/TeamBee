@@ -93,7 +93,7 @@ function shouldSendAwayReply(lastAwayReplyAt, now) {
 // Orchestration (post-ingestion, fire-and-forget from the webhook path)
 // ---------------------------------------------------------------------------
 
-async function applyInboundAutomation({ tenant, chatId }) {
+async function applyInboundAutomation({ tenant, chatId, incomingMessage = null, rawMsg = null }) {
   const run = (fn) => (rlsContextEnabled() ? withTenantDb(tenant.id, fn) : fn(prisma));
   try {
     const chat = await run((db) =>
@@ -202,6 +202,234 @@ async function applyInboundAutomation({ tenant, chatId }) {
             broadcastNewMessage(tenant.id, current.id, message, current.assignedAgentId);
           } else {
             console.error('[Automation]: away template send failed:', result.error || result.code);
+          }
+        }
+      }
+    }
+
+    // 3) DoubleTick-grade AI Bot & Keyword Flow Auto-Responder
+    if (incomingMessage && current.contact?.waId) {
+      const AutomationRulesService = require('./automationRulesService');
+      const CommerceService = require('./commerceService');
+      const config = AutomationRulesService.getConfig(tenant.id);
+
+      if (config.botEnabled !== false) {
+        const text = String(incomingMessage.content || '').toLowerCase().trim();
+        const btnReply = rawMsg?.interactive?.button_reply || null;
+        const btnId = String(btnReply?.id || '').toLowerCase();
+        const btnTitle = String(btnReply?.title || '').toLowerCase();
+
+        const isHandoff =
+          btnId.includes('btn_agent') ||
+          btnTitle.includes('human') ||
+          btnTitle.includes('agent') ||
+          (Array.isArray(config.agentHandoffKeywords) &&
+            config.agentHandoffKeywords.some((kw) => text.includes(kw.toLowerCase())));
+
+        const isCatalog =
+          btnId.includes('btn_catalog') ||
+          btnTitle.includes('catalog') ||
+          (Array.isArray(config.catalogKeywords) &&
+            config.catalogKeywords.some((kw) => text.includes(kw.toLowerCase())));
+
+        const isPayment =
+          btnId.includes('btn_pay') ||
+          btnTitle.includes('pay') ||
+          (Array.isArray(config.paymentKeywords) &&
+            config.paymentKeywords.some((kw) => text.includes(kw.toLowerCase())));
+
+        const isPaidConfirm =
+          btnId.includes('btn_pay_confirm') ||
+          /\b(paid|done payment|transferred|sent money)\b/i.test(text);
+
+        const isGreeting = /^(hi|hello|hey|start|menu|namaste)$/i.test(text);
+
+        if (isHandoff) {
+          // Escalate to live agent
+          let chatTags = [];
+          try {
+            chatTags = current.tags ? JSON.parse(current.tags) : [];
+          } catch (e) {}
+          if (!chatTags.includes('Agent Requested')) chatTags.push('Agent Requested');
+          if (!chatTags.includes('High Priority')) chatTags.push('High Priority');
+
+          await run((db) =>
+            db.chat.update({
+              where: { id: current.id },
+              data: {
+                status: 'OPEN',
+                tags: JSON.stringify(chatTags),
+              },
+            })
+          );
+
+          const botResponse = 'Connecting you with our support specialist right away. A team member has been notified and will assist you shortly! 🙋‍♂️';
+          const sentResult = await MetaApiService.sendTextMessage(tenant, current.contact.waId, botResponse);
+          if (sentResult.success) {
+            const sentAt = new Date();
+            const botMsg = await run((db) =>
+              db.message.create({
+                data: {
+                  chatId: current.id,
+                  tenantId: tenant.id,
+                  senderType: 'BOT',
+                  messageType: 'TEXT',
+                  content: botResponse,
+                  direction: 'OUTBOUND',
+                  status: 'SENT',
+                  waMessageId: sentResult.wamid || null,
+                  createdAt: sentAt,
+                },
+              })
+            );
+            broadcastNewMessage(tenant.id, current.id, botMsg, current.assignedAgentId);
+          }
+        } else if (isCatalog) {
+          const products = CommerceService.getProducts(tenant.id);
+          const topProducts = products.slice(0, 3);
+          let catalogText = '🛍️ *Featured Catalog & Pricing*\n\n';
+          topProducts.forEach((p, idx) => {
+            catalogText += `${idx + 1}. *${p.title}* — ₹${p.price.toLocaleString('en-IN')}\n_${p.description.slice(0, 80)}_\n\n`;
+          });
+          catalogText += 'Tap an action below to proceed:';
+
+          const buttons = [
+            { id: 'btn_pay_featured', title: '💳 Pay Online (UPI)' },
+            { id: 'btn_agent', title: '💬 Talk to Human' },
+          ];
+
+          const sentResult = await MetaApiService.sendInteractiveButtons(
+            tenant,
+            current.contact.waId,
+            catalogText,
+            buttons
+          );
+          if (sentResult.success) {
+            const sentAt = new Date();
+            const botMsg = await run((db) =>
+              db.message.create({
+                data: {
+                  chatId: current.id,
+                  tenantId: tenant.id,
+                  senderType: 'BOT',
+                  messageType: 'INTERACTIVE',
+                  content: catalogText,
+                  rawPayload: JSON.stringify({ buttons }),
+                  direction: 'OUTBOUND',
+                  status: 'SENT',
+                  waMessageId: sentResult.wamid || null,
+                  createdAt: sentAt,
+                },
+              })
+            );
+            broadcastNewMessage(tenant.id, current.id, botMsg, current.assignedAgentId);
+          }
+        } else if (isPayment) {
+          const settings = CommerceService.getSettings(tenant.id);
+          const upiLink = CommerceService.generateUpiLink({
+            vpa: settings.upiId || 'merchant@upi',
+            merchantName: settings.merchantName || 'WhatsApp Store',
+            amount: 999,
+            orderId: `TB-${Date.now().toString().slice(-6)}`,
+            note: 'Order Payment',
+          });
+
+          const payText = `💳 *Instant UPI Payment Option*\n\n🏛️ *Payee VPA:* \`${settings.upiId || 'merchant@upi'}\`\n\nTap below to open your preferred UPI App (GPay, PhonePe, Paytm, BHIM) and complete payment securely.`;
+          const buttons = [
+            { id: 'btn_pay_confirm', title: '✅ I Have Paid' },
+            { id: 'btn_agent', title: '💬 Payment Help' },
+          ];
+
+          const sentResult = await MetaApiService.sendInteractiveButtons(
+            tenant,
+            current.contact.waId,
+            payText,
+            buttons
+          );
+          if (sentResult.success) {
+            const sentAt = new Date();
+            const botMsg = await run((db) =>
+              db.message.create({
+                data: {
+                  chatId: current.id,
+                  tenantId: tenant.id,
+                  senderType: 'BOT',
+                  messageType: 'INTERACTIVE',
+                  content: payText,
+                  rawPayload: JSON.stringify({
+                    commerce: {
+                      type: 'PAYMENT_REQUEST',
+                      amount: 999,
+                      currency: 'INR',
+                      vpa: settings.upiId || 'merchant@upi',
+                      paymentLink: upiLink,
+                    },
+                    buttons,
+                  }),
+                  direction: 'OUTBOUND',
+                  status: 'SENT',
+                  waMessageId: sentResult.wamid || null,
+                  createdAt: sentAt,
+                },
+              })
+            );
+            broadcastNewMessage(tenant.id, current.id, botMsg, current.assignedAgentId);
+          }
+        } else if (isPaidConfirm) {
+          const confirmText = "Thank you! We've recorded your payment notice. Our team is verifying the receipt and will confirm your order shortly. ✨";
+          const sentResult = await MetaApiService.sendTextMessage(tenant, current.contact.waId, confirmText);
+          if (sentResult.success) {
+            const sentAt = new Date();
+            const botMsg = await run((db) =>
+              db.message.create({
+                data: {
+                  chatId: current.id,
+                  tenantId: tenant.id,
+                  senderType: 'BOT',
+                  messageType: 'TEXT',
+                  content: confirmText,
+                  direction: 'OUTBOUND',
+                  status: 'SENT',
+                  waMessageId: sentResult.wamid || null,
+                  createdAt: sentAt,
+                },
+              })
+            );
+            broadcastNewMessage(tenant.id, current.id, botMsg, current.assignedAgentId);
+          }
+        } else if (isGreeting) {
+          const welcomeText = config.welcomeMessage || '👋 Welcome! How can we assist you today?';
+          const buttons = [
+            { id: 'btn_catalog', title: '🛍️ View Catalog' },
+            { id: 'btn_pay', title: '💳 Pay Online' },
+            { id: 'btn_agent', title: '💬 Talk to Human' },
+          ];
+
+          const sentResult = await MetaApiService.sendInteractiveButtons(
+            tenant,
+            current.contact.waId,
+            welcomeText,
+            buttons
+          );
+          if (sentResult.success) {
+            const sentAt = new Date();
+            const botMsg = await run((db) =>
+              db.message.create({
+                data: {
+                  chatId: current.id,
+                  tenantId: tenant.id,
+                  senderType: 'BOT',
+                  messageType: 'INTERACTIVE',
+                  content: welcomeText,
+                  rawPayload: JSON.stringify({ buttons }),
+                  direction: 'OUTBOUND',
+                  status: 'SENT',
+                  waMessageId: sentResult.wamid || null,
+                  createdAt: sentAt,
+                },
+              })
+            );
+            broadcastNewMessage(tenant.id, current.id, botMsg, current.assignedAgentId);
           }
         }
       }

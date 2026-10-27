@@ -8,8 +8,19 @@ import ForgotPasswordView from './components/auth/ForgotPasswordView';
 import ResetPasswordView from './components/auth/ResetPasswordView';
 import LandingPage from './components/landing/LandingPage';
 import { TermsView, PrivacyView, RefundsView } from './components/landing/LegalViews';
+import {
+  MessageSquare,
+  Radio,
+  ShoppingBag,
+  Bot,
+  LayoutDashboard,
+  Settings,
+} from 'lucide-react';
 const DashboardView = lazy(() => import('./components/dashboard/DashboardView'));
 const HelpView = lazy(() => import('./components/help/HelpView'));
+const CommerceView = lazy(() => import('./components/commerce/CommerceView'));
+const AutomationView = lazy(() => import('./components/automation/AutomationView'));
+const CampaignsView = lazy(() => import('./components/campaigns/CampaignsView'));
 import ConversationList from './components/inbox/ConversationList';
 import ChatCanvas from './components/inbox/ChatCanvas';
 import ContactSidebar from './components/inbox/ContactSidebar';
@@ -294,6 +305,72 @@ export default function App() {
           </button>
         </div>
       )}
+
+      {/* DoubleTick-grade SaaS Global App Switcher Header */}
+      <header className="doubletick-nav-header">
+        <div className="doubletick-nav-brand">
+          <span className="brand-dot" />
+          <span className="brand-title">{tenant?.name || 'TeamBee'}</span>
+          <span className="saas-badge">DoubleTick SaaS</span>
+        </div>
+
+        <nav className="doubletick-nav-tabs">
+          <button
+            type="button"
+            className={`doubletick-tab ${effectiveMainView === 'inbox' ? 'active' : ''}`}
+            onClick={() => setMainView('inbox')}
+          >
+            <MessageSquare size={14} />
+            <span>Inbox</span>
+          </button>
+          <button
+            type="button"
+            className={`doubletick-tab ${effectiveMainView === 'campaigns' ? 'active' : ''}`}
+            onClick={() => setMainView('campaigns')}
+          >
+            <Radio size={14} />
+            <span>Campaigns</span>
+          </button>
+          <button
+            type="button"
+            className={`doubletick-tab ${effectiveMainView === 'commerce' ? 'active' : ''}`}
+            onClick={() => setMainView('commerce')}
+          >
+            <ShoppingBag size={14} />
+            <span>Catalog &amp; Pay</span>
+          </button>
+          <button
+            type="button"
+            className={`doubletick-tab ${effectiveMainView === 'automation' ? 'active' : ''}`}
+            onClick={() => setMainView('automation')}
+          >
+            <Bot size={14} />
+            <span>Automations</span>
+          </button>
+          {(agent.role === 'ADMIN' || agent.role === 'SUPERVISOR') && (
+            <button
+              type="button"
+              className={`doubletick-tab ${effectiveMainView === 'dashboard' ? 'active' : ''}`}
+              onClick={() => setMainView('dashboard')}
+            >
+              <LayoutDashboard size={14} />
+              <span>Dashboard</span>
+            </button>
+          )}
+        </nav>
+
+        <div className="doubletick-nav-actions">
+          <button
+            type="button"
+            className="doubletick-tool-btn"
+            onClick={() => setIsSettingsOpen(true)}
+            title="Meta WABA Settings"
+          >
+            <Settings size={15} />
+          </button>
+        </div>
+      </header>
+
       {effectiveMainView === 'help' ? (
         <Suspense fallback={null}>
           <HelpView
@@ -315,6 +392,27 @@ export default function App() {
             onOpenAgents={() => setIsAgentsModalOpen(true)}
           />
         </Suspense>
+      ) : effectiveMainView === 'commerce' ? (
+        <Suspense fallback={null}>
+          <CommerceView
+            onBack={() => setMainView('inbox')}
+            onOpenInbox={() => setMainView('inbox')}
+          />
+        </Suspense>
+      ) : effectiveMainView === 'automation' ? (
+        <Suspense fallback={null}>
+          <AutomationView
+            onBack={() => setMainView('inbox')}
+            onOpenInbox={() => setMainView('inbox')}
+          />
+        </Suspense>
+      ) : effectiveMainView === 'campaigns' ? (
+        <Suspense fallback={null}>
+          <CampaignsView
+            onBack={() => setMainView('inbox')}
+            onOpenCreateBroadcast={() => setIsBroadcastModalOpen(true)}
+          />
+        </Suspense>
       ) : (
       /* 3-Column WhatsApp Shared Inbox Layout */
       <div className={`inbox-layout ${(activeChat || activeChatId) ? 'has-active-chat' : 'no-active-chat'}`}>
@@ -326,6 +424,9 @@ export default function App() {
           onOpenAgents={() => setIsAgentsModalOpen(true)}
           onOpenDashboard={() => setMainView('dashboard')}
           onOpenHelp={() => setMainView('help')}
+          onOpenCommerce={() => setMainView('commerce')}
+          onOpenAutomation={() => setMainView('automation')}
+          onOpenCampaigns={() => setMainView('campaigns')}
         />
 
         {/* Column 2: Active Chat Canvas */}

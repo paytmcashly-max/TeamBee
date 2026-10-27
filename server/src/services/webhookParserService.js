@@ -483,8 +483,8 @@ class WebhookParserService {
     broadcastNewMessage(tenant.id, result.chat.id, result.message, result.chat.assignedAgentId);
 
     // Post-ingestion automation (round-robin auto-assign, office-hours
-    // away reply). Fire-and-forget: it can never delay or fail ingestion.
-    void applyInboundAutomation({ tenant, chatId: result.chat.id });
+    // away reply, keyword triggers & interactive bot routing). Fire-and-forget.
+    void applyInboundAutomation({ tenant, chatId: result.chat.id, incomingMessage: result.message, rawMsg });
 
     return result;
   }

@@ -27,6 +27,10 @@ import {
   Flame,
   ArrowLeft,
   Copy,
+  ShoppingBag,
+  CreditCard,
+  QrCode,
+  Package,
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { useChat } from '../../context/ChatContext';
@@ -146,6 +150,99 @@ export default function ChatCanvas({ onOpenTemplatePicker, onToggleSidebar, isSi
     'Talk to support',
   ]);
   const [newBtnInput, setNewBtnInput] = useState('');
+
+  // DoubleTick WhatsApp Commerce & Payments
+  const [showCommerceDrawer, setShowCommerceDrawer] = useState(false);
+  const [commerceTab, setCommerceTab] = useState('products'); // 'products' | 'payment'
+  const [catalogProducts, setCatalogProducts] = useState([]);
+  const [catalogSettings, setCatalogSettings] = useState({ upiId: 'teambee@upi', merchantName: 'WhatsApp Store' });
+  const [loadingCatalog, setLoadingCatalog] = useState(false);
+  const [payAmount, setPayAmount] = useState('');
+  const [payNote, setPayNote] = useState('');
+  const [sendingCommerce, setSendingCommerce] = useState(false);
+
+  useEffect(() => {
+    if (!showCommerceDrawer) return;
+    async function loadCatalog() {
+      setLoadingCatalog(true);
+      try {
+        const res = await fetch('/api/commerce/products', {
+          headers: token ? { Authorization: `Bearer ${token}` } : {},
+        });
+        const data = await res.json();
+        if (data.success) {
+          setCatalogProducts(data.products || []);
+          if (data.settings) setCatalogSettings(data.settings);
+        }
+      } catch (err) {
+        console.error('Failed to load catalog:', err);
+      } finally {
+        setLoadingCatalog(false);
+      }
+    }
+    loadCatalog();
+  }, [showCommerceDrawer, token]);
+
+  const handleSendProductToChat = async (product) => {
+    if (!activeChat?.id) return;
+    setSendingCommerce(true);
+    try {
+      const res = await fetch(`/api/commerce/send-product/${activeChat.id}`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({ productId: product.id }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        toast.success(`Product "${product.title}" sent to WhatsApp chat!`);
+        setShowCommerceDrawer(false);
+      } else {
+        toast.error(data.error || 'Failed to send product');
+      }
+    } catch (err) {
+      toast.error(err.message);
+    } finally {
+      setSendingCommerce(false);
+    }
+  };
+
+  const handleSendPaymentRequest = async (e) => {
+    e.preventDefault();
+    if (!activeChat?.id || !payAmount || Number(payAmount) <= 0) {
+      toast.error('Please enter a valid payment amount');
+      return;
+    }
+    setSendingCommerce(true);
+    try {
+      const res = await fetch(`/api/commerce/send-payment/${activeChat.id}`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({
+          amount: Number(payAmount),
+          note: payNote.trim() || 'Order Payment',
+        }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        toast.success(`Payment request for ₹${payAmount} sent!`);
+        setShowCommerceDrawer(false);
+        setPayAmount('');
+        setPayNote('');
+      } else {
+        toast.error(data.error || 'Failed to send payment request');
+      }
+    } catch (err) {
+      toast.error(err.message);
+    } finally {
+      setSendingCommerce(false);
+    }
+  };
 
   const messagesEndRef = useRef(null);
   const messagesContainerRef = useRef(null);
@@ -896,12 +993,14 @@ export default function ChatCanvas({ onOpenTemplatePicker, onToggleSidebar, isSi
               );
             }
 
-            // 3.3. Parse interactive buttons if message is interactive
+            // 3.3. Parse interactive buttons & commerce data
             let interactivePills = [];
+            let commerceData = null;
             if (msg.messageType === 'INTERACTIVE' && msg.rawPayload) {
               try {
                 const parsed = JSON.parse(msg.rawPayload);
                 interactivePills = Array.isArray(parsed.buttons) ? parsed.buttons : [];
+                commerceData = parsed.commerce || null;
               } catch (e) {}
             }
 
@@ -1018,6 +1117,146 @@ export default function ChatCanvas({ onOpenTemplatePicker, onToggleSidebar, isSi
                           msg.mediaFilename || 'Document'
                         )}
                       </div>
+                    </div>
+                  )}
+
+                  {/* WhatsApp Commerce & Product Card */}
+                  {commerceData?.type === 'PRODUCT' && (
+                    <div
+                      style={{
+                        background: '#ffffff',
+                        border: '1px solid var(--border-medium)',
+                        borderRadius: '10px',
+                        overflow: 'hidden',
+                        margin: '8px 0',
+                        boxShadow: '0 2px 8px rgba(0,0,0,0.06)',
+                      }}
+                    >
+                      {commerceData.imageUrl && (
+                        <img
+                          src={commerceData.imageUrl}
+                          alt={commerceData.title}
+                          style={{ width: '100%', maxHeight: '140px', objectFit: 'cover', display: 'block' }}
+                        />
+                      )}
+                      <div style={{ padding: '10px' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
+                          <span style={{ fontSize: '13px', fontWeight: '700', color: 'var(--text-main)' }}>
+                            {commerceData.title}
+                          </span>
+                          <span
+                            style={{
+                              background: 'rgba(37, 211, 102, 0.15)',
+                              color: '#16a34a',
+                              fontSize: '11.5px',
+                              fontWeight: '800',
+                              padding: '2px 8px',
+                              borderRadius: '4px',
+                            }}
+                          >
+                            ₹{Number(commerceData.price || 0).toLocaleString('en-IN')}
+                          </span>
+                        </div>
+                        <div style={{ fontSize: '11.5px', color: 'var(--text-muted)', lineHeight: 1.35, marginBottom: '8px' }}>
+                          {commerceData.description}
+                        </div>
+                        {commerceData.paymentLink && (
+                          <a
+                            href={commerceData.paymentLink}
+                            target="_blank"
+                            rel="noreferrer"
+                            style={{
+                              display: 'block',
+                              textAlign: 'center',
+                              background: 'var(--wa-primary)',
+                              color: '#ffffff',
+                              padding: '6px 10px',
+                              borderRadius: '6px',
+                              fontSize: '11.5px',
+                              fontWeight: '700',
+                              textDecoration: 'none',
+                            }}
+                          >
+                            ⚡ Pay ₹{Number(commerceData.price || 0).toLocaleString('en-IN')} via UPI
+                          </a>
+                        )}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* WhatsApp Instant UPI Payment Request Bubble */}
+                  {commerceData?.type === 'PAYMENT_REQUEST' && (
+                    <div
+                      style={{
+                        background: '#ffffff',
+                        border: '1px solid rgba(37, 211, 102, 0.4)',
+                        borderRadius: '10px',
+                        padding: '12px',
+                        margin: '8px 0',
+                        boxShadow: '0 2px 8px rgba(0,0,0,0.06)',
+                      }}
+                    >
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '11px', fontWeight: '700', color: '#16a34a', marginBottom: '4px' }}>
+                        <CreditCard size={13} />
+                        <span>INSTANT UPI PAYMENT REQUEST</span>
+                      </div>
+                      <div style={{ fontSize: '20px', fontWeight: '800', color: 'var(--text-main)', marginBottom: '2px' }}>
+                        ₹{Number(commerceData.amount || 0).toLocaleString('en-IN')}
+                      </div>
+                      <div style={{ fontSize: '11.5px', color: 'var(--text-muted)', marginBottom: '6px' }}>
+                        {commerceData.note} {commerceData.orderId ? `• Ref: ${commerceData.orderId}` : ''}
+                      </div>
+                      <div
+                        style={{
+                          fontSize: '11px',
+                          color: 'var(--text-secondary)',
+                          background: 'var(--bg-input)',
+                          padding: '5px 8px',
+                          borderRadius: '6px',
+                          fontFamily: 'var(--font-mono)',
+                          marginBottom: '8px',
+                          display: 'flex',
+                          justifyContent: 'space-between',
+                          alignItems: 'center',
+                        }}
+                      >
+                        <span>UPI VPA: {commerceData.vpa || 'merchant@upi'}</span>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            navigator.clipboard.writeText(commerceData.vpa || 'merchant@upi');
+                            toast.success('UPI ID copied!');
+                          }}
+                          style={{
+                            background: 'none',
+                            border: 'none',
+                            color: 'var(--wa-primary)',
+                            cursor: 'pointer',
+                            fontWeight: '700',
+                            fontSize: '10.5px',
+                          }}
+                        >
+                          COPY
+                        </button>
+                      </div>
+                      {commerceData.paymentLink && (
+                        <a
+                          href={commerceData.paymentLink}
+                          style={{
+                            display: 'block',
+                            textAlign: 'center',
+                            background: '#16a34a',
+                            color: '#ffffff',
+                            padding: '7px 12px',
+                            borderRadius: '6px',
+                            fontSize: '12px',
+                            fontWeight: '700',
+                            textDecoration: 'none',
+                          }}
+                        >
+                          ⚡ Open UPI App (GPay / PhonePe / Paytm)
+                        </a>
+                      )}
                     </div>
                   )}
 
@@ -1359,6 +1598,210 @@ export default function ChatCanvas({ onOpenTemplatePicker, onToggleSidebar, isSi
         </div>
       )}
 
+      {/* 5.3 WhatsApp Commerce & UPI Payment Popover Drawer */}
+      {showCommerceDrawer && (
+        <div
+          style={{
+            position: 'absolute',
+            bottom: '72px',
+            left: '12px',
+            right: '12px',
+            maxWidth: '420px',
+            background: 'var(--bg-surface)',
+            border: '1px solid var(--border-medium)',
+            borderRadius: '12px',
+            padding: '14px',
+            boxShadow: 'var(--shadow-card)',
+            zIndex: 30,
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '10px',
+            maxHeight: '380px',
+            overflowY: 'auto',
+          }}
+        >
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <div style={{ display: 'flex', gap: '6px' }}>
+              <button
+                type="button"
+                onClick={() => setCommerceTab('products')}
+                style={{
+                  background: commerceTab === 'products' ? 'rgba(37, 211, 102, 0.15)' : 'none',
+                  color: commerceTab === 'products' ? '#16a34a' : 'var(--text-secondary)',
+                  border: 'none',
+                  borderRadius: '6px',
+                  padding: '4px 10px',
+                  fontSize: '12px',
+                  fontWeight: '700',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '4px',
+                }}
+              >
+                <ShoppingBag size={13} />
+                <span>Products ({catalogProducts.length})</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setCommerceTab('payment')}
+                style={{
+                  background: commerceTab === 'payment' ? 'rgba(37, 211, 102, 0.15)' : 'none',
+                  color: commerceTab === 'payment' ? '#16a34a' : 'var(--text-secondary)',
+                  border: 'none',
+                  borderRadius: '6px',
+                  padding: '4px 10px',
+                  fontSize: '12px',
+                  fontWeight: '700',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '4px',
+                }}
+              >
+                <CreditCard size={13} />
+                <span>UPI Payment</span>
+              </button>
+            </div>
+            <button
+              onClick={() => setShowCommerceDrawer(false)}
+              className="btn btn-ghost btn-xs"
+            >
+              ✕
+            </button>
+          </div>
+
+          {commerceTab === 'products' ? (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+              {loadingCatalog ? (
+                <div style={{ textAlign: 'center', padding: '20px', fontSize: '12px', color: 'var(--text-muted)' }}>
+                  Loading catalog products...
+                </div>
+              ) : catalogProducts.length === 0 ? (
+                <div style={{ textAlign: 'center', padding: '20px', fontSize: '12px', color: 'var(--text-muted)' }}>
+                  No products in catalog. Add products in Commerce view.
+                </div>
+              ) : (
+                catalogProducts.map((p) => (
+                  <div
+                    key={p.id}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      padding: '8px 10px',
+                      borderRadius: '8px',
+                      border: '1px solid var(--border-subtle)',
+                      background: 'var(--bg-app)',
+                      gap: '10px',
+                    }}
+                  >
+                    {p.imageUrl ? (
+                      <img
+                        src={p.imageUrl}
+                        alt={p.title}
+                        style={{ width: '40px', height: '40px', borderRadius: '6px', objectFit: 'cover' }}
+                      />
+                    ) : (
+                      <div
+                        style={{
+                          width: '40px',
+                          height: '40px',
+                          borderRadius: '6px',
+                          background: 'rgba(37, 211, 102, 0.12)',
+                          color: 'var(--wa-primary)',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                        }}
+                      >
+                        <ShoppingBag size={18} />
+                      </div>
+                    )}
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontSize: '12.5px', fontWeight: '700', color: 'var(--text-main)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                        {p.title}
+                      </div>
+                      <div style={{ fontSize: '11px', color: '#16a34a', fontWeight: '700' }}>
+                        ₹{Number(p.price).toLocaleString('en-IN')}
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      disabled={sendingCommerce}
+                      onClick={() => handleSendProductToChat(p)}
+                      className="btn btn-primary btn-xs"
+                      style={{ background: 'var(--wa-primary)', color: '#ffffff', fontWeight: '600' }}
+                    >
+                      {sendingCommerce ? 'Sending...' : 'Send'}
+                    </button>
+                  </div>
+                ))
+              )}
+            </div>
+          ) : (
+            <form onSubmit={handleSendPaymentRequest} style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+              <div>
+                <label style={{ fontSize: '11px', fontWeight: '600', color: 'var(--text-main)', display: 'block', marginBottom: '3px' }}>
+                  Amount (₹) *
+                </label>
+                <input
+                  type="number"
+                  required
+                  min="1"
+                  value={payAmount}
+                  onChange={(e) => setPayAmount(e.target.value)}
+                  placeholder="e.g. 999"
+                  style={{
+                    width: '100%',
+                    padding: '6px 10px',
+                    borderRadius: '6px',
+                    border: '1px solid var(--border-medium)',
+                    background: 'var(--bg-input)',
+                    color: 'var(--text-main)',
+                    fontSize: '13px',
+                  }}
+                />
+              </div>
+
+              <div>
+                <label style={{ fontSize: '11px', fontWeight: '600', color: 'var(--text-main)', display: 'block', marginBottom: '3px' }}>
+                  Note / Invoice Ref
+                </label>
+                <input
+                  type="text"
+                  value={payNote}
+                  onChange={(e) => setPayNote(e.target.value)}
+                  placeholder="e.g. Order #8241 or Consultation fee"
+                  style={{
+                    width: '100%',
+                    padding: '6px 10px',
+                    borderRadius: '6px',
+                    border: '1px solid var(--border-medium)',
+                    background: 'var(--bg-input)',
+                    color: 'var(--text-main)',
+                    fontSize: '12px',
+                  }}
+                />
+              </div>
+
+              <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
+                Payee VPA: <code>{catalogSettings.upiId || 'teambee@upi'}</code>
+              </div>
+
+              <button
+                type="submit"
+                disabled={sendingCommerce}
+                className="btn btn-primary btn-sm"
+                style={{ background: '#16a34a', color: '#ffffff', justifyContent: 'center', marginTop: '4px' }}
+              >
+                {sendingCommerce ? 'Dispatching...' : 'Send UPI Payment Request'}
+              </button>
+            </form>
+          )}
+        </div>
+      )}
+
       {/* 6. Interactive Composer Container */}
       <div className={`chat-composer-box${composeMode === 'NOTE' ? ' note-mode' : ''}`}>
         {/* 6.1 Mode Switcher Tabs */}
@@ -1541,6 +1984,20 @@ export default function ChatCanvas({ onOpenTemplatePicker, onToggleSidebar, isSi
               title="Attach Document or Brochure"
             >
               <Paperclip size={17} />
+            </button>
+
+            <button
+              type="button"
+              onClick={() => {
+                setShowCommerceDrawer(!showCommerceDrawer);
+                setShowAttachmentMenu(false);
+                setShowQuickReplies(false);
+              }}
+              className="btn-tool"
+              style={{ color: showCommerceDrawer ? 'var(--wa-primary)' : 'var(--text-secondary)' }}
+              title="Share Product Catalog / UPI Payment"
+            >
+              <ShoppingBag size={17} />
             </button>
           </div>
 

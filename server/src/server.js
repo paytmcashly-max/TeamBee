@@ -25,6 +25,8 @@ const quickReplyRoutes = require('./routes/quickReplyRoutes');
 const analyticsRoutes = require('./routes/analyticsRoutes');
 const billingRoutes = require('./routes/billingRoutes');
 const simulatorRoutes = require('./routes/simulatorRoutes');
+const commerceRoutes = require('./routes/commerceRoutes');
+const automationRoutes = require('./routes/automationRoutes');
 
 const app = express();
 const server = http.createServer(app);
@@ -162,6 +164,8 @@ app.use('/api/broadcasts', broadcastRoutes);
 app.use('/api/quick-replies', quickReplyRoutes);
 app.use('/api/analytics', analyticsRoutes);
 app.use('/api/billing', billingRoutes);
+app.use('/api/commerce', commerceRoutes);
+app.use('/api/automation', automationRoutes);
 // Dev-only tool: the simulator injects fake inbound messages and statuses,
 // so it is mounted only when explicitly enabled (staging), never by default.
 if (process.env.ENABLE_SIMULATOR === 'true') {

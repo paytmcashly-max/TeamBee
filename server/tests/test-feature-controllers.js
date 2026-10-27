@@ -160,7 +160,13 @@ async function main() {
   const TenantController = require(path.join(serverSrc, 'controllers', 'tenantController'));
   const { applyInboundAutomation } = require(path.join(serverSrc, 'services', 'automationService'));
 
-  const adminReq = { tenantId: 't1', agent: { id: 'a1', role: 'ADMIN', name: 'Admin' }, body: {}, params: {} };
+  const adminReq = {
+    tenantId: 't1',
+    agent: { id: 'a1', role: 'ADMIN', name: 'Admin' },
+    body: {},
+    params: {},
+    db: (fn) => fn(prismaFake),
+  };
 
   // -------------------------------------------------------------------------
   // Quick replies
@@ -229,7 +235,13 @@ async function main() {
       { id: 'c1', tenantId: 't1', assignedAgentId: 'a1', snoozedUntil: null, snoozedById: null },
       { id: 'c2', tenantId: 't2', assignedAgentId: null, snoozedUntil: null, snoozedById: null },
     ];
-    const agentReq = { tenantId: 't1', agent: { id: 'a1', role: 'AGENT', name: 'A' }, params: { id: 'c1' }, body: {} };
+    const agentReq = {
+      tenantId: 't1',
+      agent: { id: 'a1', role: 'AGENT', name: 'A' },
+      params: { id: 'c1' },
+      body: {},
+      db: (fn) => fn(prismaFake),
+    };
     const future = new Date(Date.now() + 3600e3).toISOString();
 
     let res = makeRes();
@@ -278,6 +290,7 @@ async function main() {
       tenantId: 't1',
       agent: { id: 'a1', role: 'ADMIN' },
       body,
+      db: (fn) => fn(prismaFake),
     });
 
     let res = makeRes();
