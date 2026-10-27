@@ -57,21 +57,6 @@ export default function ConversationList({
     logout();
   };
 
-  const menuItemStyle = (danger) => ({
-    display: 'flex',
-    alignItems: 'center',
-    gap: '10px',
-    width: '100%',
-    textAlign: 'left',
-    background: 'transparent',
-    border: 'none',
-    borderRadius: '8px',
-    padding: '9px 10px',
-    fontSize: '13px',
-    fontWeight: '500',
-    color: danger ? '#f87171' : '#e2e8f0',
-    cursor: 'pointer',
-  });
   const {
     chats,
     activeChatId,
@@ -158,110 +143,42 @@ export default function ConversationList({
   return (
     <aside className="col-conversations">
       {/* Top Header: Business Branding & Quick Action Badges */}
-      <div className="conversations-header" style={{ padding: '16px 16px 12px 16px', borderBottom: '1px solid var(--border-subtle)' }}>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-            <div
-              style={{
-                width: '38px',
-                height: '38px',
-                borderRadius: '10px',
-                background: 'linear-gradient(135deg, #25D366 0%, #128C7E 100%)',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                color: '#062B18',
-                fontWeight: 'bold',
-                boxShadow: '0 4px 12px rgba(37, 211, 102, 0.3)',
-              }}
-            >
+      <div className="conversations-header conv-head">
+        <div className="fx" style={{ justifyContent: 'space-between', marginBottom: 'var(--space-3)' }}>
+          <div className="fx" style={{ gap: '10px' }}>
+            <div className="brand-mark-lg">
               <MessageSquare size={20} />
             </div>
             <div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                <span style={{ fontWeight: '700', fontSize: '15px', color: '#fff', letterSpacing: '-0.01em' }}>
-                  {tenant?.name || 'TeamBee'}
-                </span>
-                <span
-                  style={{
-                    fontSize: '10px',
-                    background: 'rgba(37, 211, 102, 0.15)',
-                    color: '#25D366',
-                    padding: '1px 6px',
-                    borderRadius: '4px',
-                    fontWeight: '600',
-                  }}
-                >
-                  Meta API
-                </span>
+              <div className="fx" style={{ gap: '6px' }}>
+                <span className="tenant-name">{tenant?.name || 'TeamBee'}</span>
+                <span className="meta-chip">Meta API</span>
               </div>
-              <div style={{ fontSize: '11.5px', color: 'var(--text-secondary)' }}>
-                {tenant?.displayPhoneNumber || 'Not connected'}
-              </div>
+              <div className="tenant-phone">{tenant?.displayPhoneNumber || 'Not connected'}</div>
             </div>
           </div>
-
         </div>
 
         {/* Current Agent Info Strip */}
-        <div
-          style={{
-            background: 'var(--bg-surface)',
-            borderRadius: 'var(--radius-md)',
-            padding: '8px 10px',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            border: '1px solid var(--border-subtle)',
-          }}
-        >
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+        <div className="agent-strip">
+          <div className="fx" style={{ gap: 'var(--space-2)' }}>
             <div style={{ position: 'relative' }}>
               {agent?.avatarUrl ? (
                 <img
                   src={agent.avatarUrl}
                   alt="Avatar"
-                  style={{ width: '28px', height: '28px', borderRadius: '50%', objectFit: 'cover' }}
+                  className="avatar-28 avatar-img"
                 />
               ) : (
-                <div
-                  aria-label="Avatar"
-                  style={{
-                    width: '28px',
-                    height: '28px',
-                    borderRadius: '50%',
-                    background: 'var(--wa-primary)',
-                    color: '#06281a',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    fontSize: '11px',
-                    fontWeight: '700',
-                  }}
-                >
+                <div aria-label="Avatar" className="avatar-28 avatar-initials">
                   {(agent?.name || '?').split(' ').map((w) => w[0]).slice(0, 2).join('').toUpperCase()}
                 </div>
               )}
-              <span
-                style={{
-                  position: 'absolute',
-                  bottom: '-1px',
-                  right: '-1px',
-                  width: '8px',
-                  height: '8px',
-                  borderRadius: '50%',
-                  background: '#25D366',
-                  border: '1.5px solid #0f1624',
-                }}
-              />
+              <span className="presence-dot" />
             </div>
             <div>
-              <div style={{ fontSize: '12.5px', fontWeight: '600', color: '#fff', lineHeight: 1.2 }}>
-                {agent?.name}
-              </div>
-              <div style={{ fontSize: '10.5px', color: 'var(--text-muted)' }}>
-                {isAdmin ? 'Tenant Admin' : 'Staff Agent'}
-              </div>
+              <div className="agent-name">{agent?.name}</div>
+              <div className="agent-role">{isAdmin ? 'Tenant Admin' : 'Staff Agent'}</div>
             </div>
           </div>
 
@@ -270,20 +187,7 @@ export default function ConversationList({
             <button
               onClick={onOpenBroadcasts}
               title="Outbound Broadcast Campaigns"
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: '6px',
-                padding: '6px 11px',
-                borderRadius: '999px',
-                background: 'rgba(56, 189, 248, 0.12)',
-                border: '1px solid rgba(56, 189, 248, 0.35)',
-                color: '#38bdf8',
-                fontSize: '12px',
-                fontWeight: '600',
-                cursor: 'pointer',
-                whiteSpace: 'nowrap',
-              }}
+              className="btn-broadcast"
             >
               <Radio size={14} /> Broadcast
             </button>
@@ -301,53 +205,36 @@ export default function ConversationList({
               </button>
               {menuOpen && (
                 <>
-                  <div
-                    onClick={() => setMenuOpen(false)}
-                    style={{ position: 'fixed', inset: 0, zIndex: 40 }}
-                  />
-                  <div
-                    role="menu"
-                    style={{
-                      position: 'absolute',
-                      top: 'calc(100% + 6px)',
-                      right: 0,
-                      minWidth: '224px',
-                      background: 'var(--bg-menu)',
-                      border: '1px solid var(--border-subtle)',
-                      borderRadius: '12px',
-                      boxShadow: '0 18px 40px rgba(0, 0, 0, 0.55)',
-                      padding: '6px',
-                      zIndex: 50,
-                    }}
-                  >
+                  <div onClick={() => setMenuOpen(false)} className="menu-backdrop" />
+                  <div role="menu" className="menu-pop">
                     {isAdmin && onOpenDashboard && (
                       <button
                         type="button"
                         role="menuitem"
-                        style={menuItemStyle(false)}
+                        className="menu-item"
                         onClick={() => { setMenuOpen(false); onOpenDashboard(); }}
                       >
-                        <LayoutDashboard size={15} style={{ color: 'var(--text-secondary)', flexShrink: 0 }} />
+                        <LayoutDashboard size={15} className="icon-muted" />
                         Dashboard
                       </button>
                     )}
                     <button
                       type="button"
                       role="menuitem"
-                      style={menuItemStyle(false)}
+                      className="menu-item"
                       onClick={() => { setMenuOpen(false); onOpenTemplates(); }}
                     >
-                      <Sparkles size={15} style={{ color: 'var(--text-secondary)', flexShrink: 0 }} />
+                      <Sparkles size={15} className="icon-muted" />
                       Templates
                     </button>
                     {isAdmin && (
                       <button
                         type="button"
                         role="menuitem"
-                        style={menuItemStyle(false)}
+                        className="menu-item"
                         onClick={() => { setMenuOpen(false); onOpenAgents(); }}
                       >
-                        <Users size={15} style={{ color: 'var(--text-secondary)', flexShrink: 0 }} />
+                        <Users size={15} className="icon-muted" />
                         Team &amp; Agents
                       </button>
                     )}
@@ -355,10 +242,10 @@ export default function ConversationList({
                       <button
                         type="button"
                         role="menuitem"
-                        style={menuItemStyle(false)}
+                        className="menu-item"
                         onClick={() => { setMenuOpen(false); onOpenSettings(); }}
                       >
-                        <Shield size={15} style={{ color: 'var(--text-secondary)', flexShrink: 0 }} />
+                        <Shield size={15} className="icon-muted" />
                         Meta API Settings
                       </button>
                     )}
@@ -366,27 +253,27 @@ export default function ConversationList({
                       <button
                         type="button"
                         role="menuitem"
-                        style={menuItemStyle(false)}
+                        className="menu-item"
                         onClick={() => { setMenuOpen(false); onOpenHelp(); }}
                       >
-                        <LifeBuoy size={15} style={{ color: 'var(--text-secondary)', flexShrink: 0 }} />
+                        <LifeBuoy size={15} className="icon-muted" />
                         Help &amp; Support
                       </button>
                     )}
-                    <div style={{ height: '1px', background: 'var(--border-subtle)', margin: '5px 4px' }} />
+                    <div className="menu-divider" />
                     <button
                       type="button"
                       role="menuitem"
-                      style={menuItemStyle(false)}
+                      className="menu-item"
                       onClick={() => { setMenuOpen(false); handleSwitchWorkspace(); }}
                     >
-                      <ArrowLeftRight size={15} style={{ color: 'var(--text-secondary)', flexShrink: 0 }} />
+                      <ArrowLeftRight size={15} className="icon-muted" />
                       Switch workspace
                     </button>
                     <button
                       type="button"
                       role="menuitem"
-                      style={menuItemStyle(true)}
+                      className="menu-item danger"
                       onClick={() => { setMenuOpen(false); logout(); }}
                     >
                       <LogOut size={15} style={{ flexShrink: 0 }} />
@@ -402,19 +289,8 @@ export default function ConversationList({
 
       {/* @mention alert — a teammate tagged me in an internal note */}
       {mentionAlert && (
-        <div
-          style={{
-            margin: '10px 16px 0 16px',
-            padding: '9px 12px',
-            borderRadius: '10px',
-            background: 'rgba(245, 158, 11, 0.14)',
-            border: '1px solid rgba(245, 158, 11, 0.45)',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '8px',
-          }}
-        >
-          <span style={{ fontSize: '12px', color: '#fcd34d', flex: 1, lineHeight: 1.45 }}>
+        <div className="mention-banner">
+          <span className="mention-text">
             <strong>{mentionAlert.authorName || 'A teammate'}</strong> mentioned you in an internal note
             {mentionAlert.contactName ? (
               <>
@@ -429,16 +305,15 @@ export default function ConversationList({
               selectChat(mentionAlert.chatId);
               clearMentionAlert();
             }}
-            className="btn btn-ghost"
-            style={{ fontSize: '11.5px', padding: '3px 8px', color: '#f59e0b', fontWeight: '700', whiteSpace: 'nowrap' }}
+            className="btn btn-ghost btn-sm"
+            style={{ color: '#f59e0b', fontWeight: '700' }}
           >
             View
           </button>
           <button
             type="button"
             onClick={clearMentionAlert}
-            className="btn btn-ghost"
-            style={{ fontSize: '11.5px', padding: '3px 6px', color: 'var(--text-secondary)' }}
+            className="btn btn-ghost btn-sm"
             aria-label="Dismiss mention alert"
           >
             ✕
@@ -447,69 +322,24 @@ export default function ConversationList({
       )}
 
       {/* Role-Based Tabs (Mine / Unassigned / All) */}
-      <div className="list-tabs-wrap" style={{ padding: '10px 16px 6px 16px' }}>
-        <div
-          style={{
-            display: 'flex',
-            background: 'var(--bg-surface)',
-            padding: '3px',
-            borderRadius: 'var(--radius-md)',
-            border: '1px solid var(--border-subtle)',
-          }}
-        >
+      <div className="list-tabs-wrap list-pad-tabs">
+        <div className="seg-tabs">
           <button
             onClick={() => setTabFilter('mine')}
-            style={{
-              flex: 1,
-              padding: '6px',
-              border: 'none',
-              borderRadius: '6px',
-              background: tabFilter === 'mine' ? '#223252' : 'transparent',
-              color: tabFilter === 'mine' ? '#fff' : 'var(--text-secondary)',
-              fontWeight: tabFilter === 'mine' ? '600' : '400',
-              fontSize: '12.5px',
-              cursor: 'pointer',
-              transition: 'all 0.15s',
-            }}
+            className={`seg-tab${tabFilter === 'mine' ? ' active' : ''}`}
           >
             Mine
           </button>
           <button
             onClick={() => setTabFilter('unassigned')}
-            style={{
-              flex: 1,
-              padding: '6px',
-              border: 'none',
-              borderRadius: '6px',
-              background: tabFilter === 'unassigned' ? '#223252' : 'transparent',
-              color: tabFilter === 'unassigned' ? '#fbbf24' : 'var(--text-secondary)',
-              fontWeight: tabFilter === 'unassigned' ? '600' : '400',
-              fontSize: '12.5px',
-              cursor: 'pointer',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              gap: '4px',
-              transition: 'all 0.15s',
-            }}
+            className={`seg-tab${tabFilter === 'unassigned' ? ' active warn' : ''}`}
           >
             <span>Unassigned</span>
           </button>
           {isAdmin && (
             <button
               onClick={() => setTabFilter('all')}
-              style={{
-                flex: 1,
-                padding: '6px',
-                border: 'none',
-                borderRadius: '6px',
-                background: tabFilter === 'all' ? '#223252' : 'transparent',
-                color: tabFilter === 'all' ? '#a5b4fc' : 'var(--text-secondary)',
-                fontWeight: tabFilter === 'all' ? '600' : '400',
-                fontSize: '12.5px',
-                cursor: 'pointer',
-                transition: 'all 0.15s',
-              }}
+            className={`seg-tab${tabFilter === 'all' ? ' active indigo' : ''}`}
             >
               All (Admin)
             </button>
@@ -518,33 +348,20 @@ export default function ConversationList({
       </div>
 
       {/* Search Bar & Status Quick Filter */}
-      <div className="list-search-wrap" style={{ padding: '6px 16px 10px 16px' }}>
-        <div style={{ position: 'relative', marginBottom: '8px' }}>
-          <Search
-            size={15}
-            style={{ position: 'absolute', left: '10px', top: '9px', color: 'var(--text-muted)' }}
-          />
+      <div className="list-search-wrap list-pad-search">
+        <div className="search-box">
+          <Search size={15} className="search-icon" />
           <input
             type="search"
             className="chat-search-input"
             placeholder="Search customer name or phone..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            style={{
-              width: '100%',
-              padding: '10px 12px 10px 34px',
-              background: 'var(--bg-surface)',
-              border: '1px solid var(--border-subtle)',
-              borderRadius: 'var(--radius-md)',
-              color: '#fff',
-              outline: 'none',
-              fontFamily: 'inherit',
-            }}
           />
         </div>
 
         {/* Status Pills */}
-        <div style={{ display: 'flex', gap: '6px', overflowX: 'auto', paddingBottom: '2px' }}>
+        <div className="chip-row">
           {['OPEN', 'UNASSIGNED', 'RESOLVED', 'ALL'].map((st) => (
             <button
               key={st}
@@ -583,8 +400,8 @@ export default function ConversationList({
 
       {/* Tag filter — only rendered when tags exist */}
       {allTags.length > 0 && (
-        <div className="list-tags-wrap" style={{ padding: '0 16px 8px 16px' }}>
-          <div style={{ display: 'flex', gap: '6px', overflowX: 'auto', paddingBottom: '2px' }}>
+        <div className="list-tags-wrap list-pad-tags">
+          <div className="chip-row">
             <button
               onClick={() => setSelectedTag(null)}
               style={{
