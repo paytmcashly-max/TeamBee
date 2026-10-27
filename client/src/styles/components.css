@@ -224,7 +224,8 @@
 .footer-base .right { margin-left: auto; }
 
 /* ---------- Auth ---------- */
-.auth-shell { height: 100dvh; overflow-y: auto; background: var(--bg-app); display: flex; align-items: center; justify-content: center; padding: var(--space-6) var(--space-4); }
+.auth-shell { height: 100dvh; overflow-y: auto; background: var(--bg-app); display: flex; padding: var(--space-6) var(--space-4); }
+.auth-shell > * { margin: auto; }
 .auth-card { width: 100%; max-width: 430px; background: var(--bg-surface); border: 1px solid var(--border-subtle); border-radius: var(--radius-xl); padding: var(--space-8) var(--space-6); }
 .auth-brand { display: flex; align-items: center; gap: var(--space-3); margin-bottom: var(--space-2); }
 .auth-title { font-family: var(--font-display); font-size: 20px; font-weight: 800; color: var(--text-main); }
@@ -312,3 +313,35 @@
 .ws-meta { display: block; font-size: var(--fs-caption); color: var(--text-secondary); margin-top: 1px; }
 .ws-role { font-size: 10px; font-weight: 700; letter-spacing: 0.04em; background: rgba(255, 255, 255, 0.08); color: var(--text-secondary); padding: 3px 7px; border-radius: var(--radius-sm); white-space: nowrap; }
 .ws-role.admin { background: rgba(99, 102, 241, 0.18); color: #a5b4fc; }
+
+/* ---------- In-app pages (dashboard, help, settings) ---------- */
+.page-scroll { flex: 1; overflow-y: auto; background: var(--bg-app); min-height: 0; }
+.page-wrap { max-width: 1060px; margin-inline: auto; padding: var(--space-6) var(--space-5) var(--space-10); }
+.page-head { display: flex; align-items: center; gap: var(--space-4); flex-wrap: wrap; margin-bottom: var(--space-5); }
+.page-head-main { flex: 1; min-width: 220px; }
+.page-title { font-family: var(--font-display); font-size: 23px; font-weight: 800; color: var(--text-main); }
+.page-sub { font-size: var(--fs-small); color: var(--text-secondary); margin-top: var(--space-1); }
+.stat-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: var(--space-3); }
+.stat-icon {
+  width: 36px; height: 36px; border-radius: var(--radius-md);
+  background: rgba(37, 211, 102, 0.12); color: var(--wa-primary);
+  display: inline-flex; align-items: center; justify-content: center;
+  margin-bottom: var(--space-3);
+}
+.stat-value { font-family: var(--font-display); font-size: 24px; font-weight: 800; color: var(--text-main); line-height: 1.1; }
+.stat-label { font-size: var(--fs-caption); color: var(--text-secondary); margin-top: var(--space-1); }
+.stat-sub { font-size: 11.5px; color: var(--text-muted); margin-top: 2px; }
+.banner-warn {
+  border: 1px solid rgba(245, 158, 11, 0.45); background: rgba(245, 158, 11, 0.07);
+  border-radius: var(--radius-lg); padding: var(--space-4) var(--space-5);
+  display: flex; gap: var(--space-3); align-items: center; flex-wrap: wrap;
+  margin-bottom: var(--space-4); color: #fde68a; font-size: var(--fs-body-sm); line-height: var(--lh-body-sm);
+}
+.checklist { display: flex; flex-direction: column; gap: var(--space-1); }
+.checklist-row { display: flex; align-items: center; gap: var(--space-3); padding: var(--space-2); border-radius: var(--radius-md); }
+.checklist-label { flex: 1; font-size: var(--fs-body-sm); color: var(--text-main); }
+.checklist-label.done { color: var(--text-muted); text-decoration: line-through; }
+.plan-mini { border: 1px solid var(--border-subtle); border-radius: var(--radius-lg); padding: var(--space-4); }
+.plan-mini.current { border-color: var(--wa-primary); }
+.plan-mini-name { font-size: var(--fs-body-sm); font-weight: 700; color: var(--text-main); }
+.plan-mini-meta { font-size: var(--fs-caption); color: var(--text-muted); margin: 2px 0 var(--space-2); }

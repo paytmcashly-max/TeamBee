@@ -70,15 +70,12 @@ export default function DashboardView({ onOpenInbox, onOpenSettings, onOpenTempl
     }
   };
 
-  const card = { background: 'var(--bg-surface)', border: '1px solid var(--border-subtle)', borderRadius: '14px', padding: '18px' };
   const statCard = (icon, label, value, sub) => (
-    <div style={card}>
-      <span style={{ width: '36px', height: '36px', borderRadius: '9px', background: 'rgba(37,211,102,0.12)', color: 'var(--wa-primary)', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', marginBottom: '10px' }}>
-        {icon}
-      </span>
-      <div style={{ fontFamily: 'var(--font-display)', fontSize: '24px', fontWeight: 800, color: '#fff', lineHeight: 1.1 }}>{value}</div>
-      <div style={{ fontSize: '12.5px', color: 'var(--text-secondary)', marginTop: '3px' }}>{label}</div>
-      {sub && <div style={{ fontSize: '11.5px', color: 'var(--text-muted)', marginTop: '2px' }}>{sub}</div>}
+    <div className="card" style={{ padding: 'var(--space-5)' }}>
+      <span className="stat-icon">{icon}</span>
+      <div className="stat-value">{value}</div>
+      <div className="stat-label">{label}</div>
+      {sub && <div className="stat-sub">{sub}</div>}
     </div>
   );
 
@@ -99,26 +96,24 @@ export default function DashboardView({ onOpenInbox, onOpenSettings, onOpenTempl
   const allDone = steps.length > 0 && steps.every((s) => s.done);
 
   return (
-    <div style={{ flex: 1, overflowY: 'auto', background: 'var(--bg-app)' }}>
-      <div style={{ maxWidth: '1060px', margin: '0 auto', padding: '26px 20px 40px' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '14px', flexWrap: 'wrap', marginBottom: '20px' }}>
-          <div style={{ flex: 1, minWidth: '220px' }}>
-            <h1 style={{ fontFamily: 'var(--font-display)', fontSize: '23px', fontWeight: 800, color: '#fff' }}>
-              {tenant?.name || 'Your workspace'}
-            </h1>
-            <p style={{ fontSize: '13px', color: 'var(--text-secondary)', marginTop: '3px' }}>
+    <div className="page-scroll">
+      <div className="page-wrap">
+        <div className="page-head">
+          <div className="page-head-main">
+            <h1 className="page-title">{tenant?.name || 'Your workspace'}</h1>
+            <p className="page-sub">
               Welcome back, {agent?.name?.split(' ')[0] || 'there'} — here is your business on WhatsApp today.
             </p>
           </div>
-          <button onClick={onOpenInbox} className="btn btn-primary" style={{ padding: '11px 18px', fontSize: '14px', gap: '8px' }}>
+          <button onClick={onOpenInbox} className="btn btn-primary btn-lg">
             <Inbox size={16} /> Open Inbox
           </button>
         </div>
 
         {tenant?.subscriptionStatus === 'TRIAL' && (
-          <div style={{ ...card, borderColor: 'rgba(245, 158, 11, 0.45)', background: 'rgba(245, 158, 11, 0.07)', display: 'flex', gap: '12px', alignItems: 'center', flexWrap: 'wrap', marginBottom: '16px' }}>
+          <div className="banner-warn">
             <Crown size={20} style={{ color: '#fbbf24', flexShrink: 0 }} />
-            <div style={{ flex: 1, minWidth: '200px', fontSize: '13.5px', color: '#fde68a', lineHeight: 1.55 }}>
+            <div style={{ flex: 1, minWidth: '200px' }}>
               <strong>Free trial — {trialDaysLeft} day{trialDaysLeft === 1 ? '' : 's'} left</strong> on the Pro plan.
               Pick a plan below before it ends so your team’s work never pauses.
             </div>
@@ -126,14 +121,14 @@ export default function DashboardView({ onOpenInbox, onOpenSettings, onOpenTempl
         )}
 
         {loading ? (
-          <div aria-hidden="true" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: '12px' }}>
+          <div aria-hidden="true" className="stat-grid">
             {[0, 1, 2, 3].map((i) => (
               <div key={i} className="skel" style={{ height: '118px' }} />
             ))}
           </div>
         ) : data ? (
           <>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: '12px' }}>
+            <div className="stat-grid">
               {statCard(<MessageSquare size={17} />, 'Chats started today', data.stats.chatsToday)}
               {statCard(<Inbox size={17} />, 'Open chats', data.stats.openChats, `${data.stats.unassignedChats} waiting for an owner`)}
               {statCard(<UserX size={17} />, 'Unassigned', data.stats.unassignedChats)}
@@ -145,20 +140,20 @@ export default function DashboardView({ onOpenInbox, onOpenSettings, onOpenTempl
             </div>
 
             {!allDone && (
-              <div style={{ ...card, marginTop: '16px' }}>
-                <h2 style={{ fontSize: '15px', color: '#fff', marginBottom: '4px' }}>Get set up</h2>
-                <p style={{ fontSize: '12.5px', color: 'var(--text-secondary)', marginBottom: '12px' }}>Finish these steps to get full value from TeamBee.</p>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+              <div className="card" style={{ marginTop: 'var(--space-4)' }}>
+                <h2 className="card-title">Get set up</h2>
+                <p className="t-small" style={{ marginBottom: 'var(--space-3)' }}>Finish these steps to get full value from TeamBee.</p>
+                <div className="checklist">
                   {steps.map((s) => (
-                    <div key={s.label} style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '8px 6px', borderRadius: '9px' }}>
+                    <div key={s.label} className="checklist-row">
                       {s.done ? (
                         <CheckCircle2 size={18} style={{ color: 'var(--wa-primary)', flexShrink: 0 }} />
                       ) : (
                         <Circle size={18} style={{ color: 'var(--text-muted)', flexShrink: 0 }} />
                       )}
-                      <span style={{ flex: 1, fontSize: '13.5px', color: s.done ? 'var(--text-muted)' : '#e2e8f0', textDecoration: s.done ? 'line-through' : 'none' }}>{s.label}</span>
+                      <span className={`checklist-label${s.done ? ' done' : ''}`}>{s.label}</span>
                       {!s.done && (
-                        <button onClick={s.action} className="btn btn-secondary" style={{ padding: '6px 11px', fontSize: '12px', gap: '5px' }}>
+                        <button onClick={s.action} className="btn btn-secondary btn-sm">
                           {s.cta} <ArrowRight size={13} />
                         </button>
                       )}
@@ -168,27 +163,27 @@ export default function DashboardView({ onOpenInbox, onOpenSettings, onOpenTempl
               </div>
             )}
 
-            <div style={{ ...card, marginTop: '16px' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '9px', marginBottom: '4px' }}>
+            <div className="card" style={{ marginTop: 'var(--space-4)' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)', marginBottom: 'var(--space-1)' }}>
                 <Sparkles size={17} style={{ color: 'var(--wa-primary)' }} />
-                <h2 style={{ fontSize: '15px', color: '#fff' }}>Your plan — {tenant?.plan || data.subscription.plan}</h2>
+                <h2 className="card-title" style={{ marginBottom: 0 }}>Your plan — {tenant?.plan || data.subscription.plan}</h2>
               </div>
-              <p style={{ fontSize: '12.5px', color: 'var(--text-secondary)', marginBottom: '14px' }}>
+              <p className="t-small" style={{ marginBottom: 'var(--space-4)' }}>
                 {tenant?.subscriptionStatus === 'TRIAL'
                   ? 'You are trialling Pro free. Choose a plan to continue after the trial.'
                   : 'Switch plans anytime — changes apply from the next billing cycle.'}
               </p>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '10px' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 'var(--space-3)' }}>
                 {PLANS.map((p) => {
                   const current = (tenant?.plan || '') === p.key && tenant?.subscriptionStatus === 'ACTIVE';
                   return (
-                    <div key={p.key} style={{ border: `1px solid ${current ? 'var(--wa-primary)' : 'var(--border-subtle)'}`, borderRadius: '12px', padding: '14px' }}>
-                      <div style={{ fontSize: '13.5px', fontWeight: 700, color: '#fff' }}>{p.name}</div>
-                      <div style={{ fontSize: '12px', color: 'var(--text-muted)', margin: '2px 0 8px' }}>{p.features[0]} · ₹{p.price.toLocaleString('en-IN')}/mo</div>
+                    <div key={p.key} className={`plan-mini${current ? ' current' : ''}`}>
+                      <div className="plan-mini-name">{p.name}</div>
+                      <div className="plan-mini-meta">{p.features[0]} · ₹{p.price.toLocaleString('en-IN')}/mo</div>
                       {current ? (
-                        <span style={{ fontSize: '12px', color: 'var(--wa-primary)', fontWeight: 600 }}>Current plan</span>
+                        <span className="t-small" style={{ color: 'var(--wa-primary)', fontWeight: 600 }}>Current plan</span>
                       ) : (
-                        <button onClick={() => handleUpgrade(p.key)} disabled={upgrading === p.key} className="btn btn-secondary" style={{ padding: '7px 12px', fontSize: '12.5px' }}>
+                        <button onClick={() => handleUpgrade(p.key)} disabled={upgrading === p.key} className="btn btn-secondary btn-sm">
                           {upgrading === p.key ? 'Starting…' : `Choose ${p.name}`}
                         </button>
                       )}
@@ -199,7 +194,7 @@ export default function DashboardView({ onOpenInbox, onOpenSettings, onOpenTempl
             </div>
           </>
         ) : (
-          <div style={{ ...card, textAlign: 'center', color: 'var(--text-secondary)', fontSize: '13.5px' }}>
+          <div className="card t-body" style={{ textAlign: 'center' }}>
             Dashboard data could not be loaded. Open the inbox — your chats are unaffected.
           </div>
         )}

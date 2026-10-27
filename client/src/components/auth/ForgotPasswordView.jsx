@@ -4,6 +4,7 @@ import { MailQuestion, ArrowLeft, CheckCircle2 } from 'lucide-react';
 // Self-serve "forgot password": asks the server to email a reset link.
 // The server's answer is identical whether or not the email exists, and
 // this screen mirrors that — it never reveals if an account was found.
+// Styling: design system only (styles/components.css auth patterns).
 export default function ForgotPasswordView({ onBack, onHome }) {
   const [email, setEmail] = useState('');
   const [submitting, setSubmitting] = useState(false);
@@ -28,49 +29,43 @@ export default function ForgotPasswordView({ onBack, onHome }) {
   };
 
   return (
-    <div style={{ minHeight: '100vh', background: 'var(--bg-app)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '22px 16px', overflowY: 'auto' }}>
-      <div style={{ width: '100%', maxWidth: '400px', background: 'var(--bg-surface)', border: '1px solid var(--border-subtle)', borderRadius: '18px', padding: '26px 24px' }}>
-        <span style={{ width: '40px', height: '40px', borderRadius: '10px', background: 'rgba(37,211,102,0.12)', color: 'var(--wa-primary)', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', marginBottom: '12px' }}>
-          <MailQuestion size={19} />
-        </span>
-        <h1 style={{ fontFamily: 'var(--font-display)', fontSize: '19px', fontWeight: 800, color: '#fff', marginBottom: '6px' }}>Forgot your password?</h1>
+    <div className="auth-shell">
+      <div className="auth-card" style={{ maxWidth: '400px' }}>
+        <span className="card-icon"><MailQuestion size={19} /></span>
+        <h1 className="auth-title" style={{ marginBottom: 'var(--space-2)' }}>Forgot your password?</h1>
         {sent ? (
           <>
-            <p style={{ fontSize: '13.5px', color: 'var(--text-secondary)', lineHeight: 1.6, display: 'flex', gap: '8px', alignItems: 'flex-start' }}>
-              <CheckCircle2 size={17} style={{ color: 'var(--wa-primary)', flexShrink: 0, marginTop: '2px' }} />
+            <p className="t-body" style={{ display: 'flex', gap: 'var(--space-2)', alignItems: 'flex-start' }}>
+              <CheckCircle2 size={17} style={{ color: 'var(--wa-primary)', flexShrink: 0, marginTop: '3px' }} />
               If an account exists for that email, a reset link is on its way. The link works for 1 hour — check your spam folder too.
             </p>
-            <button onClick={onBack} className="btn btn-primary" style={{ width: '100%', padding: '12px', fontSize: '14px', justifyContent: 'center', marginTop: '16px' }}>
+            <button onClick={onBack} className="btn btn-primary btn-block btn-lg" style={{ marginTop: 'var(--space-4)' }}>
               Back to sign in
             </button>
           </>
         ) : (
           <>
-            <p style={{ fontSize: '13px', color: 'var(--text-secondary)', lineHeight: 1.55, marginBottom: '16px' }}>
-              Enter your work email and we will send you a link to set a new password.
-            </p>
-            <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '13px' }}>
+            <p className="auth-sub">Enter your work email and we will send you a link to set a new password.</p>
+            <form onSubmit={handleSubmit} className="form-stack">
               <input
                 type="email"
+                className="input"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 placeholder="you@business.com"
                 required
                 aria-label="Work email"
-                style={{ width: '100%', background: 'var(--bg-input)', border: '1px solid var(--border-medium)', borderRadius: '10px', color: '#fff', padding: '11px 12px', fontSize: '14px', outline: 'none' }}
               />
-              <button type="submit" disabled={submitting} className="btn btn-primary" style={{ padding: '12px', fontSize: '14.5px', justifyContent: 'center' }}>
+              <button type="submit" disabled={submitting} className="btn btn-primary btn-block btn-lg">
                 {submitting ? 'Sending…' : 'Email me a reset link'}
               </button>
             </form>
-            <div style={{ display: 'flex', gap: '4px', alignItems: 'center', marginTop: '12px' }}>
-              <button onClick={onBack} className="btn btn-ghost" style={{ padding: '8px 11px', fontSize: '13px', gap: '6px' }}>
+            <div style={{ display: 'flex', gap: 'var(--space-1)', alignItems: 'center', marginTop: 'var(--space-3)' }}>
+              <button onClick={onBack} className="btn btn-ghost btn-sm">
                 <ArrowLeft size={14} /> Back to sign in
               </button>
               {onHome && (
-                <button onClick={onHome} className="btn btn-ghost" style={{ padding: '8px 11px', fontSize: '13px' }}>
-                  Back to home
-                </button>
+                <button onClick={onHome} className="btn btn-ghost btn-sm">Back to home</button>
               )}
             </div>
           </>
