@@ -271,7 +271,7 @@ export default function BroadcastModal({ isOpen, onClose }) {
               <Radio size={20} />
             </div>
             <div>
-              <h2 style={{ fontSize: '16px', fontWeight: '700', color: '#fff' }}>
+              <h2 style={{ fontSize: '16px', fontWeight: '700', color: 'var(--text-main)' }}>
                 WhatsApp Outbound Broadcast Campaigns
               </h2>
               <div style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>
@@ -317,7 +317,7 @@ export default function BroadcastModal({ isOpen, onClose }) {
             /* Campaign History List */
             <div>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px' }}>
-                <span style={{ fontSize: '13px', fontWeight: '600', color: '#fff' }}>
+                <span style={{ fontSize: '13px', fontWeight: '600', color: 'var(--text-main)' }}>
                   Campaign Dispatch History ({broadcasts.length})
                 </span>
                 <button onClick={loadData} className="btn btn-ghost" style={{ fontSize: '11px', padding: '4px 8px' }}>
@@ -332,7 +332,7 @@ export default function BroadcastModal({ isOpen, onClose }) {
               ) : broadcasts.length === 0 ? (
                 <div style={{ textAlign: 'center', padding: '50px 20px', color: 'var(--text-muted)' }}>
                   <Radio size={36} style={{ margin: '0 auto 12px auto', opacity: 0.4 }} />
-                  <p style={{ fontSize: '14px', color: '#fff', marginBottom: '4px' }}>No campaigns launched yet</p>
+                  <p style={{ fontSize: '14px', color: 'var(--text-main)', marginBottom: '4px' }}>No campaigns launched yet</p>
                   <p style={{ fontSize: '12px' }}>
                     Click "+ New Campaign" to broadcast an approved WhatsApp template to your leads.
                   </p>
@@ -355,7 +355,7 @@ export default function BroadcastModal({ isOpen, onClose }) {
                     >
                       <div>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                          <span style={{ fontWeight: '700', fontSize: '14px', color: '#fff' }}>{bc.name}</span>
+                          <span style={{ fontWeight: '700', fontSize: '14px', color: 'var(--text-main)' }}>{bc.name}</span>
                           <span
                             style={{
                               fontSize: '10.5px',
@@ -376,7 +376,7 @@ export default function BroadcastModal({ isOpen, onClose }) {
                       {/* Stats Badges */}
                       <div className="broadcast-card-stats" style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
                         <div style={{ textAlign: 'center' }}>
-                          <div style={{ fontSize: '16px', fontWeight: '700', color: '#fff' }}>{bc.totalCount}</div>
+                          <div style={{ fontSize: '16px', fontWeight: '700', color: 'var(--text-main)' }}>{bc.totalCount}</div>
                           <div style={{ fontSize: '10px', color: 'var(--text-muted)' }}>Total</div>
                         </div>
                         <div style={{ textAlign: 'center' }}>
@@ -384,8 +384,8 @@ export default function BroadcastModal({ isOpen, onClose }) {
                           <div style={{ fontSize: '10px', color: '#10b981' }}>Sent</div>
                         </div>
                         <div style={{ textAlign: 'center' }}>
-                          <div style={{ fontSize: '16px', fontWeight: '700', color: '#f87171' }}>{bc.failedCount}</div>
-                          <div style={{ fontSize: '10px', color: '#f87171' }}>Failed</div>
+                          <div style={{ fontSize: '16px', fontWeight: '700', color: '#dc2626' }}>{bc.failedCount}</div>
+                          <div style={{ fontSize: '10px', color: '#dc2626' }}>Failed</div>
                         </div>
                       </div>
                     </div>
@@ -397,7 +397,7 @@ export default function BroadcastModal({ isOpen, onClose }) {
             /* Create New Campaign Form */
             <form onSubmit={handleLaunch} style={{ display: 'flex', flexDirection: 'column', gap: '18px' }}>
               <div>
-                <label style={{ display: 'block', fontSize: '12.5px', fontWeight: '600', color: '#fff', marginBottom: '6px' }}>
+                <label style={{ display: 'block', fontSize: '12.5px', fontWeight: '600', color: 'var(--text-main)', marginBottom: '6px' }}>
                   Campaign Name
                 </label>
                 <input
@@ -412,7 +412,7 @@ export default function BroadcastModal({ isOpen, onClose }) {
                     border: '1px solid var(--border-medium)',
                     borderRadius: 'var(--radius-md)',
                     padding: '8px 12px',
-                    color: '#fff',
+                    color: 'var(--text-main)',
                     fontSize: '13px',
                     outline: 'none',
                   }}
@@ -420,7 +420,7 @@ export default function BroadcastModal({ isOpen, onClose }) {
               </div>
 
               <div>
-                <label style={{ display: 'block', fontSize: '12.5px', fontWeight: '600', color: '#fff', marginBottom: '6px' }}>
+                <label style={{ display: 'block', fontSize: '12.5px', fontWeight: '600', color: 'var(--text-main)', marginBottom: '6px' }}>
                   Choose Approved Meta WhatsApp Template
                 </label>
                 <select
@@ -432,7 +432,7 @@ export default function BroadcastModal({ isOpen, onClose }) {
                     border: '1px solid var(--border-medium)',
                     borderRadius: 'var(--radius-md)',
                     padding: '8px 12px',
-                    color: '#fff',
+                    color: 'var(--text-main)',
                     fontSize: '13px',
                     outline: 'none',
                   }}
@@ -447,7 +447,7 @@ export default function BroadcastModal({ isOpen, onClose }) {
                 {selectedTemplate && (
                   <div
                     style={{
-                      background: 'rgba(0, 0, 0, 0.25)',
+                      background: 'var(--bg-input)',
                       border: '1px solid var(--border-subtle)',
                       borderRadius: '8px',
                       padding: '10px 14px',
@@ -468,7 +468,7 @@ export default function BroadcastModal({ isOpen, onClose }) {
                   <div style={{ marginTop: '10px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
                     {placeholderIndexes.map((index) => (
                       <div key={index}>
-                        <label style={{ display: 'block', fontSize: '11.5px', fontWeight: '600', color: '#fff', marginBottom: '4px' }}>
+                        <label style={{ display: 'block', fontSize: '11.5px', fontWeight: '600', color: 'var(--text-main)', marginBottom: '4px' }}>
                           Variable {`{{${index}}}`}
                           {index === '1' ? ' — defaults to each customer’s name when left blank' : ''}
                         </label>
@@ -486,7 +486,7 @@ export default function BroadcastModal({ isOpen, onClose }) {
                             border: '1px solid var(--border-medium)',
                             borderRadius: 'var(--radius-md)',
                             padding: '8px 12px',
-                            color: '#fff',
+                            color: 'var(--text-main)',
                             fontSize: '13px',
                             outline: 'none',
                           }}
@@ -500,7 +500,7 @@ export default function BroadcastModal({ isOpen, onClose }) {
               {/* Target Audience */}
               <div>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
-                  <label style={{ fontSize: '12.5px', fontWeight: '600', color: '#fff' }}>
+                  <label style={{ fontSize: '12.5px', fontWeight: '600', color: 'var(--text-main)' }}>
                     Target Contacts ({selectedContactIds.length} of {contacts.length} selected)
                   </label>
                   <button
@@ -530,7 +530,7 @@ export default function BroadcastModal({ isOpen, onClose }) {
                       onChange={(e) => setAudienceTag(e.target.value)}
                       style={{
                         background: 'var(--bg-surface)',
-                        color: '#fff',
+                        color: 'var(--text-main)',
                         border: '1px solid var(--border-medium)',
                         borderRadius: '6px',
                         padding: '5px 8px',
@@ -574,7 +574,7 @@ export default function BroadcastModal({ isOpen, onClose }) {
                         alignItems: 'center',
                         gap: '8px',
                         fontSize: '12px',
-                        color: '#fff',
+                        color: 'var(--text-main)',
                         cursor: 'pointer',
                         padding: '4px 6px',
                         borderRadius: '4px',

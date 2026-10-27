@@ -282,7 +282,7 @@ export default function TemplateModal({ isOpen, onClose }) {
               <Sparkles size={20} />
             </div>
             <div>
-              <h3 style={{ fontSize: '16px', color: '#fff' }}>Meta Approved WhatsApp Templates</h3>
+              <h3 style={{ fontSize: '16px', color: 'var(--text-main)' }}>Meta Approved WhatsApp Templates</h3>
               <p style={{ fontSize: '11.5px', color: 'var(--text-secondary)' }}>
                 Select pre-approved template & interpolate custom variables for +{activeChat?.contact?.waId}
               </p>
@@ -321,7 +321,7 @@ export default function TemplateModal({ isOpen, onClose }) {
         {/* Create Template (ADMIN): submits to Meta for review */}
         {showCreate && agent?.role === 'ADMIN' && (
           <div style={{ padding: '16px 20px', borderBottom: '1px solid var(--border-subtle)', background: 'rgba(37, 211, 102, 0.04)' }}>
-            <div style={{ fontSize: '13px', fontWeight: 600, color: '#fff', marginBottom: '4px' }}>Create a new template</div>
+            <div style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-main)', marginBottom: '4px' }}>Create a new template</div>
             <p style={{ fontSize: '11.5px', color: 'var(--text-secondary)', marginBottom: '12px', lineHeight: 1.5 }}>
               This is submitted to Meta for review — approval is Meta's decision and can take minutes to hours.
               Utility templates (reminders, confirmations) are reviewed lighter and cost less than Marketing ones.
@@ -333,7 +333,7 @@ export default function TemplateModal({ isOpen, onClose }) {
                   value={createForm.name}
                   onChange={(e) => setField('name', e.target.value)}
                   placeholder="demo_class_reminder"
-                  style={{ width: '100%', background: 'var(--bg-input)', border: '1px solid var(--border-medium)', borderRadius: '8px', color: '#fff', padding: '8px 10px', fontSize: '13px', outline: 'none', fontFamily: 'var(--font-mono)' }}
+                  style={{ width: '100%', background: 'var(--bg-input)', border: '1px solid var(--border-medium)', borderRadius: '8px', color: 'var(--text-main)', padding: '8px 10px', fontSize: '13px', outline: 'none', fontFamily: 'var(--font-mono)' }}
                 />
                 <div style={{ fontSize: '10.5px', color: 'var(--text-muted)', marginTop: '3px' }}>Lowercase, numbers, underscores only</div>
               </div>
@@ -342,7 +342,7 @@ export default function TemplateModal({ isOpen, onClose }) {
                 <select
                   value={createForm.language}
                   onChange={(e) => setField('language', e.target.value)}
-                  style={{ width: '100%', background: 'var(--bg-input)', border: '1px solid var(--border-medium)', borderRadius: '8px', color: '#fff', padding: '8px 10px', fontSize: '13px', outline: 'none' }}
+                  style={{ width: '100%', background: 'var(--bg-input)', border: '1px solid var(--border-medium)', borderRadius: '8px', color: 'var(--text-main)', padding: '8px 10px', fontSize: '13px', outline: 'none' }}
                 >
                   <option value="en_US">English (en_US)</option>
                   <option value="en">English (en)</option>
@@ -354,7 +354,7 @@ export default function TemplateModal({ isOpen, onClose }) {
                 <select
                   value={createForm.category}
                   onChange={(e) => setField('category', e.target.value)}
-                  style={{ width: '100%', background: 'var(--bg-input)', border: '1px solid var(--border-medium)', borderRadius: '8px', color: '#fff', padding: '8px 10px', fontSize: '13px', outline: 'none' }}
+                  style={{ width: '100%', background: 'var(--bg-input)', border: '1px solid var(--border-medium)', borderRadius: '8px', color: 'var(--text-main)', padding: '8px 10px', fontSize: '13px', outline: 'none' }}
                 >
                   <option value="UTILITY">Utility — reminder / confirmation</option>
                   <option value="MARKETING">Marketing — offer / promotion</option>
@@ -368,7 +368,7 @@ export default function TemplateModal({ isOpen, onClose }) {
                   onChange={(e) => setField('headerText', e.target.value)}
                   placeholder="e.g. Class Reminder"
                   maxLength={60}
-                  style={{ width: '100%', background: 'var(--bg-input)', border: '1px solid var(--border-medium)', borderRadius: '8px', color: '#fff', padding: '8px 10px', fontSize: '13px', outline: 'none' }}
+                  style={{ width: '100%', background: 'var(--bg-input)', border: '1px solid var(--border-medium)', borderRadius: '8px', color: 'var(--text-main)', padding: '8px 10px', fontSize: '13px', outline: 'none' }}
                 />
               </div>
             </div>
@@ -380,7 +380,7 @@ export default function TemplateModal({ isOpen, onClose }) {
                 placeholder={'Hello {{1}}, your demo class is scheduled on {{2}} at {{3}}. Please reply to confirm.'}
                 rows={4}
                 maxLength={1024}
-                style={{ width: '100%', background: 'var(--bg-input)', border: '1px solid var(--border-medium)', borderRadius: '8px', color: '#fff', padding: '8px 10px', fontSize: '13px', outline: 'none', resize: 'vertical', lineHeight: 1.5 }}
+                style={{ width: '100%', background: 'var(--bg-input)', border: '1px solid var(--border-medium)', borderRadius: '8px', color: 'var(--text-main)', padding: '8px 10px', fontSize: '13px', outline: 'none', resize: 'vertical', lineHeight: 1.5 }}
               />
               <div style={{ fontSize: '10.5px', color: 'var(--text-muted)', marginTop: '3px' }}>
                 Use {'{{1}}'}, {'{{2}}'}… for values that change per customer — keep them in order.
@@ -397,7 +397,7 @@ export default function TemplateModal({ isOpen, onClose }) {
                       value={createExamples[n] || ''}
                       onChange={(e) => setCreateExamples((prev) => ({ ...prev, [n]: e.target.value }))}
                       placeholder={n === 1 ? 'e.g. Aarav' : 'e.g. value'}
-                      style={{ width: '100%', background: 'var(--bg-input)', border: '1px solid var(--border-medium)', borderRadius: '8px', color: '#fff', padding: '8px 10px', fontSize: '13px', outline: 'none' }}
+                      style={{ width: '100%', background: 'var(--bg-input)', border: '1px solid var(--border-medium)', borderRadius: '8px', color: 'var(--text-main)', padding: '8px 10px', fontSize: '13px', outline: 'none' }}
                     />
                   </div>
                 ))}
@@ -411,7 +411,7 @@ export default function TemplateModal({ isOpen, onClose }) {
                   onChange={(e) => setField('footerText', e.target.value)}
                   placeholder="e.g. Apex EduCare Academy"
                   maxLength={60}
-                  style={{ width: '100%', background: 'var(--bg-input)', border: '1px solid var(--border-medium)', borderRadius: '8px', color: '#fff', padding: '8px 10px', fontSize: '13px', outline: 'none' }}
+                  style={{ width: '100%', background: 'var(--bg-input)', border: '1px solid var(--border-medium)', borderRadius: '8px', color: 'var(--text-main)', padding: '8px 10px', fontSize: '13px', outline: 'none' }}
                 />
               </div>
               <div>
@@ -421,7 +421,7 @@ export default function TemplateModal({ isOpen, onClose }) {
                   onChange={(e) => setField('qr1', e.target.value)}
                   placeholder="e.g. Confirm"
                   maxLength={25}
-                  style={{ width: '100%', background: 'var(--bg-input)', border: '1px solid var(--border-medium)', borderRadius: '8px', color: '#fff', padding: '8px 10px', fontSize: '13px', outline: 'none' }}
+                  style={{ width: '100%', background: 'var(--bg-input)', border: '1px solid var(--border-medium)', borderRadius: '8px', color: 'var(--text-main)', padding: '8px 10px', fontSize: '13px', outline: 'none' }}
                 />
               </div>
               <div>
@@ -431,7 +431,7 @@ export default function TemplateModal({ isOpen, onClose }) {
                   onChange={(e) => setField('qr2', e.target.value)}
                   placeholder="e.g. Reschedule"
                   maxLength={25}
-                  style={{ width: '100%', background: 'var(--bg-input)', border: '1px solid var(--border-medium)', borderRadius: '8px', color: '#fff', padding: '8px 10px', fontSize: '13px', outline: 'none' }}
+                  style={{ width: '100%', background: 'var(--bg-input)', border: '1px solid var(--border-medium)', borderRadius: '8px', color: 'var(--text-main)', padding: '8px 10px', fontSize: '13px', outline: 'none' }}
                 />
               </div>
               <div>
@@ -441,7 +441,7 @@ export default function TemplateModal({ isOpen, onClose }) {
                   onChange={(e) => setField('urlText', e.target.value)}
                   placeholder="e.g. Visit Website"
                   maxLength={25}
-                  style={{ width: '100%', background: 'var(--bg-input)', border: '1px solid var(--border-medium)', borderRadius: '8px', color: '#fff', padding: '8px 10px', fontSize: '13px', outline: 'none' }}
+                  style={{ width: '100%', background: 'var(--bg-input)', border: '1px solid var(--border-medium)', borderRadius: '8px', color: 'var(--text-main)', padding: '8px 10px', fontSize: '13px', outline: 'none' }}
                 />
               </div>
               <div>
@@ -450,7 +450,7 @@ export default function TemplateModal({ isOpen, onClose }) {
                   value={createForm.urlValue}
                   onChange={(e) => setField('urlValue', e.target.value)}
                   placeholder="https://…"
-                  style={{ width: '100%', background: 'var(--bg-input)', border: '1px solid var(--border-medium)', borderRadius: '8px', color: '#fff', padding: '8px 10px', fontSize: '13px', outline: 'none' }}
+                  style={{ width: '100%', background: 'var(--bg-input)', border: '1px solid var(--border-medium)', borderRadius: '8px', color: 'var(--text-main)', padding: '8px 10px', fontSize: '13px', outline: 'none' }}
                 />
               </div>
             </div>
@@ -474,7 +474,7 @@ export default function TemplateModal({ isOpen, onClose }) {
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', minHeight: '380px' }}>
           {/* Left: Template Selector & Variables */}
           <div style={{ padding: '20px', borderRight: '1px solid var(--border-subtle)' }}>
-            <label style={{ display: 'block', fontSize: '12px', fontWeight: '600', color: '#fff', marginBottom: '8px' }}>
+            <label style={{ display: 'block', fontSize: '12px', fontWeight: '600', color: 'var(--text-main)', marginBottom: '8px' }}>
               Select Approved Meta Template
             </label>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginBottom: '16px' }}>
@@ -488,7 +488,7 @@ export default function TemplateModal({ isOpen, onClose }) {
                     textAlign: 'left',
                     background: selectedTemplate?.id === tpl.id ? 'var(--bg-surface-active)' : 'var(--bg-surface)',
                     border: `1px solid ${selectedTemplate?.id === tpl.id ? 'var(--wa-primary)' : 'var(--border-subtle)'}`,
-                    color: '#fff',
+                    color: 'var(--text-main)',
                     cursor: 'pointer',
                     transition: 'all 0.15s',
                   }}
@@ -499,7 +499,7 @@ export default function TemplateModal({ isOpen, onClose }) {
                       style={{
                         fontSize: '9.5px',
                         background: 'rgba(16, 185, 129, 0.15)',
-                        color: '#34d399',
+                        color: '#059669',
                         padding: '1px 5px',
                         borderRadius: '3px',
                       }}
@@ -537,7 +537,7 @@ export default function TemplateModal({ isOpen, onClose }) {
             {/* Dynamic Variable Inputs */}
             {selectedTemplate && (
               <div>
-                <label style={{ display: 'block', fontSize: '12px', fontWeight: '600', color: '#fff', marginBottom: '8px' }}>
+                <label style={{ display: 'block', fontSize: '12px', fontWeight: '600', color: 'var(--text-main)', marginBottom: '8px' }}>
                   Dynamic Variable Fields
                 </label>
                 {Object.keys(variables).length > 0 ? (
@@ -557,7 +557,7 @@ export default function TemplateModal({ isOpen, onClose }) {
                             border: '1px solid var(--border-medium)',
                             borderRadius: '6px',
                             padding: '6px 10px',
-                            color: '#fff',
+                            color: 'var(--text-main)',
                             fontSize: '12px',
                             outline: 'none',
                             marginTop: '2px',
@@ -603,12 +603,12 @@ export default function TemplateModal({ isOpen, onClose }) {
                   }}
                 >
                   {selectedTemplate.headerContent && (
-                    <div style={{ fontWeight: '700', fontSize: '13px', color: '#fff', marginBottom: '6px' }}>
+                    <div style={{ fontWeight: '700', fontSize: '13px', color: 'var(--text-main)', marginBottom: '6px' }}>
                       {selectedTemplate.headerContent}
                     </div>
                   )}
 
-                  <div style={{ fontSize: '13px', color: '#e2e8f0', whiteSpace: 'pre-wrap', lineHeight: 1.45 }}>
+                  <div style={{ fontSize: '13px', color: 'var(--text-main)', whiteSpace: 'pre-wrap', lineHeight: 1.45 }}>
                     {getRenderedPreview()}
                   </div>
 
@@ -622,7 +622,7 @@ export default function TemplateModal({ isOpen, onClose }) {
                   {selectedTemplate.buttons && (
                     <div
                       style={{
-                        borderTop: '1px solid rgba(255,255,255,0.08)',
+                        borderTop: '1px solid var(--border-subtle)',
                         marginTop: '10px',
                         paddingTop: '8px',
                         display: 'flex',

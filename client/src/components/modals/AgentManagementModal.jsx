@@ -230,13 +230,13 @@ export default function AgentManagementModal({ isOpen, onClose }) {
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
-                color: '#a5b4fc',
+                color: '#4338ca',
               }}
             >
               <Users size={20} />
             </div>
             <div>
-              <h3 style={{ fontSize: '16px', color: '#fff' }}>Staff Agents & Operational Metrics</h3>
+              <h3 style={{ fontSize: '16px', color: 'var(--text-main)' }}>Staff Agents & Operational Metrics</h3>
               <p style={{ fontSize: '11.5px', color: 'var(--text-secondary)' }}>
                 Monitor agent response speeds, active workloads, and invite team members
               </p>
@@ -275,7 +275,7 @@ export default function AgentManagementModal({ isOpen, onClose }) {
                 }}
               >
                 <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>OPEN CHATS</div>
-                <div style={{ fontSize: '20px', fontWeight: '700', color: '#34d399', marginTop: '2px' }}>
+                <div style={{ fontSize: '20px', fontWeight: '700', color: '#059669', marginTop: '2px' }}>
                   {analytics.openChats}
                 </div>
               </div>
@@ -314,7 +314,7 @@ export default function AgentManagementModal({ isOpen, onClose }) {
                 }}
               >
                 <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>RESOLUTION RATE</div>
-                <div style={{ fontSize: '20px', fontWeight: '700', color: '#a5b4fc', marginTop: '2px' }}>
+                <div style={{ fontSize: '20px', fontWeight: '700', color: '#4338ca', marginTop: '2px' }}>
                   {analytics.firstContactResolutionRate}
                 </div>
               </div>
@@ -331,7 +331,7 @@ export default function AgentManagementModal({ isOpen, onClose }) {
               marginBottom: '16px',
             }}
           >
-            <div style={{ fontSize: '13px', fontWeight: '600', color: '#fff', marginBottom: '4px' }}>
+            <div style={{ fontSize: '13px', fontWeight: '600', color: 'var(--text-main)', marginBottom: '4px' }}>
               ⚙️ Automation
             </div>
             <p style={{ fontSize: '11.5px', color: 'var(--text-muted)', margin: '0 0 12px 0', lineHeight: 1.5 }}>
@@ -339,7 +339,7 @@ export default function AgentManagementModal({ isOpen, onClose }) {
               hours can receive one automatic template reply (max once per 12 hours per chat).
             </p>
 
-            <label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '12.5px', color: '#e2e8f0', cursor: 'pointer', marginBottom: '12px' }}>
+            <label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '12.5px', color: 'var(--text-main)', cursor: 'pointer', marginBottom: '12px' }}>
               <input
                 type="checkbox"
                 checked={automation.autoAssignEnabled}
@@ -357,7 +357,7 @@ export default function AgentManagementModal({ isOpen, onClose }) {
                   value={automation.officeHoursStart}
                   disabled={!isAdmin}
                   onChange={(e) => setAutomation((p) => ({ ...p, officeHoursStart: e.target.value }))}
-                  style={{ width: '100%', background: 'var(--bg-input)', border: '1px solid var(--border-medium)', borderRadius: '7px', padding: '7px 9px', color: '#fff', fontSize: '12.5px' }}
+                  style={{ width: '100%', background: 'var(--bg-input)', border: '1px solid var(--border-medium)', borderRadius: '7px', padding: '7px 9px', color: 'var(--text-main)', fontSize: '12.5px' }}
                 />
               </div>
               <div>
@@ -367,7 +367,7 @@ export default function AgentManagementModal({ isOpen, onClose }) {
                   value={automation.officeHoursEnd}
                   disabled={!isAdmin}
                   onChange={(e) => setAutomation((p) => ({ ...p, officeHoursEnd: e.target.value }))}
-                  style={{ width: '100%', background: 'var(--bg-input)', border: '1px solid var(--border-medium)', borderRadius: '7px', padding: '7px 9px', color: '#fff', fontSize: '12.5px' }}
+                  style={{ width: '100%', background: 'var(--bg-input)', border: '1px solid var(--border-medium)', borderRadius: '7px', padding: '7px 9px', color: 'var(--text-main)', fontSize: '12.5px' }}
                 />
               </div>
             </div>
@@ -408,7 +408,7 @@ export default function AgentManagementModal({ isOpen, onClose }) {
                   value={automation.awayTemplateName}
                   disabled={!isAdmin}
                   onChange={(e) => setAutomation((p) => ({ ...p, awayTemplateName: e.target.value }))}
-                  style={{ width: '100%', background: 'var(--bg-input)', border: '1px solid var(--border-medium)', borderRadius: '7px', padding: '7px 9px', color: '#fff', fontSize: '12.5px' }}
+                  style={{ width: '100%', background: 'var(--bg-input)', border: '1px solid var(--border-medium)', borderRadius: '7px', padding: '7px 9px', color: 'var(--text-main)', fontSize: '12.5px' }}
                 >
                   <option value="">None — no away reply</option>
                   {automationTemplates.map((t) => (
@@ -426,7 +426,7 @@ export default function AgentManagementModal({ isOpen, onClose }) {
                   disabled={!isAdmin}
                   onChange={(e) => setAutomation((p) => ({ ...p, officeHoursTimezone: e.target.value }))}
                   placeholder="Asia/Kolkata"
-                  style={{ width: '100%', background: 'var(--bg-input)', border: '1px solid var(--border-medium)', borderRadius: '7px', padding: '7px 9px', color: '#fff', fontSize: '12.5px' }}
+                  style={{ width: '100%', background: 'var(--bg-input)', border: '1px solid var(--border-medium)', borderRadius: '7px', padding: '7px 9px', color: 'var(--text-main)', fontSize: '12.5px' }}
                 />
               </div>
             </div>
@@ -445,7 +445,7 @@ export default function AgentManagementModal({ isOpen, onClose }) {
 
           {/* Action Header */}
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px' }}>
-            <span style={{ fontSize: '13px', fontWeight: '600', color: '#fff' }}>
+            <span style={{ fontSize: '13px', fontWeight: '600', color: 'var(--text-main)' }}>
               Active Staff Roster ({agents.length})
             </span>
             {isAdmin && !showAddForm && (
@@ -474,7 +474,7 @@ export default function AgentManagementModal({ isOpen, onClose }) {
                 gap: '10px',
               }}
             >
-              <div style={{ fontSize: '12.5px', fontWeight: '600', color: '#fff' }}>Invite New Agent Account</div>
+              <div style={{ fontSize: '12.5px', fontWeight: '600', color: 'var(--text-main)' }}>Invite New Agent Account</div>
               <div className="grid-form-2" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
                 <input
                   type="text"
@@ -487,7 +487,7 @@ export default function AgentManagementModal({ isOpen, onClose }) {
                     border: '1px solid var(--border-subtle)',
                     borderRadius: '6px',
                     padding: '8px 10px',
-                    color: '#fff',
+                    color: 'var(--text-main)',
                     fontSize: '12px',
                   }}
                 />
@@ -502,7 +502,7 @@ export default function AgentManagementModal({ isOpen, onClose }) {
                     border: '1px solid var(--border-subtle)',
                     borderRadius: '6px',
                     padding: '8px 10px',
-                    color: '#fff',
+                    color: 'var(--text-main)',
                     fontSize: '12px',
                   }}
                 />
@@ -519,7 +519,7 @@ export default function AgentManagementModal({ isOpen, onClose }) {
                     border: '1px solid var(--border-subtle)',
                     borderRadius: '6px',
                     padding: '8px 10px',
-                    color: '#fff',
+                    color: 'var(--text-main)',
                     fontSize: '12px',
                   }}
                 />
@@ -531,7 +531,7 @@ export default function AgentManagementModal({ isOpen, onClose }) {
                     border: '1px solid var(--border-subtle)',
                     borderRadius: '6px',
                     padding: '8px 10px',
-                    color: '#fff',
+                    color: 'var(--text-main)',
                     fontSize: '12px',
                   }}
                 >
@@ -603,7 +603,7 @@ export default function AgentManagementModal({ isOpen, onClose }) {
                     />
                   </div>
                   <div>
-                    <div style={{ fontWeight: '600', fontSize: '13.5px', color: '#fff' }}>{a.name}</div>
+                    <div style={{ fontWeight: '600', fontSize: '13.5px', color: 'var(--text-main)' }}>{a.name}</div>
                     <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>{a.email}</div>
                   </div>
                 </div>
@@ -612,7 +612,7 @@ export default function AgentManagementModal({ isOpen, onClose }) {
                   <span
                     style={{
                       fontSize: '11px',
-                      background: 'rgba(255,255,255,0.08)',
+                      background: 'rgba(15, 23, 42, 0.06)',
                       padding: '2px 8px',
                       borderRadius: '4px',
                       color: 'var(--text-secondary)',
@@ -656,7 +656,7 @@ export default function AgentManagementModal({ isOpen, onClose }) {
                         border: '1px solid var(--border-subtle)',
                         borderRadius: '6px',
                         padding: '7px 10px',
-                        color: '#fff',
+                        color: 'var(--text-main)',
                         fontSize: '12px',
                       }}
                     />
@@ -688,7 +688,7 @@ export default function AgentManagementModal({ isOpen, onClose }) {
               gap: '10px',
             }}
           >
-            <div style={{ fontSize: '12.5px', fontWeight: '600', color: '#fff' }}>Change my password</div>
+            <div style={{ fontSize: '12.5px', fontWeight: '600', color: 'var(--text-main)' }}>Change my password</div>
             <div className="grid-form-2" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
               <input
                 type="password"
@@ -702,7 +702,7 @@ export default function AgentManagementModal({ isOpen, onClose }) {
                   border: '1px solid var(--border-subtle)',
                   borderRadius: '6px',
                   padding: '8px 10px',
-                  color: '#fff',
+                  color: 'var(--text-main)',
                   fontSize: '12px',
                 }}
               />
@@ -718,7 +718,7 @@ export default function AgentManagementModal({ isOpen, onClose }) {
                   border: '1px solid var(--border-subtle)',
                   borderRadius: '6px',
                   padding: '8px 10px',
-                  color: '#fff',
+                  color: 'var(--text-main)',
                   fontSize: '12px',
                 }}
               />

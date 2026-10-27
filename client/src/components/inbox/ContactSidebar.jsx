@@ -229,7 +229,7 @@ export default function ContactSidebar({ onOpenTemplatePicker, onClose }) {
           style={{
             height: '6px',
             width: '100%',
-            background: 'rgba(255, 255, 255, 0.08)',
+            background: 'rgba(15, 23, 42, 0.08)',
             borderRadius: '999px',
             overflow: 'hidden',
           }}
@@ -284,9 +284,9 @@ export default function ContactSidebar({ onOpenTemplatePicker, onClose }) {
               <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                 <span
                   style={{
-                    color: '#fff',
+                    color: 'var(--text-main)',
                     fontWeight: '600',
-                    background: 'rgba(255, 255, 255, 0.05)',
+                    background: 'rgba(15, 23, 42, 0.05)',
                     padding: '2px 6px',
                     borderRadius: '4px',
                     fontSize: '11.5px',
@@ -329,10 +329,10 @@ export default function ContactSidebar({ onOpenTemplatePicker, onClose }) {
                 value={fieldKey}
                 onChange={(e) => setFieldKey(e.target.value)}
                 style={{
-                  background: 'rgba(0,0,0,0.2)',
+                  background: 'var(--bg-input)',
                   border: '1px solid var(--border-medium)',
                   borderRadius: '4px',
-                  color: '#fff',
+                  color: 'var(--text-main)',
                   padding: '4px 6px',
                   fontSize: '11.5px',
                   outline: 'none',
@@ -344,10 +344,10 @@ export default function ContactSidebar({ onOpenTemplatePicker, onClose }) {
                 value={fieldVal}
                 onChange={(e) => setFieldVal(e.target.value)}
                 style={{
-                  background: 'rgba(0,0,0,0.2)',
+                  background: 'var(--bg-input)',
                   border: '1px solid var(--border-medium)',
                   borderRadius: '4px',
-                  color: '#fff',
+                  color: 'var(--text-main)',
                   padding: '4px 6px',
                   fontSize: '11.5px',
                   outline: 'none',
@@ -413,8 +413,8 @@ export default function ContactSidebar({ onOpenTemplatePicker, onClose }) {
               key={tag}
               style={{
                 fontSize: '11.5px',
-                background: 'rgba(255, 255, 255, 0.08)',
-                color: '#e2e8f0',
+                background: 'rgba(15, 23, 42, 0.06)',
+                color: 'var(--text-main)',
                 padding: '3px 8px',
                 borderRadius: '4px',
                 display: 'inline-flex',
@@ -454,7 +454,7 @@ export default function ContactSidebar({ onOpenTemplatePicker, onClose }) {
                   background: 'var(--bg-surface)',
                   border: '1px solid var(--border-medium)',
                   borderRadius: '4px',
-                  color: '#fff',
+                  color: 'var(--text-main)',
                   padding: '4px 8px',
                   fontSize: '12px',
                   outline: 'none',

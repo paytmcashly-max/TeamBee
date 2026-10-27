@@ -372,14 +372,14 @@ export default function ConversationList({
                 fontSize: '11px',
                 fontWeight: statusFilter === st ? '600' : '400',
                 border: '1px solid',
-                borderColor: statusFilter === st ? 'rgba(255,255,255,0.25)' : 'transparent',
+                borderColor: statusFilter === st ? 'rgba(15,23,42,0.3)' : 'transparent',
                 background:
                   statusFilter === st
                     ? st === 'OPEN'
                       ? 'rgba(16, 185, 129, 0.2)'
                       : st === 'UNASSIGNED'
                       ? 'rgba(245, 158, 11, 0.2)'
-                      : 'rgba(255,255,255,0.1)'
+                      : 'rgba(15,23,42,0.07)'
                     : 'transparent',
                 color:
                   statusFilter === st
@@ -410,8 +410,8 @@ export default function ConversationList({
                 fontSize: '11px',
                 fontWeight: !selectedTag ? '600' : '400',
                 border: '1px solid',
-                borderColor: !selectedTag ? 'rgba(255,255,255,0.25)' : 'transparent',
-                background: !selectedTag ? 'rgba(255,255,255,0.1)' : 'transparent',
+                borderColor: !selectedTag ? 'rgba(15,23,42,0.3)' : 'transparent',
+                background: !selectedTag ? 'rgba(15,23,42,0.07)' : 'transparent',
                 color: !selectedTag ? '#fff' : 'var(--text-muted)',
                 cursor: 'pointer',
                 whiteSpace: 'nowrap',
@@ -657,7 +657,7 @@ export default function ConversationList({
                         style={{
                           fontWeight: '600',
                           fontSize: '13.5px',
-                          color: '#fff',
+                          color: 'var(--text-main)',
                           overflow: 'hidden',
                           textOverflow: 'ellipsis',
                           whiteSpace: 'nowrap',
@@ -711,7 +711,7 @@ export default function ConversationList({
                           <span
                             style={{
                               fontSize: '10.5px',
-                              background: 'rgba(255, 255, 255, 0.08)',
+                              background: 'rgba(15, 23, 42, 0.06)',
                               color: 'var(--text-secondary)',
                               padding: '2px 6px',
                               borderRadius: '4px',

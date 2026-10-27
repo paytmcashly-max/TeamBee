@@ -504,7 +504,7 @@ export default function ChatCanvas({ onOpenTemplatePicker, onToggleSidebar, isSi
           >
             <Phone size={34} />
           </div>
-          <h2 style={{ fontSize: '18px', color: '#fff', marginBottom: '8px' }}>
+          <h2 style={{ fontSize: '18px', color: 'var(--text-main)', marginBottom: '8px' }}>
             WhatsApp Shared Team Inbox
           </h2>
           <p style={{ fontSize: '13px', color: 'var(--text-secondary)', lineHeight: 1.6 }}>
@@ -616,7 +616,7 @@ export default function ChatCanvas({ onOpenTemplatePicker, onToggleSidebar, isSi
                       type="button"
                       onClick={() => applySnooze(preset.until)}
                       className="btn btn-ghost"
-                      style={{ display: 'block', width: '100%', textAlign: 'left', padding: '10px 8px', fontSize: '12.5px', color: '#e2e8f0' }}
+                      style={{ display: 'block', width: '100%', textAlign: 'left', padding: '10px 8px', fontSize: '12.5px', color: 'var(--text-main)' }}
                     >
                       {preset.label}
                     </button>
@@ -659,7 +659,7 @@ export default function ChatCanvas({ onOpenTemplatePicker, onToggleSidebar, isSi
                   onChange={(e) => assignChat(activeChat.id, e.target.value || null).catch((err) => toast.error(err.message))}
                   style={{
                     background: 'var(--bg-surface)',
-                    color: '#fff',
+                    color: 'var(--text-main)',
                     border: '1px solid var(--border-medium)',
                     borderRadius: 'var(--radius-md)',
                     padding: '6px 24px 6px 8px',
@@ -753,7 +753,7 @@ export default function ChatCanvas({ onOpenTemplatePicker, onToggleSidebar, isSi
             </>
           ) : (
             <>
-              <AlertTriangle size={13} style={{ color: '#f87171', flexShrink: 0 }} />
+              <AlertTriangle size={13} style={{ color: '#dc2626', flexShrink: 0 }} />
               <span className="ellipsis">
                 24h Window Expired: Send template to re-engage
               </span>
@@ -887,7 +887,7 @@ export default function ChatCanvas({ onOpenTemplatePicker, onToggleSidebar, isSi
                       {msg.content}
                     </div>
                     {msg.senderAgent && (
-                      <div style={{ fontSize: '10.5px', color: '#fbbf24', marginTop: '4px', textAlign: 'right' }}>
+                      <div style={{ fontSize: '10.5px', color: '#b45309', marginTop: '4px', textAlign: 'right' }}>
                         — {msg.senderAgent.name}
                       </div>
                     )}
@@ -955,7 +955,7 @@ export default function ChatCanvas({ onOpenTemplatePicker, onToggleSidebar, isSi
                       ) : msg.mediaId ? (
                         <AuthedMedia messageId={msg.id} kind="IMAGE" token={token} filename={msg.mediaFilename} />
                       ) : (
-                        <div style={{ padding: '18px 12px', borderRadius: '8px', background: 'rgba(255,255,255,0.06)', color: 'var(--text-muted)', fontSize: '12px', textAlign: 'center' }}>
+                        <div style={{ padding: '18px 12px', borderRadius: '8px', background: 'rgba(15,23,42,0.04)', color: 'var(--text-muted)', fontSize: '12px', textAlign: 'center' }}>
                           Media unavailable
                         </div>
                       )}
@@ -971,7 +971,7 @@ export default function ChatCanvas({ onOpenTemplatePicker, onToggleSidebar, isSi
                       ) : msg.mediaId ? (
                         <AuthedMedia messageId={msg.id} kind="AUDIO" token={token} filename={msg.mediaFilename} />
                       ) : (
-                        <div style={{ padding: '12px', borderRadius: '8px', background: 'rgba(255,255,255,0.06)', color: 'var(--text-muted)', fontSize: '12px', textAlign: 'center' }}>
+                        <div style={{ padding: '12px', borderRadius: '8px', background: 'rgba(15,23,42,0.04)', color: 'var(--text-muted)', fontSize: '12px', textAlign: 'center' }}>
                           Voice message unavailable
                         </div>
                       )}
@@ -986,7 +986,7 @@ export default function ChatCanvas({ onOpenTemplatePicker, onToggleSidebar, isSi
                       ) : msg.mediaId ? (
                         <AuthedMedia messageId={msg.id} kind="VIDEO" token={token} filename={msg.mediaFilename} />
                       ) : (
-                        <div style={{ padding: '12px', borderRadius: '8px', background: 'rgba(255,255,255,0.06)', color: 'var(--text-muted)', fontSize: '12px', textAlign: 'center' }}>
+                        <div style={{ padding: '12px', borderRadius: '8px', background: 'rgba(15,23,42,0.04)', color: 'var(--text-muted)', fontSize: '12px', textAlign: 'center' }}>
                           Video unavailable
                         </div>
                       )}
@@ -997,7 +997,7 @@ export default function ChatCanvas({ onOpenTemplatePicker, onToggleSidebar, isSi
                   {msg.messageType === 'DOCUMENT' && (
                     <div
                       style={{
-                        background: 'rgba(0,0,0,0.2)',
+                        background: 'rgba(15, 23, 42, 0.06)',
                         padding: '6px 10px',
                         borderRadius: '6px',
                         display: 'flex',
@@ -1033,12 +1033,12 @@ export default function ChatCanvas({ onOpenTemplatePicker, onToggleSidebar, isSi
                         <div
                           key={bIdx}
                           style={{
-                            background: 'rgba(255, 255, 255, 0.12)',
-                            border: '1px solid rgba(255, 255, 255, 0.2)',
+                            background: '#ffffff',
+                            border: '1px solid var(--border-medium)',
                             borderRadius: '6px',
                             padding: '5px 8px',
                             fontSize: '11.5px',
-                            color: '#fff',
+                            color: '#128c7e',
                             textAlign: 'center',
                             fontWeight: '600',
                           }}
@@ -1071,7 +1071,7 @@ export default function ChatCanvas({ onOpenTemplatePicker, onToggleSidebar, isSi
                         ) : msg.status === 'SENT' ? (
                           <Check size={12} style={{ color: '#a7f3d0' }} title="Sent via Meta Cloud API" />
                         ) : msg.status === 'FAILED' ? (
-                          <AlertTriangle size={12} style={{ color: '#f87171' }} title={msg.errorMessage || 'Failed'} />
+                          <AlertTriangle size={12} style={{ color: '#dc2626' }} title={msg.errorMessage || 'Failed'} />
                         ) : (
                           <Clock size={11} title="Pending" />
                         )}
@@ -1122,7 +1122,7 @@ export default function ChatCanvas({ onOpenTemplatePicker, onToggleSidebar, isSi
               type="button"
               onClick={() => pickMention(candidate)}
               className="btn btn-ghost"
-              style={{ display: 'flex', width: '100%', textAlign: 'left', padding: '6px 8px', fontSize: '12.5px', color: '#e2e8f0', alignItems: 'center', gap: '8px' }}
+              style={{ display: 'flex', width: '100%', textAlign: 'left', padding: '6px 8px', fontSize: '12.5px', color: 'var(--text-main)', alignItems: 'center', gap: '8px' }}
             >
               <span
                 style={{
@@ -1185,7 +1185,7 @@ export default function ChatCanvas({ onOpenTemplatePicker, onToggleSidebar, isSi
                 maxLength={1000}
                 className="input input-sm input-area"
               />
-              {qrError && <div style={{ fontSize: '11.5px', color: '#fca5a5' }}>{qrError}</div>}
+              {qrError && <div style={{ fontSize: '11.5px', color: '#b91c1c' }}>{qrError}</div>}
               <div style={{ display: 'flex', gap: '8px' }}>
                 <button onClick={saveQrForm} className="btn btn-primary btn-xs">
                   {qrForm.id ? 'Save changes' : 'Add quick reply'}
@@ -1251,7 +1251,7 @@ export default function ChatCanvas({ onOpenTemplatePicker, onToggleSidebar, isSi
                             title="Delete"
                             onClick={() => deleteQuickReply(qr)}
                             className="btn btn-ghost"
-                            style={{ padding: '2px 5px', fontSize: '10.5px', color: '#f87171' }}
+                            style={{ padding: '2px 5px', fontSize: '10.5px', color: '#dc2626' }}
                           >
                             🗑
                           </button>
@@ -1300,7 +1300,7 @@ export default function ChatCanvas({ onOpenTemplatePicker, onToggleSidebar, isSi
           }}
         >
           <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px', alignItems: 'center' }}>
-            <span style={{ fontSize: '11.5px', fontWeight: '600', color: '#fff', display: 'inline-flex', alignItems: 'center', gap: '6px' }}><Paperclip size={13} /> Attach Media / Doc</span>
+            <span style={{ fontSize: '11.5px', fontWeight: '600', color: 'var(--text-main)', display: 'inline-flex', alignItems: 'center', gap: '6px' }}><Paperclip size={13} /> Attach Media / Doc</span>
             <button
               onClick={() => setShowAttachmentMenu(false)}
               className="btn btn-ghost btn-xs"
@@ -1315,7 +1315,7 @@ export default function ChatCanvas({ onOpenTemplatePicker, onToggleSidebar, isSi
               onChange={(e) => setAttachUrl(e.target.value)}
               placeholder="Paste a public file URL (https://...)"
               aria-label="Attachment URL"
-              style={{ background: 'var(--bg-input)', border: '1px solid rgba(255,255,255,0.12)', borderRadius: '6px', padding: '7px 9px', color: '#fff', fontSize: '12px', width: '100%' }}
+              style={{ background: 'var(--bg-input)', border: '1px solid var(--border-medium)', borderRadius: '6px', padding: '7px 9px', color: 'var(--text-main)', fontSize: '12px', width: '100%' }}
             />
             <input
               type="text"
@@ -1323,7 +1323,7 @@ export default function ChatCanvas({ onOpenTemplatePicker, onToggleSidebar, isSi
               onChange={(e) => setAttachName(e.target.value)}
               placeholder="File name (optional)"
               aria-label="Attachment file name"
-              style={{ background: 'var(--bg-input)', border: '1px solid rgba(255,255,255,0.12)', borderRadius: '6px', padding: '7px 9px', color: '#fff', fontSize: '12px', width: '100%' }}
+              style={{ background: 'var(--bg-input)', border: '1px solid var(--border-medium)', borderRadius: '6px', padding: '7px 9px', color: 'var(--text-main)', fontSize: '12px', width: '100%' }}
             />
             <button
               onClick={() => {
@@ -1436,8 +1436,8 @@ export default function ChatCanvas({ onOpenTemplatePicker, onToggleSidebar, isSi
                   key={idx}
                   style={{
                     fontSize: '11px',
-                    background: 'rgba(255, 255, 255, 0.1)',
-                    color: '#fff',
+                    background: 'rgba(15, 23, 42, 0.06)',
+                    color: 'var(--text-main)',
                     padding: '2px 6px',
                     borderRadius: '4px',
                     display: 'inline-flex',
@@ -1449,7 +1449,7 @@ export default function ChatCanvas({ onOpenTemplatePicker, onToggleSidebar, isSi
                   <button
                     type="button"
                     onClick={() => setInteractiveButtons((prev) => prev.filter((_, i) => i !== idx))}
-                    style={{ background: 'none', border: 'none', color: '#f87171', cursor: 'pointer', padding: 0 }}
+                    style={{ background: 'none', border: 'none', color: '#dc2626', cursor: 'pointer', padding: 0 }}
                   >
                     ×
                   </button>
@@ -1468,7 +1468,7 @@ export default function ChatCanvas({ onOpenTemplatePicker, onToggleSidebar, isSi
                       background: 'var(--bg-surface)',
                       border: '1px solid var(--border-medium)',
                       borderRadius: '4px',
-                      color: '#fff',
+                      color: 'var(--text-main)',
                       padding: '3px 6px',
                       outline: 'none',
                       width: '110px',
@@ -1594,7 +1594,7 @@ export default function ChatCanvas({ onOpenTemplatePicker, onToggleSidebar, isSi
                     ? '1px solid rgba(56, 189, 248, 0.5)'
                     : '1px solid var(--border-medium)',
                 borderRadius: '22px',
-                color: '#fff',
+                color: 'var(--text-main)',
                 padding: '9px 14px',
                 resize: 'none',
                 outline: 'none',

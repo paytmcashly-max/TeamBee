@@ -135,7 +135,7 @@ export default function MetaOnboardingModal({ isOpen, onClose }) {
               <Shield size={20} />
             </div>
             <div>
-              <h3 style={{ fontSize: '16px', color: '#fff' }}>Meta WhatsApp Cloud API Onboarding</h3>
+              <h3 style={{ fontSize: '16px', color: 'var(--text-main)' }}>Meta WhatsApp Cloud API Onboarding</h3>
               <p style={{ fontSize: '11.5px', color: 'var(--text-secondary)' }}>
                 Configure permanent access token, WABA ID, and webhook handshake
               </p>
@@ -203,7 +203,7 @@ export default function MetaOnboardingModal({ isOpen, onClose }) {
           <form onSubmit={handleSave} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
             {/* Permanent Access Token */}
             <div>
-              <label style={{ display: 'block', fontSize: '12px', fontWeight: '600', color: '#fff', marginBottom: '5px' }}>
+              <label style={{ display: 'block', fontSize: '12px', fontWeight: '600', color: 'var(--text-main)', marginBottom: '5px' }}>
                 Permanent System User Access Token (with whatsapp_business_messaging permissions)
               </label>
               <input
@@ -222,7 +222,7 @@ export default function MetaOnboardingModal({ isOpen, onClose }) {
                   border: '1px solid var(--border-medium)',
                   borderRadius: 'var(--radius-md)',
                   padding: '9px 12px',
-                  color: '#fff',
+                  color: 'var(--text-main)',
                   fontSize: '12.5px',
                   fontFamily: 'var(--font-mono)',
                   outline: 'none',
@@ -233,7 +233,7 @@ export default function MetaOnboardingModal({ isOpen, onClose }) {
             <div className="grid-form-2" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
               {/* WhatsApp Business Account ID */}
               <div>
-                <label style={{ display: 'block', fontSize: '12px', fontWeight: '600', color: '#fff', marginBottom: '5px' }}>
+                <label style={{ display: 'block', fontSize: '12px', fontWeight: '600', color: 'var(--text-main)', marginBottom: '5px' }}>
                   WABA ID (Account ID)
                 </label>
                 <input
@@ -247,7 +247,7 @@ export default function MetaOnboardingModal({ isOpen, onClose }) {
                     border: '1px solid var(--border-medium)',
                     borderRadius: 'var(--radius-md)',
                     padding: '9px 12px',
-                    color: '#fff',
+                    color: 'var(--text-main)',
                     fontSize: '12.5px',
                     outline: 'none',
                   }}
@@ -256,7 +256,7 @@ export default function MetaOnboardingModal({ isOpen, onClose }) {
 
               {/* Phone Number ID */}
               <div>
-                <label style={{ display: 'block', fontSize: '12px', fontWeight: '600', color: '#fff', marginBottom: '5px' }}>
+                <label style={{ display: 'block', fontSize: '12px', fontWeight: '600', color: 'var(--text-main)', marginBottom: '5px' }}>
                   Phone Number ID
                 </label>
                 <input
@@ -270,7 +270,7 @@ export default function MetaOnboardingModal({ isOpen, onClose }) {
                     border: '1px solid var(--border-medium)',
                     borderRadius: 'var(--radius-md)',
                     padding: '9px 12px',
-                    color: '#fff',
+                    color: 'var(--text-main)',
                     fontSize: '12.5px',
                     outline: 'none',
                   }}
@@ -281,7 +281,7 @@ export default function MetaOnboardingModal({ isOpen, onClose }) {
             <div className="grid-form-2" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
               {/* Display Phone Number */}
               <div>
-                <label style={{ display: 'block', fontSize: '12px', fontWeight: '600', color: '#fff', marginBottom: '5px' }}>
+                <label style={{ display: 'block', fontSize: '12px', fontWeight: '600', color: 'var(--text-main)', marginBottom: '5px' }}>
                   Display Phone Number
                 </label>
                 <input
@@ -295,7 +295,7 @@ export default function MetaOnboardingModal({ isOpen, onClose }) {
                     border: '1px solid var(--border-medium)',
                     borderRadius: 'var(--radius-md)',
                     padding: '9px 12px',
-                    color: '#fff',
+                    color: 'var(--text-main)',
                     fontSize: '12.5px',
                     outline: 'none',
                   }}
@@ -304,7 +304,7 @@ export default function MetaOnboardingModal({ isOpen, onClose }) {
 
               {/* Webhook Verification Secret */}
               <div>
-                <label style={{ display: 'block', fontSize: '12px', fontWeight: '600', color: '#fff', marginBottom: '5px' }}>
+                <label style={{ display: 'block', fontSize: '12px', fontWeight: '600', color: 'var(--text-main)', marginBottom: '5px' }}>
                   Webhook Verify Token (Secret Handshake)
                 </label>
                 <input
@@ -318,7 +318,7 @@ export default function MetaOnboardingModal({ isOpen, onClose }) {
                     border: '1px solid var(--border-medium)',
                     borderRadius: 'var(--radius-md)',
                     padding: '9px 12px',
-                    color: '#fff',
+                    color: 'var(--text-main)',
                     fontSize: '12.5px',
                     outline: 'none',
                   }}

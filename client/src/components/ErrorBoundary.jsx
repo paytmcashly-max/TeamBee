@@ -27,7 +27,7 @@ export default class ErrorBoundary extends React.Component {
             justifyContent: 'center',
             height: '100vh',
             background: 'var(--bg-app)',
-            color: '#e2e8f0',
+            color: 'var(--text-main)',
             gap: '12px',
             padding: '24px',
             textAlign: 'center',
@@ -42,7 +42,7 @@ export default class ErrorBoundary extends React.Component {
             onClick={() => window.location.reload()}
             style={{
               background: 'linear-gradient(135deg, #25D366 0%, #128C7E 100%)',
-              color: '#fff',
+              color: 'var(--text-main)',
               border: 'none',
               borderRadius: '8px',
               padding: '9px 18px',

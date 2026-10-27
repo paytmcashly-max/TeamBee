@@ -14,7 +14,7 @@ export default React.memo(function ClosedWindowBar({ onSendTemplate }) {
   return (
     <div className="closed-bar">
       <div className="closed-bar-main">
-        <Clock size={17} style={{ color: '#f87171', flexShrink: 0, marginTop: '1px' }} />
+        <Clock size={17} style={{ color: '#dc2626', flexShrink: 0, marginTop: '1px' }} />
         <div style={{ minWidth: 0 }}>
           <div className="closed-bar-title">24-hour window closed</div>
           <div className="closed-bar-text">
