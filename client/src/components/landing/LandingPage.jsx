@@ -353,7 +353,7 @@ export default function LandingPage({ onLogin, onSignup, onShowTerms, onShowPriv
   );
 
   return (
-    <div style={{ minHeight: '100vh', background: 'var(--bg-app)', color: '#e2e8f0' }}>
+    <div style={{ height: '100dvh', overflowY: 'auto', background: 'var(--bg-app)', color: '#e2e8f0' }}>
       {/* Announcement bar */}
       <div style={{ background: 'linear-gradient(90deg, #065f46, #047857)', color: '#ecfdf5', fontSize: '12.5px', textAlign: 'center', padding: '8px 14px' }}>
         Every plan starts with a {TRIAL_DAYS}-day free trial — full Pro features, no card required.{' '}
