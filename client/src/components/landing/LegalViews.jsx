@@ -44,3 +44,16 @@ export function PrivacyView({ onBack }) {
     </Shell>
   );
 }
+
+export function RefundsView({ onBack }) {
+  return (
+    <Shell title="Refund Policy" onBack={onBack}>
+      <p><strong style={{ color: '#fff' }}>1. Free trial.</strong> Every workspace starts with a free trial and no card is required. Nothing is charged during the trial, so nothing needs refunding.</p>
+      <p><strong style={{ color: '#fff' }}>2. Cancelling a paid plan.</strong> You may cancel anytime. Cancellation stops the next renewal; your workspace stays active until the end of the period you have already paid for. Subscription fees for a period that has already begun are not refunded on cancellation.</p>
+      <p><strong style={{ color: '#fff' }}>3. Duplicate or failed charges.</strong> If you are charged twice for the same period, or a payment is taken after a failed/cancelled checkout, tell us through the support option inside your workspace — the duplicate amount will be refunded in full to the original payment method.</p>
+      <p><strong style={{ color: '#fff' }}>4. Service not delivered.</strong> If a paid workspace could not be used at all because of an error on our side (for example, a workspace that never activated after a successful payment), the charge for that period will be refunded in full.</p>
+      <p><strong style={{ color: '#fff' }}>5. Meta charges.</strong> Per-conversation charges are billed by Meta directly under Meta's own policies and are not covered by this policy.</p>
+      <p><strong style={{ color: '#fff' }}>6. How refunds are processed.</strong> Approved refunds go back to the original payment method through our payment partner. The time to reflect depends on your bank, typically a few business days after approval.</p>
+    </Shell>
+  );
+}

@@ -6,7 +6,7 @@ import SignupView from './components/auth/SignupView';
 import ForgotPasswordView from './components/auth/ForgotPasswordView';
 import ResetPasswordView from './components/auth/ResetPasswordView';
 import LandingPage from './components/landing/LandingPage';
-import { TermsView, PrivacyView } from './components/landing/LegalViews';
+import { TermsView, PrivacyView, RefundsView } from './components/landing/LegalViews';
 const DashboardView = lazy(() => import('./components/dashboard/DashboardView'));
 import ConversationList from './components/inbox/ConversationList';
 import ChatCanvas from './components/inbox/ChatCanvas';
@@ -208,6 +208,7 @@ export default function App() {
       );
     }
     if (publicView === 'terms') return <TermsView onBack={() => setPublicView('landing')} />;
+    if (publicView === 'refunds') return <RefundsView onBack={() => setPublicView('landing')} />;
     if (publicView === 'privacy') return <PrivacyView onBack={() => setPublicView('landing')} />;
     return (
       <LandingPage
@@ -215,6 +216,7 @@ export default function App() {
         onSignup={showSignup}
         onShowTerms={() => setPublicView('terms')}
         onShowPrivacy={() => setPublicView('privacy')}
+        onShowRefunds={() => setPublicView('refunds')}
       />
     );
   }
