@@ -34,29 +34,25 @@ export default React.memo(function AuthedMedia({ messageId, kind, token, filenam
 
   if (failed) {
     return (
-      <div style={{ padding: '18px 12px', borderRadius: '8px', background: 'rgba(255,255,255,0.06)', color: 'var(--text-muted)', fontSize: '12px', textAlign: 'center' }}>
-        Media unavailable
-      </div>
+      <div className="media-placeholder">Media unavailable</div>
     );
   }
   if (!objectUrl) {
     return (
-      <div style={{ padding: '18px 12px', borderRadius: '8px', background: 'rgba(255,255,255,0.06)', color: 'var(--text-muted)', fontSize: '12px', textAlign: 'center' }}>
-        Loading media…
-      </div>
+      <div className="media-placeholder">Loading media…</div>
     );
   }
   if (kind === 'IMAGE') {
-    return <img src={objectUrl} alt="WhatsApp Attachment" loading="lazy" decoding="async" style={{ maxWidth: '100%', maxHeight: '200px', borderRadius: '8px', display: 'block', objectFit: 'cover' }} />;
+    return <img src={objectUrl} alt="WhatsApp Attachment" loading="lazy" decoding="async" className="media-img" />;
   }
   if (kind === 'AUDIO') {
-    return <audio controls src={objectUrl} style={{ maxWidth: '100%' }} />;
+    return <audio controls src={objectUrl} className="media-audio" />;
   }
   if (kind === 'VIDEO') {
-    return <video controls preload="metadata" src={objectUrl} style={{ maxWidth: '100%', maxHeight: '220px', borderRadius: '8px', display: 'block' }} />;
+    return <video controls preload="metadata" src={objectUrl} className="media-video" />;
   }
   return (
-    <a href={objectUrl} target="_blank" rel="noreferrer" style={{ color: '#38bdf8', fontSize: '11.5px', fontWeight: 500 }}>
+    <a href={objectUrl} target="_blank" rel="noreferrer" className="media-doc">
       {filename || 'Open document'}
     </a>
   );

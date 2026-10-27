@@ -9,51 +9,21 @@ import { Clock, Sparkles } from 'lucide-react';
 // closed and give ONE action that works, sending an approved template.
 // Team Notes are unaffected: they never needed the window, and the mode
 // tabs above this bar still switch to them.
+// Styling: design system only (.closed-bar in styles/components.css).
 export default React.memo(function ClosedWindowBar({ onSendTemplate }) {
   return (
-    <div
-      style={{
-        display: 'flex',
-        alignItems: 'center',
-        gap: '12px',
-        flexWrap: 'wrap',
-        background: 'rgba(239, 68, 68, 0.06)',
-        border: '1px solid rgba(239, 68, 68, 0.22)',
-        borderRadius: '12px',
-        padding: '10px 12px',
-      }}
-    >
-      <div style={{ display: 'flex', gap: '9px', alignItems: 'flex-start', flex: '1 1 220px', minWidth: 0 }}>
+    <div className="closed-bar">
+      <div className="closed-bar-main">
         <Clock size={17} style={{ color: '#f87171', flexShrink: 0, marginTop: '1px' }} />
         <div style={{ minWidth: 0 }}>
-          <div style={{ fontSize: '13px', fontWeight: 600, color: '#fca5a5' }}>
-            24-hour window closed
-          </div>
-          <div style={{ fontSize: '12px', color: 'var(--text-secondary)', lineHeight: 1.45 }}>
+          <div className="closed-bar-title">24-hour window closed</div>
+          <div className="closed-bar-text">
             Free messages can’t be sent to this customer right now. Send an approved template to
             restart the conversation — or switch to Team Note for an internal note.
           </div>
         </div>
       </div>
-      <button
-        type="button"
-        onClick={onSendTemplate}
-        style={{
-          display: 'inline-flex',
-          alignItems: 'center',
-          gap: '7px',
-          background: 'var(--wa-teal)',
-          color: '#fff',
-          border: 'none',
-          borderRadius: '10px',
-          padding: '10px 14px',
-          fontSize: '13px',
-          fontWeight: 600,
-          cursor: 'pointer',
-          minHeight: '42px',
-          flexShrink: 0,
-        }}
-      >
+      <button type="button" onClick={onSendTemplate} className="btn btn-lg" style={{ background: 'var(--wa-teal)', color: '#fff', flexShrink: 0 }}>
         <Sparkles size={15} />
         Send template
       </button>

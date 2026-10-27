@@ -44,42 +44,34 @@ const FAQS = [
 ];
 
 export default function HelpView({ onBack, onOpenDashboard, onOpenTemplates, onOpenAgents, onOpenSettings, isAdmin }) {
-  const card = {
-    background: 'var(--bg-surface)',
-    border: '1px solid var(--border-subtle)',
-    borderRadius: '14px',
-    padding: '18px',
-    textAlign: 'left',
-    width: '100%',
-  };
   const actionCard = (icon, title, text, onClick, adminOnly) => {
     if (adminOnly && !isAdmin) return null;
     const Icon = icon;
     return (
-      <button key={title} type="button" onClick={onClick} style={{ ...card, cursor: onClick ? 'pointer' : 'default' }}>
-        <span style={{ width: '38px', height: '38px', borderRadius: '10px', background: 'rgba(37,211,102,0.12)', color: 'var(--wa-primary)', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', marginBottom: '10px' }}>
+      <button key={title} type="button" onClick={onClick} className="action-card">
+        <span className="stat-icon" style={{ width: '38px', height: '38px' }}>
           <Icon size={18} />
         </span>
-        <span style={{ display: 'block', fontSize: '14.5px', fontWeight: 700, color: '#fff' }}>{title}</span>
-        <span style={{ display: 'block', fontSize: '12.5px', color: 'var(--text-secondary)', lineHeight: 1.55, marginTop: '4px' }}>{text}</span>
+        <span className="action-card-title">{title}</span>
+        <span className="action-card-text">{text}</span>
       </button>
     );
   };
 
   return (
-    <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', background: 'var(--bg-app)' }}>
-      <div style={{ maxWidth: '880px', margin: '0 auto', padding: '22px 18px 50px' }}>
-        <button onClick={onBack} className="btn btn-ghost" style={{ padding: '7px 11px', fontSize: '13px', gap: '6px', marginBottom: '14px' }}>
+    <div className="page-scroll">
+      <div className="page-wrap" style={{ maxWidth: '880px' }}>
+        <button onClick={onBack} className="btn btn-ghost btn-sm" style={{ marginBottom: 'var(--space-4)' }}>
           <ArrowLeft size={15} /> Back to inbox
         </button>
-        <h1 style={{ fontFamily: 'var(--font-display)', fontSize: '23px', fontWeight: 800, color: '#fff', display: 'flex', gap: '10px', alignItems: 'center' }}>
+        <h1 className="page-title" style={{ display: 'flex', gap: 'var(--space-3)', alignItems: 'center' }}>
           <LifeBuoy size={22} style={{ color: 'var(--wa-primary)' }} /> Help &amp; Support
         </h1>
-        <p style={{ fontSize: '13.5px', color: 'var(--text-secondary)', marginTop: '6px', lineHeight: 1.6 }}>
+        <p className="t-body" style={{ marginTop: 'var(--space-2)' }}>
           The fastest route to every task, and answers to the questions every WhatsApp team asks.
         </p>
 
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '12px', marginTop: '22px' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 'var(--space-3)', marginTop: 'var(--space-6)' }}>
           {actionCard(Shield, 'Connect WhatsApp number', 'Link or check your Meta WhatsApp setup — the step that takes a workspace live.', onOpenSettings, true)}
           {actionCard(Sparkles, 'Create a template', 'Build a message template and submit it for Meta approval, without leaving TeamBee.', onOpenTemplates, false)}
           {actionCard(Megaphone, 'Send a broadcast', 'Open any conversation and use the broadcast button in the chat header — or start from the dashboard checklist.', onOpenDashboard, false)}
@@ -87,29 +79,29 @@ export default function HelpView({ onBack, onOpenDashboard, onOpenTemplates, onO
           {actionCard(LayoutDashboard, 'Plans, trial & billing', 'See your plan, trial days left and workspace numbers on the owner dashboard.', onOpenDashboard, false)}
         </div>
 
-        <h2 style={{ fontFamily: 'var(--font-display)', fontSize: '17px', fontWeight: 800, color: '#fff', marginTop: '34px', marginBottom: '12px' }}>
+        <h2 className="t-h3" style={{ marginTop: 'var(--space-8)', marginBottom: 'var(--space-3)' }}>
           Frequently asked
         </h2>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '9px' }}>
+        <div className="faq" style={{ marginTop: 0 }}>
           {FAQS.map((f) => (
-            <details key={f.q} style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-subtle)', borderRadius: '12px', padding: '13px 15px' }}>
-              <summary style={{ cursor: 'pointer', fontSize: '14px', fontWeight: 600, color: '#fff' }}>{f.q}</summary>
-              <p style={{ fontSize: '13px', color: 'var(--text-secondary)', lineHeight: 1.65, marginTop: '7px' }}>{f.a}</p>
+            <details key={f.q}>
+              <summary>{f.q}</summary>
+              <p>{f.a}</p>
             </details>
           ))}
         </div>
 
-        <div style={{ ...card, marginTop: '26px', display: 'flex', gap: '16px', alignItems: 'center', flexWrap: 'wrap' }}>
-          <span style={{ width: '42px', height: '42px', borderRadius: '50%', background: 'rgba(37,211,102,0.12)', color: 'var(--wa-primary)', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+        <div className="card" style={{ marginTop: 'var(--space-6)', display: 'flex', gap: 'var(--space-4)', alignItems: 'center', flexWrap: 'wrap' }}>
+          <span className="stat-icon" style={{ width: '42px', height: '42px', borderRadius: 'var(--radius-full)', marginBottom: 0 }}>
             <MessageCircle size={20} />
           </span>
           <div style={{ flex: 1, minWidth: '220px' }}>
-            <div style={{ fontSize: '14.5px', fontWeight: 700, color: '#fff' }}>Still stuck? Talk to support on WhatsApp</div>
-            <div style={{ fontSize: '12.5px', color: 'var(--text-secondary)', marginTop: '3px', lineHeight: 1.55 }}>
+            <div className="action-card-title">Still stuck? Talk to support on WhatsApp</div>
+            <div className="action-card-text">
               Fitting, for a WhatsApp product — message TeamBee support on WhatsApp and the team will pick it up from our own inbox.
             </div>
           </div>
-          <a href={SUPPORT_WA_LINK} target="_blank" rel="noreferrer" className="btn btn-primary" style={{ padding: '10px 16px', fontSize: '13.5px', textDecoration: 'none' }}>
+          <a href={SUPPORT_WA_LINK} target="_blank" rel="noreferrer" className="btn btn-primary" style={{ textDecoration: 'none' }}>
             Chat with support
           </a>
         </div>
