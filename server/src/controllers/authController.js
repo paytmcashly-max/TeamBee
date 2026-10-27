@@ -6,6 +6,7 @@ const { getJwtSecret, verifyAccessToken, readCookie, invalidateAgentCache } = re
 const { hashSecret } = require('../services/credentialCrypto');
 const { logAuditEvent } = require('../services/auditLog');
 const { sendEmail, appBaseUrl } = require('../services/emailService');
+const { sendWelcomeEmail } = require('../services/lifecycleEmails');
 const { withSystemDb, rlsContextEnabled } = require('../db/withTenant');
 
 // Pre-auth data access (login, lookup, registration, password reset)
@@ -355,6 +356,13 @@ class AuthController {
       });
 
       await logAuditEvent({ tenantId: result.tenant.id, agentId: result.admin.id, event: 'REGISTER_TENANT', req, metadata: { slug: result.tenant.slug } });
+      // Welcome email: fire-and-forget — a mail failure (or the mail
+      // provider not being configured yet) must never fail a signup.
+      sendWelcomeEmail({
+        to: result.admin.email,
+        adminName: result.admin.name,
+        businessName: result.tenant.name,
+      }).catch((err) => console.error('[Welcome Email] failed:', err.message));
       const token = signSession(result.admin);
       setSessionCookie(res, token);
 

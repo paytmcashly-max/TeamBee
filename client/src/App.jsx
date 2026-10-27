@@ -8,6 +8,7 @@ import ResetPasswordView from './components/auth/ResetPasswordView';
 import LandingPage from './components/landing/LandingPage';
 import { TermsView, PrivacyView, RefundsView } from './components/landing/LegalViews';
 const DashboardView = lazy(() => import('./components/dashboard/DashboardView'));
+const HelpView = lazy(() => import('./components/help/HelpView'));
 import ConversationList from './components/inbox/ConversationList';
 import ChatCanvas from './components/inbox/ChatCanvas';
 import ContactSidebar from './components/inbox/ContactSidebar';
@@ -292,7 +293,18 @@ export default function App() {
           </button>
         </div>
       )}
-      {effectiveMainView === 'dashboard' ? (
+      {effectiveMainView === 'help' ? (
+        <Suspense fallback={null}>
+          <HelpView
+            onBack={() => setMainView('inbox')}
+            onOpenDashboard={() => setMainView('dashboard')}
+            onOpenTemplates={() => setIsTemplateModalOpen(true)}
+            onOpenAgents={() => setIsAgentsModalOpen(true)}
+            onOpenSettings={() => setIsSettingsOpen(true)}
+            isAdmin={agent.role === 'ADMIN' || agent.role === 'SUPERVISOR'}
+          />
+        </Suspense>
+      ) : effectiveMainView === 'dashboard' ? (
         <Suspense fallback={null}>
           <DashboardView
             onOpenInbox={() => setMainView('inbox')}
@@ -312,6 +324,7 @@ export default function App() {
           onOpenBroadcasts={() => setIsBroadcastModalOpen(true)}
           onOpenAgents={() => setIsAgentsModalOpen(true)}
           onOpenDashboard={() => setMainView('dashboard')}
+          onOpenHelp={() => setMainView('help')}
         />
 
         {/* Column 2: Active Chat Canvas */}

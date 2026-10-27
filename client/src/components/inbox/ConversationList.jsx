@@ -14,6 +14,7 @@ import {
   Radio,
   Sparkles,
   LogOut,
+  LifeBuoy,
   ArrowLeftRight,
   MoreVertical,
   RotateCcw,
@@ -28,6 +29,7 @@ export default function ConversationList({
   onOpenBroadcasts,
   onOpenAgents,
   onOpenDashboard,
+  onOpenHelp,
 }) {
   const { agent, tenant, isAdmin, logout } = useAuth();
   const toast = useToast();
@@ -358,6 +360,17 @@ export default function ConversationList({
                       >
                         <Shield size={15} style={{ color: 'var(--text-secondary)', flexShrink: 0 }} />
                         Meta API Settings
+                      </button>
+                    )}
+                    {onOpenHelp && (
+                      <button
+                        type="button"
+                        role="menuitem"
+                        style={menuItemStyle(false)}
+                        onClick={() => { setMenuOpen(false); onOpenHelp(); }}
+                      >
+                        <LifeBuoy size={15} style={{ color: 'var(--text-secondary)', flexShrink: 0 }} />
+                        Help &amp; Support
                       </button>
                     )}
                     <div style={{ height: '1px', background: 'var(--border-subtle)', margin: '5px 4px' }} />

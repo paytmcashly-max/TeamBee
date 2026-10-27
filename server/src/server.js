@@ -12,6 +12,7 @@ const WebhookParserService = require('./services/webhookParserService');
 const { drainPendingBroadcasts } = require('./services/broadcastWorker');
 const { startMaintenanceScheduler, stopMaintenanceScheduler } = require('./queues/maintenanceQueue');
 const { expireSnoozedChats } = require('./services/snoozeService');
+const { drainTrialReminders } = require('./services/lifecycleEmails');
 const webhookRoutes = require('./routes/webhookRoutes');
 const authRoutes = require('./routes/authRoutes');
 const tenantRoutes = require('./routes/tenantRoutes');
@@ -314,6 +315,9 @@ async function start() {
           scheduleBackgroundRecovery('Webhook', () => WebhookParserService.drainPendingWebhookEvents());
           scheduleBackgroundRecovery('Broadcast', () => drainPendingBroadcasts());
           scheduleBackgroundRecovery('Snooze', () => expireSnoozedChats());
+          // Trial-ending reminders: the service self-throttles to one
+          // scan per 6h and no-ops until email is configured.
+          scheduleBackgroundRecovery('TrialReminders', () => drainTrialReminders());
         };
         startMaintenanceScheduler(runMaintenanceDrains)
           .then((mode) => {
