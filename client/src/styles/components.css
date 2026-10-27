@@ -529,3 +529,10 @@ button.action-card:hover { border-color: var(--border-medium); background: var(-
 .quick-reactions { display: flex; align-items: center; gap: 3px; flex-shrink: 0; }
 .reaction-btn { background: none; border: none; font-size: var(--fs-small); cursor: pointer; padding: 3px var(--space-1); border-radius: var(--radius-sm); }
 .header-actions { display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
+
+/* ---------- Legal pages ---------- */
+.legal-wrap { max-width: 760px; margin-inline: auto; padding: var(--space-6) var(--space-5) 60px; }
+.legal-title { font-family: var(--font-display); font-size: 26px; font-weight: 800; color: var(--text-main); margin-bottom: 6px; }
+.legal-updated { font-size: var(--fs-caption); color: var(--text-muted); margin-bottom: var(--space-6); }
+.legal-content { font-size: var(--fs-body-sm); color: var(--text-secondary); line-height: 1.75; display: flex; flex-direction: column; gap: var(--space-3); }
+.legal-content strong { color: var(--text-main); }
