@@ -535,44 +535,14 @@ export default function ChatCanvas({ onOpenTemplatePicker, onToggleSidebar, isSi
   return (
     <main className="col-chat-canvas">
       {/* 1. Chat Header (Permanently pinned at top, safe from notches and dynamic island) */}
-      <div
-        className="chat-canvas-header"
-        style={{
-          padding: '10px 14px',
-          background: 'rgba(14, 21, 36, 0.98)',
-          backdropFilter: 'blur(12px)',
-          borderBottom: '1px solid var(--border-subtle)',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          zIndex: 50,
-          gap: '8px',
-          flexShrink: 0,
-          position: 'sticky',
-          top: 0,
-          width: '100%',
-        }}
-      >
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', minWidth: 0, flex: 1 }}>
+      <div className="chat-canvas-header">
+        <div className="fx" style={{ gap: 'var(--space-2)', minWidth: 0, flex: 1 }}>
           {/* Mobile Back Button: High contrast, easy tap */}
           {onBack && (
             <button
               type="button"
               onClick={onBack}
-              className="btn-mobile-back"
-              style={{
-                width: '36px',
-                height: '36px',
-                minWidth: '36px',
-                borderRadius: '50%',
-                background: 'rgba(255, 255, 255, 0.1)',
-                color: '#fff',
-                border: 'none',
-                alignItems: 'center',
-                justifyContent: 'center',
-                cursor: 'pointer',
-                flexShrink: 0,
-              }}
+              className="btn-mobile-back btn-back"
               title="Back to conversation queue"
             >
               <ArrowLeft size={19} />
@@ -580,68 +550,25 @@ export default function ChatCanvas({ onOpenTemplatePicker, onToggleSidebar, isSi
           )}
 
           {/* Customer Avatar */}
-          <div
-            style={{
-              width: '38px',
-              height: '38px',
-              minWidth: '38px',
-              borderRadius: '50%',
-              background: 'linear-gradient(135deg, #10b981 0%, #047857 100%)',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              fontSize: '15px',
-              fontWeight: '700',
-              color: '#fff',
-              flexShrink: 0,
-            }}
-          >
+          <div className="chat-avatar">
             {avatarLetter}
           </div>
 
           <div style={{ minWidth: 0, flex: 1 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-              <span
-                style={{
-                  fontWeight: '700',
-                  fontSize: '15px',
-                  color: '#fff',
-                  whiteSpace: 'nowrap',
-                  overflow: 'hidden',
-                  textOverflow: 'ellipsis',
-                  display: 'block',
-                }}
-              >
-                {displayName}
-              </span>
-              <span
-                className="desktop-only-header-control"
-                style={{
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  gap: '3px',
-                  fontSize: '10px',
-                  background: 'rgba(37, 211, 102, 0.15)',
-                  color: '#25D366',
-                  padding: '1px 6px',
-                  borderRadius: '4px',
-                  fontWeight: '600',
-                  whiteSpace: 'nowrap',
-                }}
-              >
+              <span className="chat-title">{displayName}</span>
+              <span className="desktop-only-header-control meta-chip" style={{ display: 'inline-flex', alignItems: 'center', gap: '3px' }}>
                 <CheckCheck size={11} /> Meta Official
               </span>
             </div>
             {subText && (
-              <div style={{ fontSize: '11px', color: 'var(--text-secondary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                {subText}
-              </div>
+              <div className="chat-sub">{subText}</div>
             )}
           </div>
         </div>
 
         {/* Action Controls: Status, Assignment (Desktop), Resolution & CRM Sidebar Toggle */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexShrink: 0 }}>
+        <div className="header-actions">
           {/* Snooze / follow-up reminder */}
           <div style={{ position: 'relative' }}>
             <button
@@ -816,31 +743,19 @@ export default function ChatCanvas({ onOpenTemplatePicker, onToggleSidebar, isSi
       </div>
 
       {/* 2. WhatsApp 24-Hour Messaging Window Notice */}
-      <div
-        style={{
-          background: messagingWindow.isOpen ? 'rgba(16, 185, 129, 0.08)' : 'rgba(239, 68, 68, 0.1)',
-          borderBottom: `1px solid ${messagingWindow.isOpen ? 'rgba(16, 185, 129, 0.2)' : 'rgba(239, 68, 68, 0.25)'}`,
-          padding: '6px 16px',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          fontSize: '11.5px',
-          gap: '8px',
-          flexShrink: 0,
-        }}
-      >
-        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', minWidth: 0, overflow: 'hidden' }}>
+      <div className={`window-bar ${messagingWindow.isOpen ? 'open' : 'closed'}`}>
+        <div className="fx" style={{ gap: '6px', minWidth: 0, overflow: 'hidden' }}>
           {messagingWindow.isOpen ? (
             <>
               <Clock size={13} style={{ color: '#10b981', flexShrink: 0 }} />
-              <span style={{ color: '#6ee7b7', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+              <span className="ellipsis">
                 Meta 24h Window Active: {(() => { const hrs = parseFloat(messagingWindow.hoursRemaining); return Number.isFinite(hrs) ? (hrs >= 1 ? `${hrs.toFixed(1)}h` : `${Math.max(1, Math.round(hrs * 60))}m`) : '—'; })()} remaining
               </span>
             </>
           ) : (
             <>
               <AlertTriangle size={13} style={{ color: '#f87171', flexShrink: 0 }} />
-              <span style={{ color: '#fca5a5', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+              <span className="ellipsis">
                 24h Window Expired: Send template to re-engage
               </span>
             </>
@@ -849,8 +764,8 @@ export default function ChatCanvas({ onOpenTemplatePicker, onToggleSidebar, isSi
 
         <button
           onClick={onOpenTemplatePicker}
-          className="btn btn-ghost"
-          style={{ padding: '2px 6px', fontSize: '11px', color: '#25D366', gap: '4px', flexShrink: 0 }}
+          className="btn btn-ghost btn-xs"
+          style={{ color: '#25d366', flexShrink: 0 }}
         >
           <Sparkles size={12} /> Template
         </button>
@@ -863,22 +778,13 @@ export default function ChatCanvas({ onOpenTemplatePicker, onToggleSidebar, isSi
         aria-label="Chat messages"
         ref={messagesContainerRef}
         onScroll={handleMessageScroll}
-        style={{
-          flex: '1 1 0%',
-          minHeight: 0,
-          overflowY: 'auto',
-          padding: '16px',
-          display: 'flex',
-          flexDirection: 'column',
-          gap: '10px',
-        }}
        >
         {messagePagination?.hasMore && (
           <button
             type="button"
             onClick={() => loadOlderMessages().catch((error) => toast.error(error.message))}
-            className="btn btn-secondary"
-            style={{ alignSelf: 'center', fontSize: '11px', padding: '5px 10px' }}
+            className="btn btn-secondary btn-xs"
+            style={{ alignSelf: 'center' }}
           >
             Load older messages
           </button>
@@ -891,7 +797,7 @@ export default function ChatCanvas({ onOpenTemplatePicker, onToggleSidebar, isSi
             <div className="skel skel-bubble right" style={{ width: '42%' }} />
           </div>
         ) : messages.length === 0 ? (
-          <div style={{ textAlign: 'center', color: 'var(--text-muted)', padding: '40px 0' }}>
+          <div className="t-caption" style={{ textAlign: 'center', padding: 'var(--space-10) 0' }}>
             No messages logged in this session yet.
           </div>
         ) : (
@@ -1473,45 +1379,14 @@ export default function ChatCanvas({ onOpenTemplatePicker, onToggleSidebar, isSi
       )}
 
       {/* 6. Interactive Composer Container */}
-      <div
-        className="chat-composer-box"
-        style={{
-          padding: '10px 12px',
-          paddingBottom: 'max(10px, env(safe-area-inset-bottom, 10px))',
-          background: 'rgba(14, 21, 36, 0.98)',
-          borderTop: '1px solid var(--border-subtle)',
-        }}
-      >
+      <div className="chat-composer-box">
         {/* 6.1 Mode Switcher Tabs */}
-        <div
-          className="composer-mode-row"
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            marginBottom: '6px',
-            overflowX: 'auto',
-            gap: '8px',
-          }}
-        >
-          <div style={{ display: 'flex', alignItems: 'center', gap: '4px', flexShrink: 0 }}>
+        <div className="composer-mode-row">
+          <div className="fx" style={{ gap: 'var(--space-1)', flexShrink: 0 }}>
             <button
               type="button"
-              className="composer-mode-tab"
+              className={`composer-mode-tab mode-tab${composeMode === 'WHATSAPP' ? ' active-green' : ''}`}
               onClick={() => setComposeMode('WHATSAPP')}
-              style={{
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: '4px',
-                padding: '4px 10px',
-                borderRadius: '6px',
-                fontSize: '11.5px',
-                fontWeight: '600',
-                cursor: 'pointer',
-                border: 'none',
-                background: composeMode === 'WHATSAPP' ? 'rgba(37, 211, 102, 0.18)' : 'transparent',
-                color: composeMode === 'WHATSAPP' ? '#25D366' : 'var(--text-secondary)',
-              }}
             >
               <MessageSquare size={12} />
               <span>WhatsApp</span>
@@ -1519,21 +1394,8 @@ export default function ChatCanvas({ onOpenTemplatePicker, onToggleSidebar, isSi
 
             <button
               type="button"
-              className="composer-mode-tab"
+              className={`composer-mode-tab mode-tab${composeMode === 'NOTE' ? ' active-amber' : ''}`}
               onClick={() => setComposeMode('NOTE')}
-              style={{
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: '4px',
-                padding: '4px 10px',
-                borderRadius: '6px',
-                fontSize: '11.5px',
-                fontWeight: '600',
-                cursor: 'pointer',
-                border: 'none',
-                background: composeMode === 'NOTE' ? 'rgba(245, 158, 11, 0.18)' : 'transparent',
-                color: composeMode === 'NOTE' ? '#f59e0b' : 'var(--text-secondary)',
-              }}
             >
               <Lock size={11} />
               <span>Team Note</span>
@@ -1541,21 +1403,8 @@ export default function ChatCanvas({ onOpenTemplatePicker, onToggleSidebar, isSi
 
             <button
               type="button"
-              className="composer-mode-tab"
+              className={`composer-mode-tab mode-tab${composeMode === 'INTERACTIVE' ? ' active-sky' : ''}`}
               onClick={() => setComposeMode('INTERACTIVE')}
-              style={{
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: '4px',
-                padding: '4px 10px',
-                borderRadius: '6px',
-                fontSize: '11.5px',
-                fontWeight: '600',
-                cursor: 'pointer',
-                border: 'none',
-                background: composeMode === 'INTERACTIVE' ? 'rgba(56, 189, 248, 0.18)' : 'transparent',
-                color: composeMode === 'INTERACTIVE' ? '#38bdf8' : 'var(--text-secondary)',
-              }}
             >
               <Sparkles size={11} />
               <span>Buttons</span>
@@ -1563,20 +1412,13 @@ export default function ChatCanvas({ onOpenTemplatePicker, onToggleSidebar, isSi
           </div>
 
           {/* Quick Reaction Pills */}
-          <div className="quick-reactions" style={{ display: 'flex', alignItems: 'center', gap: '3px', flexShrink: 0 }}>
+          <div className="quick-reactions">
             {['👍', '🙏', '❤️', '🎓', '📚'].map((emoji) => (
               <button
                 key={emoji}
                 type="button"
                 onClick={() => insertEmoji(emoji)}
-                style={{
-                  background: 'none',
-                  border: 'none',
-                  fontSize: '13px',
-                  cursor: 'pointer',
-                  padding: '3px 4px',
-                  borderRadius: '4px',
-                }}
+                className="reaction-btn"
                 title={`Insert ${emoji}`}
               >
                 {emoji}
