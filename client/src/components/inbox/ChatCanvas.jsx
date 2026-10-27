@@ -686,8 +686,7 @@ export default function ChatCanvas({ onOpenTemplatePicker, onToggleSidebar, isSi
             ) : isUnassigned ? (
               <button
                 onClick={() => assignChat(activeChat.id, agent.id).catch((err) => toast.error(err.message))}
-                className="btn btn-primary"
-                style={{ padding: '5px 10px', fontSize: '11.5px' }}
+                className="btn btn-primary btn-xs"
               >
                 <UserCheck size={13} /> Claim
               </button>
@@ -1151,28 +1150,12 @@ export default function ChatCanvas({ onOpenTemplatePicker, onToggleSidebar, isSi
 
       {/* 4. Quick Replies Flyout */}
       {showQuickReplies && (
-        <div
-          style={{
-            position: 'absolute',
-            bottom: '115px',
-            left: '12px',
-            right: '12px',
-            background: 'var(--bg-surface)',
-            border: '1px solid var(--border-medium)',
-            borderRadius: 'var(--radius-lg)',
-            padding: '12px',
-            boxShadow: 'var(--shadow-card)',
-            zIndex: 20,
-            maxHeight: '320px',
-            overflowY: 'auto',
-          }}
-        >
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
-            <span style={{ fontSize: '12px', fontWeight: '600', color: '#fff', display: 'inline-flex', alignItems: 'center', gap: '6px' }}><Zap size={13} /> Quick Replies</span>
+        <div className="flyout">
+          <div className="flyout-head">
+            <span className="flyout-title"><Zap size={13} /> Quick Replies</span>
             <button
               onClick={() => { setShowQuickReplies(false); setQrForm(null); setQrError(null); }}
-              className="btn btn-ghost"
-              style={{ padding: '2px 6px', fontSize: '11px' }}
+              className="btn btn-ghost btn-xs"
             >
               ✕ Close
             </button>
@@ -1185,14 +1168,14 @@ export default function ChatCanvas({ onOpenTemplatePicker, onToggleSidebar, isSi
                 onChange={(e) => setQrForm({ ...qrForm, title: e.target.value })}
                 placeholder="Title, e.g. Price list"
                 maxLength={80}
-                style={{ background: 'var(--bg-input)', border: '1px solid var(--border-medium)', borderRadius: '7px', padding: '8px 10px', color: '#fff', fontSize: '12px' }}
+                className="input input-sm"
               />
               <input
                 value={qrForm.shortcut || ''}
                 onChange={(e) => setQrForm({ ...qrForm, shortcut: e.target.value })}
                 placeholder="Shortcut (optional), e.g. price — type /price in the composer"
                 maxLength={40}
-                style={{ background: 'var(--bg-input)', border: '1px solid var(--border-medium)', borderRadius: '7px', padding: '8px 10px', color: '#fff', fontSize: '12px' }}
+                className="input input-sm"
               />
               <textarea
                 value={qrForm.body}
@@ -1200,14 +1183,14 @@ export default function ChatCanvas({ onOpenTemplatePicker, onToggleSidebar, isSi
                 placeholder="The message text agents will insert…"
                 rows={3}
                 maxLength={1000}
-                style={{ background: 'var(--bg-input)', border: '1px solid var(--border-medium)', borderRadius: '7px', padding: '8px 10px', color: '#fff', fontSize: '12px', resize: 'vertical' }}
+                className="input input-sm input-area"
               />
               {qrError && <div style={{ fontSize: '11.5px', color: '#fca5a5' }}>{qrError}</div>}
               <div style={{ display: 'flex', gap: '8px' }}>
-                <button onClick={saveQrForm} className="btn btn-primary" style={{ padding: '7px 14px', fontSize: '12px' }}>
+                <button onClick={saveQrForm} className="btn btn-primary btn-xs">
                   {qrForm.id ? 'Save changes' : 'Add quick reply'}
                 </button>
-                <button onClick={() => { setQrForm(null); setQrError(null); }} className="btn btn-ghost" style={{ padding: '7px 10px', fontSize: '12px' }}>
+                <button onClick={() => { setQrForm(null); setQrError(null); }} className="btn btn-ghost btn-xs">
                   Cancel
                 </button>
               </div>
@@ -1219,14 +1202,14 @@ export default function ChatCanvas({ onOpenTemplatePicker, onToggleSidebar, isSi
                 onChange={(e) => setQrSearch(e.target.value)}
                 placeholder="Search replies or shortcuts…"
                 autoFocus
-                style={{ width: '100%', background: 'var(--bg-input)', border: '1px solid var(--border-medium)', borderRadius: '7px', padding: '8px 10px', color: '#fff', fontSize: '12px', marginBottom: '9px' }}
+                className="input input-sm" style={{ marginBottom: '9px' }}
               />
               {visibleQuickReplies.length === 0 ? (
                 <div style={{ fontSize: '12px', color: 'var(--text-muted)', padding: '6px 2px 10px 2px' }}>
                   No quick replies match “{qrSearch}”.
                 </div>
               ) : (
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '6px' }}>
+                <div className="qr-grid">
                   {visibleQuickReplies.map((qr) => (
                     <div key={qr.id || qr.title} style={{ position: 'relative' }}>
                       <button
@@ -1259,8 +1242,7 @@ export default function ChatCanvas({ onOpenTemplatePicker, onToggleSidebar, isSi
                             type="button"
                             title="Edit"
                             onClick={() => { setQrForm({ id: qr.id, title: qr.title, body: qr.body, shortcut: qr.shortcut || '' }); setQrError(null); }}
-                            className="btn btn-ghost"
-                            style={{ padding: '2px 5px', fontSize: '10.5px' }}
+                            className="btn btn-ghost btn-xs"
                           >
                             ✎
                           </button>
@@ -1321,8 +1303,7 @@ export default function ChatCanvas({ onOpenTemplatePicker, onToggleSidebar, isSi
             <span style={{ fontSize: '11.5px', fontWeight: '600', color: '#fff', display: 'inline-flex', alignItems: 'center', gap: '6px' }}><Paperclip size={13} /> Attach Media / Doc</span>
             <button
               onClick={() => setShowAttachmentMenu(false)}
-              className="btn btn-ghost"
-              style={{ padding: '2px 6px', fontSize: '11px' }}
+              className="btn btn-ghost btn-xs"
             >
               ✕
             </button>
@@ -1510,8 +1491,7 @@ export default function ChatCanvas({ onOpenTemplatePicker, onToggleSidebar, isSi
                         setNewBtnInput('');
                       }
                     }}
-                    className="btn btn-secondary"
-                    style={{ padding: '2px 6px', fontSize: '11px' }}
+                    className="btn btn-secondary btn-xs"
                   >
                     +
                   </button>

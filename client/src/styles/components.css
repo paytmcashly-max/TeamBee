@@ -536,3 +536,16 @@ button.action-card:hover { border-color: var(--border-medium); background: var(-
 .legal-updated { font-size: var(--fs-caption); color: var(--text-muted); margin-bottom: var(--space-6); }
 .legal-content { font-size: var(--fs-body-sm); color: var(--text-secondary); line-height: 1.75; display: flex; flex-direction: column; gap: var(--space-3); }
 .legal-content strong { color: var(--text-main); }
+
+/* ---------- Flyouts & small inputs (composer panels) ---------- */
+.flyout {
+  position: absolute; bottom: 115px; left: 12px; right: 12px;
+  background: var(--bg-surface); border: 1px solid var(--border-medium);
+  border-radius: var(--radius-lg); padding: var(--space-3);
+  box-shadow: var(--shadow-card); z-index: 20; max-height: 320px; overflow-y: auto;
+}
+.flyout-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: var(--space-2); }
+.flyout-title { font-size: var(--fs-caption); font-weight: 600; color: var(--text-main); display: inline-flex; align-items: center; gap: 6px; }
+.input-sm { height: 34px; font-size: 12.5px; padding: 0 10px; border-radius: 7px; }
+.input-area { height: auto; min-height: 64px; padding: var(--space-2) 10px; resize: vertical; border-radius: 7px; }
+.qr-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 6px; }
