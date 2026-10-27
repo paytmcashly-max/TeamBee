@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef, lazy, Suspense } from 'react';
 import { useAuth } from './context/AuthContext';
+import CommandPalette from './components/common/CommandPalette';
 import { useChat } from './context/ChatContext';
 import LoginView from './components/auth/LoginView';
 import SignupView from './components/auth/SignupView';
@@ -352,6 +353,17 @@ export default function App() {
         )}
       </div>
       )}
+
+      <CommandPalette
+        onOpenDashboard={() => setMainView('dashboard')}
+        onOpenInbox={() => setMainView('inbox')}
+        onOpenHelp={() => setMainView('help')}
+        onOpenSettings={() => setIsSettingsOpen(true)}
+        onOpenTemplates={() => setIsTemplateModalOpen(true)}
+        onOpenBroadcasts={() => setIsBroadcastModalOpen(true)}
+        onOpenAgents={() => setIsAgentsModalOpen(true)}
+        isAdmin={agent.role === 'ADMIN' || agent.role === 'SUPERVISOR'}
+      />
 
       {/* Modals & Consoles */}
       <Suspense fallback={null}>
