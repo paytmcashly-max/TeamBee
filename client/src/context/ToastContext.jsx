@@ -20,7 +20,9 @@ export function ToastProvider({ children }) {
       if (!message) return;
       idRef.current += 1;
       const id = idRef.current;
-      setToasts((prev) => [...prev.slice(-2), { id, type, message: String(message) }]);
+      // One toast at a time (the Documenso discipline): a new toast
+      // replaces whatever is showing instead of stacking up.
+      setToasts([{ id, type, message: String(message) }]);
       setTimeout(() => dismiss(id), 4200);
     },
     [dismiss]

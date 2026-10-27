@@ -549,3 +549,15 @@ button.action-card:hover { border-color: var(--border-medium); background: var(-
 .input-sm { height: 34px; font-size: 12.5px; padding: 0 10px; border-radius: 7px; }
 .input-area { height: auto; min-height: 64px; padding: var(--space-2) 10px; resize: vertical; border-radius: 7px; }
 .qr-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 6px; }
+
+/* ---------- Composer NOTE mode (Chatwoot pattern) ----------
+   In Private Note mode the WHOLE composer recolours amber, so an
+   internal note can never be mistaken for a customer message. */
+.chat-composer-box.note-mode {
+  background: rgba(245, 158, 11, 0.08);
+  border-top-color: rgba(245, 158, 11, 0.45);
+}
+.chat-composer-box.note-mode .chat-textarea {
+  background: rgba(245, 158, 11, 0.06);
+  border-color: rgba(245, 158, 11, 0.4);
+}

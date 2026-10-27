@@ -1360,7 +1360,7 @@ export default function ChatCanvas({ onOpenTemplatePicker, onToggleSidebar, isSi
       )}
 
       {/* 6. Interactive Composer Container */}
-      <div className="chat-composer-box">
+      <div className={`chat-composer-box${composeMode === 'NOTE' ? ' note-mode' : ''}`}>
         {/* 6.1 Mode Switcher Tabs */}
         <div className="composer-mode-row">
           <div className="fx" style={{ gap: 'var(--space-1)', flexShrink: 0 }}>
