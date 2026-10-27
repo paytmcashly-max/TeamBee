@@ -70,12 +70,28 @@ export default function DashboardView({ onOpenInbox, onOpenSettings, onOpenTempl
     }
   };
 
-  const statCard = (icon, label, value, sub) => (
+  // Plausible pattern: a KPI ships with its comparison. Delta vs the
+  // same metric yesterday (server-provided); hidden when there is no
+  // yesterday baseline worth showing.
+  const deltaLine = (today, yesterday) => {
+    if (yesterday === undefined || yesterday === null) return null;
+    if (yesterday === 0 && today === 0) return null;
+    if (yesterday === 0) return <div className="stat-delta up">New today — none yesterday</div>;
+    const pct = Math.round(((today - yesterday) / yesterday) * 100);
+    if (pct === 0) return <div className="stat-delta flat">Same as yesterday ({yesterday})</div>;
+    return (
+      <div className={`stat-delta ${pct > 0 ? 'up' : 'down'}`}>
+        {pct > 0 ? '↑' : '↓'} {Math.abs(pct)}% vs yesterday ({yesterday})
+      </div>
+    );
+  };
+  const statCard = (icon, label, value, sub, delta) => (
     <div className="card" style={{ padding: 'var(--space-5)' }}>
       <span className="stat-icon">{icon}</span>
       <div className="stat-value">{value}</div>
       <div className="stat-label">{label}</div>
       {sub && <div className="stat-sub">{sub}</div>}
+      {delta}
     </div>
   );
 
@@ -129,12 +145,12 @@ export default function DashboardView({ onOpenInbox, onOpenSettings, onOpenTempl
         ) : data ? (
           <>
             <div className="stat-grid">
-              {statCard(<MessageSquare size={17} />, 'Chats started today', data.stats.chatsToday)}
+              {statCard(<MessageSquare size={17} />, 'Chats started today', data.stats.chatsToday, null, deltaLine(data.stats.chatsToday, data.stats.yesterday?.chats))}
               {statCard(<Inbox size={17} />, 'Open chats', data.stats.openChats, `${data.stats.unassignedChats} waiting for an owner`)}
               {statCard(<UserX size={17} />, 'Unassigned', data.stats.unassignedChats)}
-              {statCard(<CheckCircle2 size={17} />, 'Resolved today', data.stats.resolvedToday)}
-              {statCard(<ArrowDownLeft size={17} />, 'Messages received today', data.stats.messagesInToday)}
-              {statCard(<ArrowUpRight size={17} />, 'Replies sent today', data.stats.messagesOutToday)}
+              {statCard(<CheckCircle2 size={17} />, 'Resolved today', data.stats.resolvedToday, null, deltaLine(data.stats.resolvedToday, data.stats.yesterday?.resolved))}
+              {statCard(<ArrowDownLeft size={17} />, 'Messages received today', data.stats.messagesInToday, null, deltaLine(data.stats.messagesInToday, data.stats.yesterday?.messagesIn))}
+              {statCard(<ArrowUpRight size={17} />, 'Replies sent today', data.stats.messagesOutToday, null, deltaLine(data.stats.messagesOutToday, data.stats.yesterday?.messagesOut))}
               {statCard(<Users size={17} />, 'Team online', `${data.stats.agentsOnline}/${data.stats.agentsTotal}`)}
               {statCard(<Megaphone size={17} />, 'Broadcasts sent', data.stats.broadcastsTotal)}
             </div>

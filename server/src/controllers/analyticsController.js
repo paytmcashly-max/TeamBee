@@ -38,6 +38,10 @@ class AnalyticsController {
         return res.status(404).json({ success: false, error: 'Tenant not found' });
       }
       const todayStart = startOfToday(tenant.officeHoursTimezone || 'Asia/Kolkata');
+      // Yesterday's window for KPI deltas (Plausible pattern: every
+      // number ships with its comparison). Fixed-offset zones (IST
+      // included) make today-minus-24h exactly yesterday's start.
+      const yesterdayStart = new Date(todayStart.getTime() - 86400000);
 
       const [
         chatsToday,
@@ -52,6 +56,10 @@ class AnalyticsController {
         templatesCustom,
         broadcastsTotal,
         outboundTotal,
+        chatsYesterday,
+        resolvedYesterday,
+        messagesInYesterday,
+        messagesOutYesterday,
       ] = await req.db((db) =>
         Promise.all([
         db.chat.count({ where: { tenantId, createdAt: { gte: todayStart } } }),
@@ -68,6 +76,10 @@ class AnalyticsController {
         }),
         db.broadcast.count({ where: { tenantId } }),
         db.message.count({ where: { tenantId, direction: 'OUTBOUND' } }),
+        db.chat.count({ where: { tenantId, createdAt: { gte: yesterdayStart, lt: todayStart } } }),
+        db.chat.count({ where: { tenantId, status: 'RESOLVED', updatedAt: { gte: yesterdayStart, lt: todayStart } } }),
+        db.message.count({ where: { tenantId, direction: 'INBOUND', createdAt: { gte: yesterdayStart, lt: todayStart } } }),
+        db.message.count({ where: { tenantId, direction: 'OUTBOUND', createdAt: { gte: yesterdayStart, lt: todayStart } } }),
         ])
       );
 
@@ -83,6 +95,12 @@ class AnalyticsController {
           agentsTotal,
           agentsOnline,
           broadcastsTotal,
+          yesterday: {
+            chats: chatsYesterday,
+            resolved: resolvedYesterday,
+            messagesIn: messagesInYesterday,
+            messagesOut: messagesOutYesterday,
+          },
         },
         checklist: {
           hasWhatsApp: Boolean(tenant.phoneNumberId),
