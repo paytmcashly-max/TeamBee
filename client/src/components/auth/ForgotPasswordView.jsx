@@ -4,7 +4,7 @@ import { MailQuestion, ArrowLeft, CheckCircle2 } from 'lucide-react';
 // Self-serve "forgot password": asks the server to email a reset link.
 // The server's answer is identical whether or not the email exists, and
 // this screen mirrors that — it never reveals if an account was found.
-export default function ForgotPasswordView({ onBack }) {
+export default function ForgotPasswordView({ onBack, onHome }) {
   const [email, setEmail] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [sent, setSent] = useState(false);
@@ -63,9 +63,16 @@ export default function ForgotPasswordView({ onBack }) {
                 {submitting ? 'Sending…' : 'Email me a reset link'}
               </button>
             </form>
-            <button onClick={onBack} className="btn btn-ghost" style={{ padding: '8px 11px', fontSize: '13px', gap: '6px', marginTop: '12px' }}>
-              <ArrowLeft size={14} /> Back to sign in
-            </button>
+            <div style={{ display: 'flex', gap: '4px', alignItems: 'center', marginTop: '12px' }}>
+              <button onClick={onBack} className="btn btn-ghost" style={{ padding: '8px 11px', fontSize: '13px', gap: '6px' }}>
+                <ArrowLeft size={14} /> Back to sign in
+              </button>
+              {onHome && (
+                <button onClick={onHome} className="btn btn-ghost" style={{ padding: '8px 11px', fontSize: '13px' }}>
+                  Back to home
+                </button>
+              )}
+            </div>
           </>
         )}
       </div>

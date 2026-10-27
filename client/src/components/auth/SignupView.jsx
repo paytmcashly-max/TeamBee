@@ -2,17 +2,21 @@ import React, { useState } from 'react';
 import { MessageSquare, ArrowLeft, Eye, EyeOff } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { useToast } from '../../context/ToastContext';
-import { TRIAL_DAYS } from '../../data/plans';
+import { PLANS, TRIAL_DAYS } from '../../data/plans';
 
 // Public self-serve signup. Creates the workspace + first ADMIN via
 // POST /api/auth/register-tenant and lands the user inside the product
 // on a 14-day trial. If registration is still invite-gated on the
 // server, the form says so plainly and offers an invite-code field.
-export default function SignupView({ onBack, onShowLogin }) {
+export default function SignupView({ onBack, onShowLogin, initialPlan = 'PRO', onShowTerms, onShowPrivacy }) {
   const { signup } = useAuth();
   const toast = useToast();
 
   const [form, setForm] = useState({ businessName: '', adminName: '', email: '', password: '', inviteCode: '' });
+  // The plan chosen here (preselected from the pricing section) is what
+  // applies when the trial ends; the trial itself always runs on Pro.
+  const [plan, setPlan] = useState(() => (PLANS.some((p) => p.key === initialPlan) ? initialPlan : 'PRO'));
+  const selectedPlan = PLANS.find((p) => p.key === plan) || PLANS[PLANS.length - 1];
   const [showPassword, setShowPassword] = useState(false);
   const [inviteNeeded, setInviteNeeded] = useState(false);
   const [error, setError] = useState('');
@@ -36,7 +40,7 @@ export default function SignupView({ onBack, onShowLogin }) {
     setError('');
     setSubmitting(true);
     try {
-      await signup(form);
+      await signup({ ...form, plan });
       toast.success(`Welcome to TeamBee — your ${TRIAL_DAYS}-day free trial has started.`);
       // App re-renders into the product because the session is now set.
     } catch (err) {
@@ -65,7 +69,10 @@ export default function SignupView({ onBack, onShowLogin }) {
             <h1 style={{ fontFamily: 'var(--font-display)', fontSize: '20px', fontWeight: 800, color: '#fff' }}>Create your workspace</h1>
           </div>
           <p style={{ fontSize: '13px', color: 'var(--text-secondary)', lineHeight: 1.55, marginBottom: '18px' }}>
-            Start your {TRIAL_DAYS}-day free trial of TeamBee Pro. No card required — connect WhatsApp when you are ready.
+            Start your {TRIAL_DAYS}-day free trial — every workspace gets full Pro features during the trial.
+            Afterwards your <strong style={{ color: '#e2e8f0' }}>{selectedPlan.name}</strong> plan
+            (₹{selectedPlan.price.toLocaleString('en-IN')}/month + GST) applies unless you change it.
+            No card required — connect WhatsApp when you are ready.
           </p>
 
           <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '13px' }}>
@@ -99,6 +106,53 @@ export default function SignupView({ onBack, onShowLogin }) {
                 </button>
               </div>
             </div>
+            <div>
+              <span style={labelStyle} id="su-plan-label">Your plan after the trial</span>
+              <div role="radiogroup" aria-labelledby="su-plan-label" style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                {PLANS.map((p) => {
+                  const selected = plan === p.key;
+                  return (
+                    <button
+                      key={p.key}
+                      type="button"
+                      role="radio"
+                      aria-checked={selected}
+                      onClick={() => setPlan(p.key)}
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '10px',
+                        width: '100%',
+                        textAlign: 'left',
+                        background: selected ? 'rgba(37, 211, 102, 0.07)' : 'var(--bg-input)',
+                        border: selected ? '1px solid rgba(37, 211, 102, 0.6)' : '1px solid var(--border-medium)',
+                        borderRadius: '10px',
+                        padding: '10px 12px',
+                        cursor: 'pointer',
+                      }}
+                    >
+                      <span style={{ flex: 1, minWidth: 0 }}>
+                        <span style={{ display: 'block', fontSize: '13.5px', fontWeight: 700, color: '#fff' }}>
+                          {p.name}
+                          {p.popular && (
+                            <span style={{ marginLeft: '8px', fontSize: '10px', fontWeight: 700, color: '#052e12', background: 'var(--wa-primary)', borderRadius: '99px', padding: '2px 7px', verticalAlign: '2px' }}>
+                              MOST POPULAR
+                            </span>
+                          )}
+                        </span>
+                        <span style={{ display: 'block', fontSize: '11.5px', color: 'var(--text-secondary)', marginTop: '1px' }}>
+                          {p.features[0]} included
+                        </span>
+                      </span>
+                      <span style={{ fontSize: '13px', fontWeight: 700, color: '#fff', whiteSpace: 'nowrap' }}>
+                        ₹{p.price.toLocaleString('en-IN')}
+                        <span style={{ fontSize: '11px', fontWeight: 400, color: 'var(--text-muted)' }}>/mo</span>
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
             {inviteNeeded && (
               <div>
                 <label style={labelStyle} htmlFor="su-invite">Invite code</label>
@@ -114,6 +168,20 @@ export default function SignupView({ onBack, onShowLogin }) {
               {submitting ? 'Creating your workspace…' : `Start free ${TRIAL_DAYS}-day trial`}
             </button>
           </form>
+
+          {(onShowTerms || onShowPrivacy) && (
+            <p style={{ fontSize: '11.5px', color: 'var(--text-muted)', textAlign: 'center', marginTop: '14px', lineHeight: 1.55 }}>
+              By creating your workspace you agree to our{' '}
+              <button type="button" onClick={onShowTerms} style={{ background: 'none', border: 'none', color: 'var(--text-secondary)', cursor: 'pointer', fontSize: '11.5px', textDecoration: 'underline', padding: 0 }}>
+                Terms of Service
+              </button>{' '}
+              and{' '}
+              <button type="button" onClick={onShowPrivacy} style={{ background: 'none', border: 'none', color: 'var(--text-secondary)', cursor: 'pointer', fontSize: '11.5px', textDecoration: 'underline', padding: 0 }}>
+                Privacy Policy
+              </button>
+              .
+            </p>
+          )}
 
           <p style={{ fontSize: '12.5px', color: 'var(--text-muted)', textAlign: 'center', marginTop: '16px' }}>
             Already use TeamBee?{' '}

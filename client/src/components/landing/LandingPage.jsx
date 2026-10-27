@@ -11,6 +11,7 @@ import {
   ArrowRight,
   ShieldCheck,
   Clock3,
+  Send,
 } from 'lucide-react';
 import { PLANS, TRIAL_DAYS } from '../../data/plans';
 
@@ -80,9 +81,14 @@ const FAQ = [
   },
 ];
 
-function Logo() {
+function Logo({ onClick }) {
   return (
-    <span style={{ display: 'inline-flex', alignItems: 'center', gap: '9px' }}>
+    <span
+      onClick={onClick}
+      role={onClick ? 'button' : undefined}
+      title={onClick ? 'Back to top' : undefined}
+      style={{ display: 'inline-flex', alignItems: 'center', gap: '9px', cursor: onClick ? 'pointer' : 'default' }}
+    >
       <span
         style={{
           width: '34px',
@@ -148,16 +154,16 @@ function InboxMock() {
         boxShadow: '0 30px 80px rgba(0,0,0,0.55)',
         overflow: 'hidden',
         display: 'grid',
-        gridTemplateColumns: '170px 1fr',
+        gridTemplateColumns: '196px 1fr',
         minHeight: '300px',
         textAlign: 'left',
       }}
     >
       <div style={{ borderRight: '1px solid var(--border-subtle)', padding: '10px 8px', display: 'flex', flexDirection: 'column', gap: '2px' }}>
-        {row('Aarav Parent', 'Demo class confirmed, thank you!', '10:24', true)}
-        {row('Sharma Ji', 'Fees receipt bhej dijiye', '09:51', false)}
-        {row('New Admission', 'Class 10 batch timings?', '09:12', false)}
-        {row('Priya Ma’am', 'Test series kab start hogi?', 'Yesterday', false)}
+        {row('Aarav', 'Demo class confirmed!', '10:24', true)}
+        {row('Sharma Ji', 'Fees receipt please', '09:51', false)}
+        {row('Admissions', 'Class 10 timings?', '09:12', false)}
+        {row('Priya', 'Test series dates?', 'Yesterday', false)}
       </div>
       <div style={{ padding: '14px', display: 'flex', flexDirection: 'column', gap: '8px', background: 'var(--bg-app)' }}>
         <div style={{ alignSelf: 'flex-start', background: 'var(--bubble-inbound)', color: '#e2e8f0', padding: '8px 11px', borderRadius: '12px', fontSize: '12px', maxWidth: '82%', lineHeight: 1.45 }}>
@@ -171,7 +177,9 @@ function InboxMock() {
         </div>
         <div style={{ marginTop: 'auto', display: 'flex', gap: '7px', alignItems: 'center', background: 'var(--bg-surface)', border: '1px solid var(--border-subtle)', borderRadius: '99px', padding: '8px 13px' }}>
           <span style={{ flex: 1, fontSize: '12px', color: 'var(--text-muted)' }}>Type a WhatsApp message…</span>
-          <span style={{ width: '24px', height: '24px', borderRadius: '50%', background: 'var(--wa-primary)', display: 'inline-flex' }} />
+          <span style={{ width: '24px', height: '24px', borderRadius: '50%', background: 'var(--wa-primary)', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', color: '#fff' }}>
+            <Send size={11} />
+          </span>
         </div>
       </div>
     </div>
@@ -183,7 +191,7 @@ export default function LandingPage({ onLogin, onSignup, onShowTerms, onShowPriv
   const sectionSub = { fontSize: '14px', color: 'var(--text-secondary)', textAlign: 'center', maxWidth: '560px', margin: '10px auto 0', lineHeight: 1.6 };
 
   return (
-    <div style={{ minHeight: '100vh', background: 'var(--bg-app)', color: '#e2e8f0', overflowY: 'auto' }}>
+    <div style={{ minHeight: '100vh', background: 'var(--bg-app)', color: '#e2e8f0' }}>
       {/* Nav */}
       <header
         style={{
@@ -196,7 +204,7 @@ export default function LandingPage({ onLogin, onSignup, onShowTerms, onShowPriv
         }}
       >
         <div style={{ maxWidth: '1120px', margin: '0 auto', padding: '13px 20px', display: 'flex', alignItems: 'center', gap: '16px' }}>
-          <Logo />
+          <Logo onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })} />
           <nav style={{ marginLeft: 'auto', display: 'flex', gap: '20px', fontSize: '13.5px', color: 'var(--text-secondary)' }} className="landing-nav-links">
             <a href="#features" style={{ color: 'inherit', textDecoration: 'none' }}>Features</a>
             <a href="#pricing" style={{ color: 'inherit', textDecoration: 'none' }}>Pricing</a>
@@ -306,7 +314,7 @@ export default function LandingPage({ onLogin, onSignup, onShowTerms, onShowPriv
                   </li>
                 ))}
               </ul>
-              <button onClick={onSignup} className={p.popular ? 'btn btn-primary' : 'btn btn-secondary'} style={{ padding: '11px', fontSize: '14px', justifyContent: 'center' }}>
+              <button onClick={() => onSignup(p.key)} className={p.popular ? 'btn btn-primary' : 'btn btn-secondary'} style={{ padding: '11px', fontSize: '14px', justifyContent: 'center' }}>
                 Start free trial
               </button>
             </div>
@@ -325,11 +333,14 @@ export default function LandingPage({ onLogin, onSignup, onShowTerms, onShowPriv
             </details>
           ))}
         </div>
-        <div style={{ textAlign: 'center', marginTop: '40px' }}>
-          <div style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', color: 'var(--text-secondary)', fontSize: '13.5px', marginBottom: '14px' }}>
-            <Clock3 size={15} /> Most teams send their first team reply within an hour of signing up.
-          </div>
-          <div>
+        <div style={{ textAlign: 'center', marginTop: '48px' }}>
+          <h2 style={sectionTitle}>Ready when your customers are</h2>
+          <p style={sectionSub}>
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: '7px' }}>
+              <Clock3 size={15} /> Most teams send their first team reply within an hour of signing up.
+            </span>
+          </p>
+          <div style={{ marginTop: '20px' }}>
             <button onClick={onSignup} className="btn btn-primary" style={{ padding: '13px 22px', fontSize: '14.5px', gap: '8px' }}>
               Create your workspace <ArrowRight size={16} />
             </button>
@@ -342,7 +353,10 @@ export default function LandingPage({ onLogin, onSignup, onShowTerms, onShowPriv
         <div style={{ maxWidth: '1120px', margin: '0 auto', padding: '22px 20px', display: 'flex', gap: '18px', alignItems: 'center', flexWrap: 'wrap' }}>
           <Logo />
           <span style={{ fontSize: '12.5px', color: 'var(--text-muted)' }}>© 2026 TeamBee. Made for WhatsApp-first businesses in India.</span>
-          <span style={{ marginLeft: 'auto', display: 'flex', gap: '18px', fontSize: '13px' }}>
+          <span style={{ marginLeft: 'auto', display: 'flex', gap: '18px', fontSize: '13px', flexWrap: 'wrap' }}>
+            <a href="#features" style={{ color: 'var(--text-secondary)', textDecoration: 'none' }}>Features</a>
+            <a href="#pricing" style={{ color: 'var(--text-secondary)', textDecoration: 'none' }}>Pricing</a>
+            <a href="#faq" style={{ color: 'var(--text-secondary)', textDecoration: 'none' }}>FAQ</a>
             <button onClick={onShowTerms} style={{ background: 'none', border: 'none', color: 'var(--text-secondary)', cursor: 'pointer', fontSize: '13px' }}>Terms</button>
             <button onClick={onShowPrivacy} style={{ background: 'none', border: 'none', color: 'var(--text-secondary)', cursor: 'pointer', fontSize: '13px' }}>Privacy</button>
             <button onClick={onLogin} style={{ background: 'none', border: 'none', color: 'var(--text-secondary)', cursor: 'pointer', fontSize: '13px' }}>Log in</button>

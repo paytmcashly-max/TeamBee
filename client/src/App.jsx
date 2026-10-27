@@ -29,6 +29,15 @@ export default function App() {
   // meets a landing page with pricing and a real signup — not a bare
   // login form.
   const [publicView, setPublicView] = useState('landing');
+  // The plan a visitor picked on the pricing section; the signup form
+  // opens with it selected instead of silently defaulting to Pro.
+  const [signupPlan, setSignupPlan] = useState('PRO');
+  const showSignup = (plan) => {
+    if (typeof plan === 'string' && ['STARTER', 'GROWTH', 'PRO'].includes(plan)) {
+      setSignupPlan(plan);
+    }
+    setPublicView('signup');
+  };
   // Password-reset email links land on /?reset=<token>.
   const [resetToken] = useState(() => {
     try {
@@ -171,7 +180,12 @@ export default function App() {
       );
     }
     if (publicView === 'forgot') {
-      return <ForgotPasswordView onBack={() => setPublicView('login')} />;
+      return (
+        <ForgotPasswordView
+          onBack={() => setPublicView('login')}
+          onHome={() => setPublicView('landing')}
+        />
+      );
     }
     if (publicView === 'login' || publicView === 'login-after-reset') {
       return (
@@ -185,8 +199,11 @@ export default function App() {
     if (publicView === 'signup') {
       return (
         <SignupView
+          initialPlan={signupPlan}
           onBack={() => setPublicView('landing')}
           onShowLogin={() => setPublicView('login')}
+          onShowTerms={() => setPublicView('terms')}
+          onShowPrivacy={() => setPublicView('privacy')}
         />
       );
     }
@@ -195,7 +212,7 @@ export default function App() {
     return (
       <LandingPage
         onLogin={() => setPublicView('login')}
-        onSignup={() => setPublicView('signup')}
+        onSignup={showSignup}
         onShowTerms={() => setPublicView('terms')}
         onShowPrivacy={() => setPublicView('privacy')}
       />

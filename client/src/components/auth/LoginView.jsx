@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { MessageSquare, ArrowRight, ArrowLeft, ChevronRight, Check } from 'lucide-react';
+import { MessageSquare, ArrowRight, ArrowLeft, ChevronRight, Check, Eye, EyeOff } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 
 const inputStyle = {
@@ -30,6 +30,7 @@ export default function LoginView({ onShowSignup, onBack, onForgot } = {}) {
     }
   });
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [notice, setNotice] = useState(() => {
@@ -193,7 +194,7 @@ export default function LoginView({ onShowSignup, onBack, onForgot } = {}) {
           </div>
           <h1 style={{ fontSize: '22px', color: '#fff', fontWeight: '800' }}>TeamBee</h1>
           <p style={{ fontSize: '13px', color: 'var(--text-secondary)', marginTop: '4px' }}>
-            B2B Multi-Agent WhatsApp Shared Team Inbox
+            WhatsApp Shared Team Inbox
           </p>
         </div>
 
@@ -343,7 +344,7 @@ export default function LoginView({ onShowSignup, onBack, onForgot } = {}) {
           /* ---------- Step 1: credentials ---------- */
           <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
             <div>
-              <label style={labelStyle} htmlFor="login-email">Staff Email Address</label>
+              <label style={labelStyle} htmlFor="login-email">Work email</label>
               <input
                 id="login-email"
                 type="email"
@@ -360,6 +361,7 @@ export default function LoginView({ onShowSignup, onBack, onForgot } = {}) {
                   if (email.trim() && lookupEmail !== email.trim()) runLookup(email);
                 }}
                 required
+                placeholder="you@business.com"
                 style={inputStyle}
               />
             </div>
@@ -444,15 +446,21 @@ export default function LoginView({ onShowSignup, onBack, onForgot } = {}) {
 
             <div>
               <label style={labelStyle} htmlFor="login-password">Password</label>
-              <input
-                id="login-password"
-                type="password"
-                autoComplete="current-password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                required
-                style={inputStyle}
-              />
+              <div style={{ position: 'relative' }}>
+                <input
+                  id="login-password"
+                  type={showPassword ? 'text' : 'password'}
+                  autoComplete="current-password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  required
+                  placeholder="Your password"
+                  style={{ ...inputStyle, paddingRight: '42px' }}
+                />
+                <button type="button" onClick={() => setShowPassword((v) => !v)} aria-label={showPassword ? 'Hide password' : 'Show password'} style={{ position: 'absolute', right: '8px', top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', color: '#94a3b8', cursor: 'pointer', padding: '5px', display: 'flex' }}>
+                  {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                </button>
+              </div>
             </div>
 
             <button
@@ -461,13 +469,10 @@ export default function LoginView({ onShowSignup, onBack, onForgot } = {}) {
               className="btn btn-primary"
               style={{ width: '100%', padding: '12px', fontSize: '13.5px', marginTop: '6px' }}
             >
-              {loading ? 'Authenticating...' : 'Sign In to WhatsApp Inbox'}
+              {loading ? 'Signing in…' : 'Sign in'}
               <ArrowRight size={15} />
             </button>
 
-            <p style={{ fontSize: '11.5px', color: '#64748b', textAlign: 'center', lineHeight: 1.5 }}>
-              Part of several workspaces? Enter your email and pick yours above — a single workspace is selected automatically.
-            </p>
           </form>
         )}
         {(onShowSignup || onBack) && (

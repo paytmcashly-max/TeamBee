@@ -265,6 +265,11 @@ class AuthController {
       const email = cleanString(req.body?.email, 320).toLowerCase();
       const password = typeof req.body?.password === 'string' ? req.body.password : '';
       const requestedSlug = cleanString(req.body?.slug, 50).toLowerCase();
+      // The plan the visitor picked on the pricing page. The trial itself
+      // always runs with Pro features/limits; this is the plan that will
+      // apply when the trial ends. Anything unrecognised falls back to PRO.
+      const requestedPlan = cleanString(req.body?.plan, 20).toUpperCase();
+      const chosenPlan = ['STARTER', 'GROWTH', 'PRO'].includes(requestedPlan) ? requestedPlan : 'PRO';
 
       if (
         !businessName ||
@@ -323,8 +328,10 @@ class AuthController {
           data: {
             name: businessName,
             slug: finalSlug,
-            // New public signups start on a 14-day free trial of PRO.
-            plan: 'PRO',
+            // New public signups start on a 14-day free trial (Pro
+            // features/limits via the TRIAL status); the stored plan is
+            // the visitor's chosen plan for when the trial ends.
+            plan: chosenPlan,
             subscriptionStatus: 'TRIAL',
             trialEndsAt: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000),
             // Only the hash is stored (same as settings update); the

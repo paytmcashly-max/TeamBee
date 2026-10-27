@@ -97,7 +97,7 @@ export function AuthProvider({ children }) {
 
   // Public self-serve signup: creates a new workspace (tenant) + its
   // first ADMIN and adopts the returned session exactly like login.
-  const signup = async ({ businessName, adminName, email, password, inviteCode }) => {
+  const signup = async ({ businessName, adminName, email, password, inviteCode, plan }) => {
     const res = await fetch('/api/auth/register-tenant', {
       method: 'POST',
       credentials: 'include',
@@ -108,6 +108,7 @@ export function AuthProvider({ children }) {
         email,
         password,
         inviteCode: inviteCode || undefined,
+        plan: plan || undefined,
       }),
     });
     const data = await res.json();
