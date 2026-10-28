@@ -2,44 +2,61 @@ import React, { useState, useEffect } from 'react';
 import {
   Bot,
   Zap,
-  ArrowLeft,
   Sparkles,
   CheckCircle2,
-  AlertCircle,
   Plus,
   Trash2,
-  Edit3,
-  Clock,
   UserCheck,
   ShoppingBag,
   CreditCard,
   MessageSquare,
-  ShieldCheck,
-  Sliders,
+  Activity,
+  ToggleLeft,
+  ToggleRight,
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { useToast } from '../../context/ToastContext';
 
+function TriggerBlock({ icon, iconColor, iconBg, label, badge, badgeColor, badgeBg, desc, value, onChange, placeholder }) {
+  return (
+    <div className="dt-trigger-block">
+      <div className="dt-trigger-block-header">
+        <div className="dt-trigger-icon" style={{ background: iconBg, color: iconColor }}>
+          {icon}
+        </div>
+        <div className="dt-trigger-meta">
+          <div className="dt-trigger-title-row">
+            <span className="dt-trigger-title">{label}</span>
+            <span className="dt-trigger-badge" style={{ background: badgeBg, color: badgeColor }}>{badge}</span>
+          </div>
+          <p className="dt-trigger-desc">{desc}</p>
+        </div>
+      </div>
+      <input
+        type="text"
+        className="dt-input"
+        value={value}
+        onChange={onChange}
+        placeholder={placeholder}
+      />
+    </div>
+  );
+}
+
 export default function AutomationView({ onBack, onOpenInbox }) {
   const { token } = useAuth();
   const toast = useToast();
-  const [config, setConfig] = useState(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-
-  // Editable fields
   const [botEnabled, setBotEnabled] = useState(true);
   const [welcomeMessage, setWelcomeMessage] = useState('');
   const [handoffKeywords, setHandoffKeywords] = useState('');
   const [catalogKeywords, setCatalogKeywords] = useState('');
   const [paymentKeywords, setPaymentKeywords] = useState('');
   const [customRules, setCustomRules] = useState([]);
-
-  // New Rule form modal
   const [showRuleModal, setShowRuleModal] = useState(false);
   const [newTrigger, setNewTrigger] = useState('');
   const [newResponse, setNewResponse] = useState('');
-  const [newButtons, setNewButtons] = useState(['🛍️ View Catalog', '💬 Talk to Agent']);
 
   const loadConfig = async () => {
     setLoading(true);
@@ -49,52 +66,42 @@ export default function AutomationView({ onBack, onOpenInbox }) {
       });
       const data = await res.json();
       if (data.success && data.config) {
-        setConfig(data.config);
-        setBotEnabled(data.config.botEnabled !== false);
-        setWelcomeMessage(data.config.welcomeMessage || '');
-        setHandoffKeywords((data.config.agentHandoffKeywords || []).join(', '));
-        setCatalogKeywords((data.config.catalogKeywords || []).join(', '));
-        setPaymentKeywords((data.config.paymentKeywords || []).join(', '));
-        setCustomRules(data.config.customRules || []);
+        const c = data.config;
+        setBotEnabled(c.botEnabled !== false);
+        setWelcomeMessage(c.welcomeMessage || '');
+        setHandoffKeywords((c.agentHandoffKeywords || []).join(', '));
+        setCatalogKeywords((c.catalogKeywords || []).join(', '));
+        setPaymentKeywords((c.paymentKeywords || []).join(', '));
+        setCustomRules(c.customRules || []);
       }
-    } catch (err) {
+    } catch {
       toast.error('Failed to load automation settings');
     } finally {
       setLoading(false);
     }
   };
 
-  useEffect(() => {
-    loadConfig();
-  }, []);
+  useEffect(() => { loadConfig(); }, []);
 
-  const handleSaveConfig = async () => {
+  const handleSave = async () => {
     setSaving(true);
     try {
       const payload = {
         botEnabled,
         welcomeMessage: welcomeMessage.trim(),
-        agentHandoffKeywords: handoffKeywords.split(',').map((s) => s.trim()).filter(Boolean),
-        catalogKeywords: catalogKeywords.split(',').map((s) => s.trim()).filter(Boolean),
-        paymentKeywords: paymentKeywords.split(',').map((s) => s.trim()).filter(Boolean),
+        agentHandoffKeywords: handoffKeywords.split(',').map(s => s.trim()).filter(Boolean),
+        catalogKeywords: catalogKeywords.split(',').map(s => s.trim()).filter(Boolean),
+        paymentKeywords: paymentKeywords.split(',').map(s => s.trim()).filter(Boolean),
         customRules,
       };
-
       const res = await fetch('/api/automation/config', {
         method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
-        },
+        headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
         body: JSON.stringify(payload),
       });
       const data = await res.json();
-      if (data.success) {
-        toast.success('Automation rules saved successfully');
-        setConfig(data.config);
-      } else {
-        toast.error(data.error || 'Failed to save automation rules');
-      }
+      if (data.success) toast.success('Automation rules saved');
+      else toast.error(data.error || 'Save failed');
     } catch (err) {
       toast.error(err.message);
     } finally {
@@ -102,490 +109,257 @@ export default function AutomationView({ onBack, onOpenInbox }) {
     }
   };
 
-  const handleAddCustomRule = (e) => {
+  const handleAddRule = (e) => {
     e.preventDefault();
     if (!newTrigger.trim() || !newResponse.trim()) {
-      toast.error('Trigger keyword and response are required');
+      toast.error('Trigger and response are required');
       return;
     }
-    const rule = {
+    setCustomRules(prev => [...prev, {
       id: `rule_${Date.now().toString().slice(-6)}`,
       trigger: newTrigger.trim(),
       response: newResponse.trim(),
-      buttons: newButtons.filter(Boolean),
-    };
-    setCustomRules((prev) => [...prev, rule]);
+    }]);
     setNewTrigger('');
     setNewResponse('');
     setShowRuleModal(false);
-    toast.success('New auto-response rule added. Click "Save All Rules" to commit.');
-  };
-
-  const handleDeleteRule = (id) => {
-    setCustomRules((prev) => prev.filter((r) => r.id !== id));
+    toast.success('Rule added — click Save to commit');
   };
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', background: 'var(--bg-app)', overflowY: 'auto' }}>
-      {/* Top Header */}
-      <div
-        style={{
-          background: 'var(--bg-surface)',
-          borderBottom: '1px solid var(--border-subtle)',
-          padding: '16px 24px',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          flexWrap: 'wrap',
-          gap: '12px',
-          position: 'sticky',
-          top: 0,
-          zIndex: 10,
-        }}
-      >
-        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-          {onBack && (
-            <button
-              onClick={onBack}
-              className="btn btn-ghost btn-sm"
-              style={{ color: 'var(--text-secondary)', padding: '6px' }}
-              title="Back"
-            >
-              <ArrowLeft size={18} />
-            </button>
-          )}
+    <div className="dt-page">
+      {/* Page Header */}
+      <div className="dt-page-header">
+        <div className="dt-page-header-left">
+          <div className="dt-page-icon" style={{ background: 'rgba(37, 211, 102, 0.12)', color: 'var(--wa-primary)' }}>
+            <Bot size={18} />
+          </div>
           <div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <div
-                style={{
-                  width: '32px',
-                  height: '32px',
-                  borderRadius: '8px',
-                  background: 'rgba(56, 189, 248, 0.12)',
-                  color: '#0284c7',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                }}
-              >
-                <Bot size={18} />
-              </div>
-              <h1 style={{ fontSize: '18px', fontWeight: '700', color: 'var(--text-main)', margin: 0 }}>
-                DoubleTick AI Chatbot &amp; Flow Automation
-              </h1>
-              <span
-                style={{
-                  background: botEnabled ? 'rgba(37, 211, 102, 0.12)' : 'rgba(100, 116, 139, 0.12)',
-                  color: botEnabled ? '#16a34a' : '#64748b',
-                  fontSize: '11px',
-                  fontWeight: '700',
-                  padding: '2px 8px',
-                  borderRadius: '12px',
-                }}
-              >
-                {botEnabled ? '● Bot Active' : '○ Bot Paused'}
-              </span>
-            </div>
-            <p style={{ fontSize: '12.5px', color: 'var(--text-muted)', margin: '2px 0 0 40px' }}>
-              Instant auto-replies, keyword triggers, catalog showcase and 1-click human agent handoff
+            <h1 className="dt-page-title">AI Chatbot &amp; Automations</h1>
+            <p className="dt-page-desc">
+              Keyword-triggered replies, catalog showcasing &amp; instant human handoff
             </p>
           </div>
         </div>
-
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+        <div className="dt-page-header-right">
+          {/* Bot Toggle */}
           <button
-            onClick={() => setBotEnabled(!botEnabled)}
-            className="btn btn-secondary btn-sm"
-            style={{
-              color: botEnabled ? '#16a34a' : 'var(--text-muted)',
-              fontWeight: '600',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '6px',
-            }}
+            type="button"
+            onClick={() => setBotEnabled(v => !v)}
+            className={`dt-toggle-btn ${botEnabled ? 'dt-toggle-on' : 'dt-toggle-off'}`}
+            title={botEnabled ? 'Bot is Active — click to pause' : 'Bot is Paused — click to enable'}
           >
-            <Bot size={14} />
-            <span>{botEnabled ? 'Enabled' : 'Disabled'}</span>
+            {botEnabled ? <ToggleRight size={20} /> : <ToggleLeft size={20} />}
+            <span>{botEnabled ? 'Bot Active' : 'Bot Paused'}</span>
           </button>
           <button
-            onClick={handleSaveConfig}
+            onClick={handleSave}
             disabled={saving}
-            className="btn btn-primary btn-sm"
-            style={{
-              background: 'var(--wa-primary)',
-              color: '#ffffff',
-              fontWeight: '600',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '6px',
-            }}
+            className="dt-btn dt-btn-primary dt-btn-sm"
           >
             <CheckCircle2 size={15} />
-            <span>{saving ? 'Saving...' : 'Save All Rules'}</span>
+            <span>{saving ? 'Saving…' : 'Save Rules'}</span>
           </button>
         </div>
       </div>
 
-      <div style={{ padding: '24px', maxWidth: '1100px', width: '100%', margin: '0 auto' }}>
-        {/* Visual Bot Flow Architecture Banner */}
-        <div
-          style={{
-            background: 'linear-gradient(135deg, rgba(37, 211, 102, 0.08) 0%, rgba(56, 189, 248, 0.08) 100%)',
-            border: '1px solid rgba(37, 211, 102, 0.2)',
-            borderRadius: '16px',
-            padding: '20px',
-            marginBottom: '24px',
-          }}
-        >
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
-            <Sparkles size={16} style={{ color: 'var(--wa-primary)' }} />
-            <span style={{ fontSize: '13px', fontWeight: '700', color: 'var(--text-main)' }}>
-              How DoubleTick Flow Automation Works
-            </span>
-          </div>
-          <div
-            style={{
-              display: 'grid',
-              gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
-              gap: '12px',
-              fontSize: '12.5px',
-              color: 'var(--text-secondary)',
-            }}
-          >
-            <div style={{ background: 'var(--bg-surface)', padding: '12px', borderRadius: '10px', border: '1px solid var(--border-subtle)' }}>
-              <div style={{ fontWeight: '700', color: '#0284c7', marginBottom: '4px' }}>1. Customer Inbound</div>
-              Customer texts or clicks a button like "View Catalog", "Pay", or "Talk to Human".
-            </div>
-            <div style={{ background: 'var(--bg-surface)', padding: '12px', borderRadius: '10px', border: '1px solid var(--border-subtle)' }}>
-              <div style={{ fontWeight: '700', color: '#16a34a', marginBottom: '4px' }}>2. 0ms Smart Matching</div>
-              Engine checks keyword triggers and interactive reply payloads without delay.
-            </div>
-            <div style={{ background: 'var(--bg-surface)', padding: '12px', borderRadius: '10px', border: '1px solid var(--border-subtle)' }}>
-              <div style={{ fontWeight: '700', color: '#d97706', marginBottom: '4px' }}>3. Auto-Action</div>
-              Dispatches product cards, UPI payment intent, or routes chat to live agents.
-            </div>
-          </div>
-        </div>
-
-        {/* Section 1: Welcome Message & Main Greeting */}
-        <div
-          style={{
-            background: 'var(--bg-surface)',
-            border: '1px solid var(--border-subtle)',
-            borderRadius: '12px',
-            padding: '20px',
-            marginBottom: '20px',
-          }}
-        >
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px' }}>
-            <MessageSquare size={16} style={{ color: 'var(--wa-teal)' }} />
-            <h2 style={{ fontSize: '15px', fontWeight: '700', color: 'var(--text-main)', margin: 0 }}>
-              Default Welcome Greeting
-            </h2>
-          </div>
-          <p style={{ fontSize: '12.5px', color: 'var(--text-muted)', marginBottom: '10px' }}>
-            Sent automatically when a customer texts "hi", "hello", "menu", or initiates a conversation.
-          </p>
-          <textarea
-            rows={2}
-            value={welcomeMessage}
-            onChange={(e) => setWelcomeMessage(e.target.value)}
-            style={{
-              width: '100%',
-              padding: '10px 14px',
-              borderRadius: '8px',
-              border: '1px solid var(--border-medium)',
-              background: 'var(--bg-input)',
-              color: 'var(--text-main)',
-              fontSize: '13px',
-              resize: 'none',
-            }}
-          />
-        </div>
-
-        {/* Section 2: Core Automation Keyword Triggers */}
-        <div
-          style={{
-            background: 'var(--bg-surface)',
-            border: '1px solid var(--border-subtle)',
-            borderRadius: '12px',
-            padding: '20px',
-            marginBottom: '20px',
-          }}
-        >
-          <h2 style={{ fontSize: '15px', fontWeight: '700', color: 'var(--text-main)', marginBottom: '16px' }}>
-            Built-in Intelligent Triggers
-          </h2>
-
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-            {/* 1. Live Agent Handoff */}
-            <div
-              style={{
-                border: '1px solid var(--border-subtle)',
-                borderRadius: '10px',
-                padding: '14px',
-                background: 'rgba(245, 158, 11, 0.04)',
-              }}
-            >
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px' }}>
-                <UserCheck size={16} style={{ color: '#d97706' }} />
-                <span style={{ fontSize: '13.5px', fontWeight: '700', color: 'var(--text-main)' }}>
-                  Live Human Agent Handoff
-                </span>
-                <span style={{ fontSize: '11px', background: 'rgba(245, 158, 11, 0.15)', color: '#b45309', padding: '1px 6px', borderRadius: '4px', fontWeight: '700' }}>
-                  Auto Open &amp; Priority Tag
-                </span>
+      {/* Page Body */}
+      <div className="dt-page-body">
+        {loading ? (
+          <div className="dt-empty-state"><div className="dt-spinner" /><p>Loading automation config…</p></div>
+        ) : (
+          <>
+            {/* How it works banner */}
+            <div className="dt-info-banner">
+              <div className="dt-info-banner-title">
+                <Sparkles size={15} style={{ color: 'var(--wa-primary)' }} />
+                <span>How DoubleTick Flow Automation Works</span>
               </div>
-              <p style={{ fontSize: '12px', color: 'var(--text-muted)', marginBottom: '8px' }}>
-                When matched, the chat status is set to OPEN, tagged with "Agent Requested", and a notification is sent to available staff.
-              </p>
-              <input
-                type="text"
-                value={handoffKeywords}
-                onChange={(e) => setHandoffKeywords(e.target.value)}
-                placeholder="agent, human, support, help, representative"
-                style={{
-                  width: '100%',
-                  padding: '8px 12px',
-                  borderRadius: '6px',
-                  border: '1px solid var(--border-medium)',
-                  background: 'var(--bg-surface)',
-                  color: 'var(--text-main)',
-                  fontSize: '12.5px',
-                }}
-              />
-            </div>
-
-            {/* 2. Catalog & Pricing Trigger */}
-            <div
-              style={{
-                border: '1px solid var(--border-subtle)',
-                borderRadius: '10px',
-                padding: '14px',
-                background: 'rgba(37, 211, 102, 0.04)',
-              }}
-            >
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px' }}>
-                <ShoppingBag size={16} style={{ color: 'var(--wa-primary)' }} />
-                <span style={{ fontSize: '13.5px', fontWeight: '700', color: 'var(--text-main)' }}>
-                  Product Catalog &amp; Pricing Showcase
-                </span>
-                <span style={{ fontSize: '11px', background: 'rgba(37, 211, 102, 0.15)', color: '#15803d', padding: '1px 6px', borderRadius: '4px', fontWeight: '700' }}>
-                  Auto Interactive Buttons
-                </span>
-              </div>
-              <p style={{ fontSize: '12px', color: 'var(--text-muted)', marginBottom: '8px' }}>
-                Automatically displays your featured catalog items with ₹ prices and "Buy / Pay" action buttons.
-              </p>
-              <input
-                type="text"
-                value={catalogKeywords}
-                onChange={(e) => setCatalogKeywords(e.target.value)}
-                placeholder="catalog, products, shop, pricing, price list, menu"
-                style={{
-                  width: '100%',
-                  padding: '8px 12px',
-                  borderRadius: '6px',
-                  border: '1px solid var(--border-medium)',
-                  background: 'var(--bg-surface)',
-                  color: 'var(--text-main)',
-                  fontSize: '12.5px',
-                }}
-              />
-            </div>
-
-            {/* 3. Instant Payment Trigger */}
-            <div
-              style={{
-                border: '1px solid var(--border-subtle)',
-                borderRadius: '10px',
-                padding: '14px',
-                background: 'rgba(56, 189, 248, 0.04)',
-              }}
-            >
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px' }}>
-                <CreditCard size={16} style={{ color: '#0284c7' }} />
-                <span style={{ fontSize: '13.5px', fontWeight: '700', color: 'var(--text-main)' }}>
-                  Instant UPI Payment Details
-                </span>
-                <span style={{ fontSize: '11px', background: 'rgba(56, 189, 248, 0.15)', color: '#0369a1', padding: '1px 6px', borderRadius: '4px', fontWeight: '700' }}>
-                  NPCI 1-Click Pay
-                </span>
-              </div>
-              <p style={{ fontSize: '12px', color: 'var(--text-muted)', marginBottom: '8px' }}>
-                Sends your official UPI VPA and 1-click payment intent for GPay, PhonePe, Paytm, and BHIM.
-              </p>
-              <input
-                type="text"
-                value={paymentKeywords}
-                onChange={(e) => setPaymentKeywords(e.target.value)}
-                placeholder="pay, payment, upi, googlepay, phonepe, paytm, qr code"
-                style={{
-                  width: '100%',
-                  padding: '8px 12px',
-                  borderRadius: '6px',
-                  border: '1px solid var(--border-medium)',
-                  background: 'var(--bg-surface)',
-                  color: 'var(--text-main)',
-                  fontSize: '12.5px',
-                }}
-              />
-            </div>
-          </div>
-        </div>
-
-        {/* Section 3: Custom Business Keyword Rules */}
-        <div
-          style={{
-            background: 'var(--bg-surface)',
-            border: '1px solid var(--border-subtle)',
-            borderRadius: '12px',
-            padding: '20px',
-            marginBottom: '20px',
-          }}
-        >
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px' }}>
-            <div>
-              <h2 style={{ fontSize: '15px', fontWeight: '700', color: 'var(--text-main)', margin: 0 }}>
-                Custom Auto-Responder Rules ({customRules.length})
-              </h2>
-              <p style={{ fontSize: '12px', color: 'var(--text-muted)', margin: '2px 0 0 0' }}>
-                Match custom terms (e.g. "timings", "address", "refunds") with custom replies
-              </p>
-            </div>
-            <button
-              onClick={() => setShowRuleModal(true)}
-              className="btn btn-secondary btn-sm"
-              style={{ display: 'flex', alignItems: 'center', gap: '6px' }}
-            >
-              <Plus size={14} /> Add Custom Rule
-            </button>
-          </div>
-
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-            {customRules.map((r) => (
-              <div
-                key={r.id}
-                style={{
-                  border: '1px solid var(--border-subtle)',
-                  borderRadius: '8px',
-                  padding: '12px 16px',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'space-between',
-                  gap: '12px',
-                }}
-              >
-                <div style={{ flex: 1 }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
-                    <span
-                      style={{
-                        background: 'rgba(15, 23, 42, 0.08)',
-                        color: 'var(--text-main)',
-                        fontSize: '12px',
-                        fontWeight: '700',
-                        padding: '2px 8px',
-                        borderRadius: '4px',
-                        fontFamily: 'var(--font-mono)',
-                      }}
-                    >
-                      "{r.trigger}"
-                    </span>
-                    <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>→ Replies with:</span>
+              <div className="dt-flow-steps">
+                <div className="dt-flow-step">
+                  <div className="dt-flow-step-num" style={{ background: 'rgba(56, 189, 248, 0.15)', color: '#0284c7' }}>1</div>
+                  <div>
+                    <div className="dt-flow-step-title">Customer Inbound</div>
+                    <div className="dt-flow-step-desc">Customer texts or taps a button like "View Catalog", "Pay", or "Talk to Human"</div>
                   </div>
-                  <div style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>{r.response}</div>
                 </div>
+                <div className="dt-flow-arrow">→</div>
+                <div className="dt-flow-step">
+                  <div className="dt-flow-step-num" style={{ background: 'rgba(37, 211, 102, 0.15)', color: '#16a34a' }}>2</div>
+                  <div>
+                    <div className="dt-flow-step-title">0ms Smart Match</div>
+                    <div className="dt-flow-step-desc">Engine checks keyword triggers and interactive reply payloads instantly</div>
+                  </div>
+                </div>
+                <div className="dt-flow-arrow">→</div>
+                <div className="dt-flow-step">
+                  <div className="dt-flow-step-num" style={{ background: 'rgba(245, 158, 11, 0.15)', color: '#d97706' }}>3</div>
+                  <div>
+                    <div className="dt-flow-step-title">Auto Action</div>
+                    <div className="dt-flow-step-desc">Sends product cards, UPI payment intent, or routes to a live agent</div>
+                  </div>
+                </div>
+              </div>
+            </div>
 
+            {/* Welcome Message */}
+            <div className="dt-card">
+              <div className="dt-card-header">
+                <div className="dt-card-icon" style={{ background: 'rgba(18, 140, 126, 0.10)', color: 'var(--wa-teal)' }}>
+                  <MessageSquare size={16} />
+                </div>
+                <div>
+                  <div className="dt-card-title">Welcome Greeting</div>
+                  <div className="dt-card-desc">Sent when a customer texts "hi", "hello", or "menu" for the first time</div>
+                </div>
+              </div>
+              <textarea
+                rows={3}
+                className="dt-textarea"
+                value={welcomeMessage}
+                onChange={e => setWelcomeMessage(e.target.value)}
+                placeholder="e.g. 👋 Welcome to our WhatsApp Store! Reply with CATALOG to see our products or PAY to make a payment."
+              />
+            </div>
+
+            {/* Intelligent Triggers */}
+            <div className="dt-card">
+              <div className="dt-card-header">
+                <div className="dt-card-icon" style={{ background: 'rgba(99, 102, 241, 0.10)', color: '#6366f1' }}>
+                  <Zap size={16} />
+                </div>
+                <div>
+                  <div className="dt-card-title">Built-in Intelligent Triggers</div>
+                  <div className="dt-card-desc">Comma-separated keywords — when matched, the bot auto-responds with the configured action</div>
+                </div>
+              </div>
+              <div className="dt-triggers-list">
+                <TriggerBlock
+                  icon={<UserCheck size={16} />}
+                  iconBg="rgba(245, 158, 11, 0.12)"
+                  iconColor="#d97706"
+                  label="Live Agent Handoff"
+                  badge="Auto Open + Priority Tag"
+                  badgeBg="rgba(245, 158, 11, 0.12)"
+                  badgeColor="#b45309"
+                  desc="Sets chat to OPEN, tags with 'Agent Requested', and notifies available staff"
+                  value={handoffKeywords}
+                  onChange={e => setHandoffKeywords(e.target.value)}
+                  placeholder="agent, human, support, help, representative"
+                />
+                <TriggerBlock
+                  icon={<ShoppingBag size={16} />}
+                  iconBg="rgba(37, 211, 102, 0.12)"
+                  iconColor="var(--wa-primary)"
+                  label="Product Catalog Showcase"
+                  badge="Auto Buttons"
+                  badgeBg="rgba(37, 211, 102, 0.12)"
+                  badgeColor="#15803d"
+                  desc="Displays featured catalog items with ₹ prices and Buy / Pay action buttons"
+                  value={catalogKeywords}
+                  onChange={e => setCatalogKeywords(e.target.value)}
+                  placeholder="catalog, products, shop, pricing, menu"
+                />
+                <TriggerBlock
+                  icon={<CreditCard size={16} />}
+                  iconBg="rgba(56, 189, 248, 0.12)"
+                  iconColor="#0284c7"
+                  label="Instant UPI Payment"
+                  badge="NPCI 1-Click Pay"
+                  badgeBg="rgba(56, 189, 248, 0.12)"
+                  badgeColor="#0369a1"
+                  desc="Sends your UPI VPA and 1-click payment intent for GPay, PhonePe, Paytm &amp; BHIM"
+                  value={paymentKeywords}
+                  onChange={e => setPaymentKeywords(e.target.value)}
+                  placeholder="pay, payment, upi, googlepay, phonepe, qr code"
+                />
+              </div>
+            </div>
+
+            {/* Custom Rules */}
+            <div className="dt-card">
+              <div className="dt-card-header">
+                <div className="dt-card-icon" style={{ background: 'rgba(99, 102, 241, 0.10)', color: '#6366f1' }}>
+                  <Bot size={16} />
+                </div>
+                <div style={{ flex: 1 }}>
+                  <div className="dt-card-title">Custom Auto-Responder Rules <span className="dt-count-badge">{customRules.length}</span></div>
+                  <div className="dt-card-desc">Create keyword-to-reply mappings for FAQs like timings, address, refund policy</div>
+                </div>
                 <button
-                  onClick={() => handleDeleteRule(r.id)}
-                  className="btn btn-ghost btn-xs"
-                  style={{ color: '#ef4444', padding: '6px' }}
-                  title="Remove rule"
+                  onClick={() => setShowRuleModal(true)}
+                  className="dt-btn dt-btn-secondary dt-btn-sm"
                 >
-                  <Trash2 size={15} />
+                  <Plus size={14} /> Add Rule
                 </button>
               </div>
-            ))}
-          </div>
-        </div>
+
+              {customRules.length === 0 ? (
+                <div className="dt-rules-empty">
+                  <Bot size={24} style={{ color: 'var(--text-muted)', opacity: 0.5 }} />
+                  <span>No custom rules yet. Add one to automate FAQ replies.</span>
+                </div>
+              ) : (
+                <div className="dt-rules-list">
+                  {customRules.map(r => (
+                    <div key={r.id} className="dt-rule-row">
+                      <div className="dt-rule-trigger">
+                        <span className="dt-rule-trigger-label">When:</span>
+                        <code className="dt-rule-keyword">"{r.trigger}"</code>
+                      </div>
+                      <div className="dt-rule-arrow">→</div>
+                      <div className="dt-rule-response">{r.response}</div>
+                      <button
+                        onClick={() => setCustomRules(prev => prev.filter(x => x.id !== r.id))}
+                        className="dt-btn dt-btn-ghost dt-btn-icon"
+                        style={{ color: '#ef4444' }}
+                        title="Delete rule"
+                      >
+                        <Trash2 size={14} />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </>
+        )}
       </div>
 
-      {/* Add Custom Rule Modal */}
+      {/* Add Rule Modal */}
       {showRuleModal && (
-        <div className="modal-backdrop" onClick={() => setShowRuleModal(false)}>
-          <div
-            className="modal-card"
-            style={{ maxWidth: '440px', width: '90%' }}
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px' }}>
-              <h3 style={{ fontSize: '16px', fontWeight: '700', margin: 0, color: 'var(--text-main)' }}>
-                Add Custom Keyword Rule
-              </h3>
-              <button onClick={() => setShowRuleModal(false)} className="btn btn-ghost btn-xs">
-                ✕
-              </button>
+        <div className="dt-modal-overlay" onClick={() => setShowRuleModal(false)}>
+          <div className="dt-modal" onClick={e => e.stopPropagation()}>
+            <div className="dt-modal-header">
+              <div className="dt-modal-title">Add Custom Keyword Rule</div>
+              <button onClick={() => setShowRuleModal(false)} className="dt-btn dt-btn-ghost dt-btn-icon">✕</button>
             </div>
-
-            <form onSubmit={handleAddCustomRule} style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-              <div>
-                <label style={{ fontSize: '12px', fontWeight: '600', color: 'var(--text-main)', display: 'block', marginBottom: '4px' }}>
-                  When customer message contains *
-                </label>
+            <form onSubmit={handleAddRule} className="dt-modal-body">
+              <div className="dt-field">
+                <label className="dt-label">When message contains *</label>
                 <input
                   type="text"
                   required
+                  className="dt-input"
                   value={newTrigger}
-                  onChange={(e) => setNewTrigger(e.target.value)}
+                  onChange={e => setNewTrigger(e.target.value)}
                   placeholder="e.g. warranty, discount, address"
-                  style={{
-                    width: '100%',
-                    padding: '8px 12px',
-                    borderRadius: '8px',
-                    border: '1px solid var(--border-medium)',
-                    background: 'var(--bg-input)',
-                    color: 'var(--text-main)',
-                  }}
                 />
               </div>
-
-              <div>
-                <label style={{ fontSize: '12px', fontWeight: '600', color: 'var(--text-main)', display: 'block', marginBottom: '4px' }}>
-                  Bot Auto-Reply *
-                </label>
+              <div className="dt-field">
+                <label className="dt-label">Bot Auto-Reply *</label>
                 <textarea
                   rows={3}
                   required
+                  className="dt-textarea"
                   value={newResponse}
-                  onChange={(e) => setNewResponse(e.target.value)}
-                  placeholder="Type the message the bot will send..."
-                  style={{
-                    width: '100%',
-                    padding: '8px 12px',
-                    borderRadius: '8px',
-                    border: '1px solid var(--border-medium)',
-                    background: 'var(--bg-input)',
-                    color: 'var(--text-main)',
-                    resize: 'none',
-                  }}
+                  onChange={e => setNewResponse(e.target.value)}
+                  placeholder="Type the message the bot will send automatically…"
                 />
               </div>
-
-              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px', marginTop: '10px' }}>
-                <button
-                  type="button"
-                  onClick={() => setShowRuleModal(false)}
-                  className="btn btn-secondary btn-sm"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  className="btn btn-primary btn-sm"
-                  style={{ background: 'var(--wa-primary)', color: '#ffffff' }}
-                >
-                  Add Rule
-                </button>
+              <div className="dt-modal-actions">
+                <button type="button" onClick={() => setShowRuleModal(false)} className="dt-btn dt-btn-secondary dt-btn-sm">Cancel</button>
+                <button type="submit" className="dt-btn dt-btn-primary dt-btn-sm">Add Rule</button>
               </div>
             </form>
           </div>
