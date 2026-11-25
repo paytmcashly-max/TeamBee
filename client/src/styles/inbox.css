@@ -350,6 +350,7 @@
 
 .conversation-canvas {
   flex: 1;
+  min-width: 0;
   background-color: var(--tb-canvas-bg);
   display: flex;
   flex-direction: column;
@@ -366,14 +367,16 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0 24px;
+  gap: 12px;
+  padding: 0 18px;
   flex-shrink: 0;
 }
 
 .canvas-header-left {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 10px;
+  flex: 1;
   min-width: 0;
 }
 
@@ -397,7 +400,7 @@
 .canvas-contact-name-row {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
   min-width: 0;
 }
 
@@ -414,12 +417,13 @@
 .canvas-contact-phone {
   font-size: 11px;
   color: var(--tb-text-secondary);
+  white-space: nowrap;
 }
 
 .canvas-header-actions {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 6px;
   flex-shrink: 0;
 }
 
@@ -432,15 +436,16 @@
   background-color: #f2f5f1;
   border: none;
   border-radius: 6px;
-  padding: 5px 10px;
+  padding: 5px 9px;
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: 5px;
   font-size: 11px;
   font-weight: 500;
   color: var(--tb-text-primary);
   cursor: pointer;
   transition: background-color 0.15s;
+  max-width: 155px;
 }
 
 .canvas-assignee-pill:hover {
@@ -450,11 +455,15 @@
 .assignee-label {
   color: var(--tb-text-secondary);
   font-weight: 500;
+  flex-shrink: 0;
 }
 
 .assignee-name {
   font-weight: 600;
   color: var(--tb-text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .assignee-chevron {
@@ -960,6 +969,7 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: 10px;
   margin-top: 6px;
   padding-top: 6px;
 }
@@ -967,7 +977,9 @@
 .composer-toolbar-left {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
+  flex: 1;
+  min-width: 0;
 }
 
 .composer-tool-btn {
@@ -981,6 +993,7 @@
   align-items: center;
   justify-content: center;
   transition: color 0.15s;
+  flex-shrink: 0;
 }
 
 .composer-tool-btn:hover {
@@ -990,7 +1003,10 @@
 .composer-hint {
   font-size: 10px;
   color: var(--tb-text-secondary);
-  margin-left: 6px;
+  margin-left: 4px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .composer-send-btn {
@@ -1372,10 +1388,15 @@
   cursor: pointer;
 }
 
-.details-divider {
+.customer-details-panel .details-divider {
   height: 1px;
   background-color: var(--tb-border-color);
   width: 100%;
+  flex-shrink: 0;
+}
+
+.crm-drawer-backdrop {
+  display: none;
 }
 
 /* Key-Value Details Table */
@@ -1435,18 +1456,18 @@
 /* Extended Inbox UI Controls (Media, Status Pills, Quick Replies, Errors) */
 .queue-status-pills {
   display: flex;
-  gap: 4px;
-  padding: 0 16px 8px 16px;
+  gap: 3px;
+  padding: 0 12px 8px 12px;
   flex-wrap: wrap;
 }
 
 .queue-status-chip {
-  padding: 3px 8px;
+  padding: 3px 6px;
   border-radius: 6px;
   border: 1px solid var(--tb-border-color);
   background: #ffffff;
   color: var(--tb-text-secondary);
-  font-size: 10.5px;
+  font-size: 10px;
   font-weight: 500;
   cursor: pointer;
 }
@@ -1607,12 +1628,12 @@
 /* 1. Large Laptops / Screens (max-width: 1280px) */
 @media (max-width: 1280px) {
   .conversation-queue {
-    width: 280px;
-    min-width: 260px;
+    width: 265px;
+    min-width: 255px;
   }
   .customer-details-panel {
-    width: 260px;
-    min-width: 250px;
+    width: 245px;
+    min-width: 235px;
   }
 }
 
@@ -1765,12 +1786,35 @@
   }
 
   .canvas-header {
-    padding: 0 16px;
+    height: auto;
+    min-height: 58px;
+    padding: 8px 12px;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .canvas-header-left {
+    flex: 1 1 100%;
+  }
+
+  .canvas-header-actions {
+    width: 100%;
+    justify-content: flex-end;
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+
+  .assignee-label {
+    display: none;
   }
 
   .canvas-care-banner {
-    margin: 8px 14px 0 14px;
+    margin: 8px 12px 0 12px;
     flex-wrap: wrap;
+  }
+
+  .composer-hint {
+    display: none;
   }
 
   .canvas-messages-container {
