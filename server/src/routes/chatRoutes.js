@@ -4,6 +4,7 @@ const ChatController = require('../controllers/chatController');
 const { authenticateToken } = require('../middleware/authMiddleware');
 
 router.get('/', authenticateToken, ChatController.listChats);
+router.post('/initiate', authenticateToken, ChatController.initiateChat);
 router.get('/:id', authenticateToken, ChatController.getChatById);
 router.put('/:id/assign', authenticateToken, ChatController.assignChat);
 router.put('/:id/status', authenticateToken, ChatController.updateStatus);

@@ -1,479 +1,260 @@
-import React, { useState, useEffect, useRef, lazy, Suspense } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
+import { Search, HelpCircle, Menu } from 'lucide-react';
 import { useAuth } from './context/AuthContext';
-import CommandPalette from './components/common/CommandPalette';
 import { useChat } from './context/ChatContext';
+import { useSocket } from './context/SocketContext';
+import { apiFetch } from './services/apiClient';
 import LoginView from './components/auth/LoginView';
-import SignupView from './components/auth/SignupView';
-import ForgotPasswordView from './components/auth/ForgotPasswordView';
 import ResetPasswordView from './components/auth/ResetPasswordView';
-import LandingPage from './components/landing/LandingPage';
-import { TermsView, PrivacyView, RefundsView } from './components/landing/LegalViews';
-import {
-  MessageSquare,
-  Radio,
-  ShoppingBag,
-  Bot,
-  LayoutDashboard,
-  Settings,
-} from 'lucide-react';
-const DashboardView = lazy(() => import('./components/dashboard/DashboardView'));
-const HelpView = lazy(() => import('./components/help/HelpView'));
-const CommerceView = lazy(() => import('./components/commerce/CommerceView'));
-const AutomationView = lazy(() => import('./components/automation/AutomationView'));
-const CampaignsView = lazy(() => import('./components/campaigns/CampaignsView'));
+import WorkspaceSidebar from './components/inbox/WorkspaceSidebar';
 import ConversationList from './components/inbox/ConversationList';
 import ChatCanvas from './components/inbox/ChatCanvas';
 import ContactSidebar from './components/inbox/ContactSidebar';
-// Modals are heavy and most sessions never open some of them — split them
-// out of the initial bundle and fetch each on first use.
-const MetaOnboardingModal = lazy(() => import('./components/modals/MetaOnboardingModal'));
-import ErrorBoundary from './components/ErrorBoundary';
-import { useSocket } from './context/SocketContext';
-const TemplateModal = lazy(() => import('./components/modals/TemplateModal'));
-const AgentManagementModal = lazy(() => import('./components/modals/AgentManagementModal'));
-const BroadcastModal = lazy(() => import('./components/modals/BroadcastModal'));
+import OverviewView from './components/pages/OverviewView';
+import BroadcastsView from './components/pages/BroadcastsView';
+import AutomationView from './components/pages/AutomationView';
+import CommerceView from './components/pages/CommerceView';
+import TeamView from './components/pages/TeamView';
+import SettingsView from './components/pages/SettingsView';
+import TemplatesView from './components/pages/TemplatesView';
+import ContactsView from './components/pages/ContactsView';
+import TemplateModal from './components/modals/TemplateModal';
+import NewChatModal from './components/modals/NewChatModal';
+
+const VIEW_LABELS = {
+  inbox: 'Inbox',
+  overview: 'Overview',
+  contacts: 'Contacts',
+  templates: 'Templates',
+  broadcasts: 'Broadcasts',
+  automation: 'Automation',
+  commerce: 'Catalog',
+  team: 'Team',
+  settings: 'Settings',
+};
 
 export default function App() {
-  const { agent, loading, tenant, logout } = useAuth();
-  const { activeChat, activeChatId, selectChat } = useChat();
-  const { connected } = useSocket();
+  const { agent, loading, isAdmin } = useAuth();
+  const { activeChat, activeChatId, selectChat, searchQuery, setSearchQuery } = useChat();
+  const { onlineAgentIds } = useSocket();
 
-  // Public (logged-out) views: the product's front door. A visitor now
-  // meets a landing page with pricing and a real signup — not a bare
-  // login form.
-  const [publicView, setPublicView] = useState('landing');
-  // The plan a visitor picked on the pricing section; the signup form
-  // opens with it selected instead of silently defaulting to Pro.
-  const [signupPlan, setSignupPlan] = useState('PRO');
-  const showSignup = (plan) => {
-    if (typeof plan === 'string' && ['STARTER', 'GROWTH', 'PRO'].includes(plan)) {
-      setSignupPlan(plan);
-    }
-    setPublicView('signup');
-  };
-  // Password-reset email links land on /?reset=<token>.
-  const [resetToken] = useState(() => {
-    try {
-      return new URLSearchParams(window.location.search).get('reset') || '';
-    } catch {
-      return '';
-    }
-  });
-  // Logged-in home: owners land on the dashboard, agents in the inbox.
-  const [mainView, setMainView] = useState(null);
-  useEffect(() => {
-    if (agent && mainView === null) {
-      setMainView(agent.role === 'ADMIN' || agent.role === 'SUPERVISOR' ? 'dashboard' : 'inbox');
-    }
-    if (!agent) setMainView(null);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [agent]);
-
-  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [currentView, setCurrentView] = useState('inbox');
+  const [resetToken, setResetToken] = useState(() =>
+    typeof window !== 'undefined'
+      ? new URLSearchParams(window.location.search).get('reset') || ''
+      : ''
+  );
   const [isTemplateModalOpen, setIsTemplateModalOpen] = useState(false);
-  const [isBroadcastModalOpen, setIsBroadcastModalOpen] = useState(false);
-  const [isAgentsModalOpen, setIsAgentsModalOpen] = useState(false);
-  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const [isSidebarOpen, setIsSidebarOpen] = useState(() =>
+    typeof window !== 'undefined' ? window.innerWidth > 1080 : true
+  );
+  const [isNewChatOpen, setIsNewChatOpen] = useState(false);
+  const [isMobileNavOpen, setIsMobileNavOpen] = useState(false);
+  const [fallbackOnlineCount, setFallbackOnlineCount] = useState(1);
 
-  // Mobile drill-in history: on a phone, opening a chat pushes one history
-  // entry so the device/browser Back button returns to the conversation
-  // list instead of leaving the app. Desktop keeps plain state navigation.
-  const chatHistoryArmedRef = useRef(false);
-  useEffect(() => {
-    const chatOpen = Boolean(activeChat || activeChatId);
-    if (
-      chatOpen &&
-      !chatHistoryArmedRef.current &&
-      typeof window !== 'undefined' &&
-      window.matchMedia('(max-width: 768px)').matches
-    ) {
-      window.history.pushState({ teambeeChat: true }, '');
-      chatHistoryArmedRef.current = true;
-    }
-    if (!chatOpen) chatHistoryArmedRef.current = false;
-  }, [activeChat, activeChatId]);
+  const searchInputRef = useRef(null);
 
+  // Keyboard shortcut Cmd+K / Ctrl+K focuses top workspace search
   useEffect(() => {
-    const onPopState = () => {
-      if (chatHistoryArmedRef.current) {
-        chatHistoryArmedRef.current = false;
-        selectChat(null);
+    const handleKeyDown = (e) => {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
+        e.preventDefault();
+        searchInputRef.current?.focus();
       }
     };
-    window.addEventListener('popstate', onPopState);
-    return () => window.removeEventListener('popstate', onPopState);
-  }, [selectChat]);
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
 
-  const handleMobileBack = () => {
-    if (chatHistoryArmedRef.current) {
-      window.history.back(); // the popstate handler closes the chat
-    } else {
-      selectChat(null);
-    }
-  };
-
-  // iOS Safari keyboard handling: the interactive-widget viewport keyword
-  // is not shipped in Safari, so there the layout viewport does NOT shrink
-  // when the keyboard opens and the in-flow composer can end up hidden
-  // behind the keyboard. Track the VisualViewport instead: while the
-  // keyboard is open, size the app shell to the visible area (its height
-  // + offsetTop). Android Chrome already resizes the layout viewport via
-  // interactive-widget=resizes-content, so this fallback runs on iOS only.
-  const appShellRef = useRef(null);
+  // Load initial online count when agent logs in
   useEffect(() => {
-    const vv = window.visualViewport;
-    const el = appShellRef.current;
-    if (!vv || !el) return;
-    const isIOS =
-      /iPhone|iPad|iPod/.test(navigator.userAgent) ||
-      (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
-    if (!isIOS) return;
-    let raf = 0;
-    const apply = () => {
-      cancelAnimationFrame(raf);
-      raf = requestAnimationFrame(() => {
-        if (vv.scale !== 1) {
-          el.style.height = '';
-          el.style.transform = '';
-          return;
-        }
-        const keyboardOpen = vv.height < window.innerHeight - 60;
-        if (keyboardOpen) {
-          el.style.height = `${Math.round(vv.height)}px`;
-          el.style.transform = `translateY(${Math.round(vv.offsetTop)}px)`;
-        } else {
-          el.style.height = '';
-          el.style.transform = '';
-        }
-      });
-    };
-    vv.addEventListener('resize', apply);
-    vv.addEventListener('scroll', apply);
-    apply();
-    return () => {
-      vv.removeEventListener('resize', apply);
-      vv.removeEventListener('scroll', apply);
-      cancelAnimationFrame(raf);
-      el.style.height = '';
-      el.style.transform = '';
-    };
+    if (!agent) return;
+    apiFetch('/api/agents')
+      .then((data) => {
+        const liveCount = Array.isArray(data.onlineAgentIds) && data.onlineAgentIds.length > 0
+          ? data.onlineAgentIds.length
+          : (data.agents || []).filter((a) => a.isLiveOnline || a.status === 'ONLINE').length;
+        setFallbackOnlineCount(Math.max(1, liveCount));
+      })
+      .catch(() => {});
   }, [agent]);
 
   if (loading) {
     return (
-      <div
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          height: '100vh',
-          background: 'var(--bg-app)',
-          color: '#25D366',
-          fontSize: '15px',
-          fontWeight: '600',
-        }}
-      >
-        Loading TeamBee...
+      <div className="app-loading-screen">
+        <div className="app-loading-card">
+          <div className="app-loading-spinner" />
+          <span className="app-loading-title">Loading TeamBee...</span>
+          <span className="app-loading-subtitle">TEAM INBOX, IN SYNC</span>
+        </div>
       </div>
     );
   }
 
   if (!agent) {
-    if (resetToken && publicView !== 'login-after-reset') {
+    if (resetToken) {
       return (
         <ResetPasswordView
           token={resetToken}
           onDone={() => {
-            try {
-              window.history.replaceState({}, '', window.location.pathname);
-            } catch {}
-            setPublicView('login-after-reset');
+            window.history.replaceState({}, '', window.location.pathname);
+            setResetToken('');
           }}
         />
       );
     }
-    if (publicView === 'forgot') {
-      return (
-        <ForgotPasswordView
-          onBack={() => setPublicView('login')}
-          onHome={() => setPublicView('landing')}
-        />
-      );
-    }
-    if (publicView === 'login' || publicView === 'login-after-reset') {
-      return (
-        <LoginView
-          onShowSignup={() => setPublicView('signup')}
-          onBack={() => setPublicView('landing')}
-          onForgot={() => setPublicView('forgot')}
-        />
-      );
-    }
-    if (publicView === 'signup') {
-      return (
-        <SignupView
-          initialPlan={signupPlan}
-          onBack={() => setPublicView('landing')}
-          onShowLogin={() => setPublicView('login')}
-          onShowTerms={() => setPublicView('terms')}
-          onShowPrivacy={() => setPublicView('privacy')}
-        />
-      );
-    }
-    if (publicView === 'terms') return <TermsView onBack={() => setPublicView('landing')} />;
-    if (publicView === 'refunds') return <RefundsView onBack={() => setPublicView('landing')} />;
-    if (publicView === 'privacy') return <PrivacyView onBack={() => setPublicView('landing')} />;
-    return (
-      <LandingPage
-        onLogin={() => setPublicView('login')}
-        onSignup={showSignup}
-        onShowTerms={() => setPublicView('terms')}
-        onShowPrivacy={() => setPublicView('privacy')}
-        onShowRefunds={() => setPublicView('refunds')}
-      />
-    );
+    return <LoginView />;
   }
 
-  const trialDaysLeft =
-    tenant?.subscriptionStatus === 'TRIAL' && tenant?.trialEndsAt
-      ? Math.max(0, Math.ceil((new Date(tenant.trialEndsAt).getTime() - Date.now()) / 86400000))
-      : null;
-  const subscriptionExpired = tenant?.subscriptionStatus === 'EXPIRED';
-  // An expired workspace keeps its dashboard (and the upgrade path) but
-  // not the inbox — the trial's whole point.
-  const effectiveMainView = subscriptionExpired ? 'dashboard' : mainView || 'inbox';
+  const onlineTeammatesCount = onlineAgentIds?.length > 0 ? onlineAgentIds.length : fallbackOnlineCount;
+
+  const handleGlobalSearchChange = (e) => {
+    const value = e.target.value;
+    setSearchQuery(value);
+    if (value.trim() && currentView !== 'inbox' && currentView !== 'contacts') {
+      setCurrentView('inbox');
+    }
+  };
 
   return (
-    <ErrorBoundary>
-    <div className="app-container" ref={appShellRef}>
-      {!connected && (
-        <div className="connection-banner" role="alert">
-          Connection lost — reconnecting to TeamBee… New messages will appear once the connection is back.
-        </div>
-      )}
-      {tenant?.subscriptionStatus === 'TRIAL' && trialDaysLeft !== null && (
+    <div className="teambee-app-wrapper" data-node-id="2:2" data-name="Workspace Shell">
+      <div className={`workspace-nav-container ${isMobileNavOpen ? 'mobile-open' : ''}`}>
+        <WorkspaceSidebar
+          currentView={currentView}
+          onSelectView={setCurrentView}
+          onOpenSettings={() => setCurrentView(isAdmin ? 'settings' : 'inbox')}
+          onOpenSimulator={() => setCurrentView(isAdmin ? 'settings' : 'inbox')}
+          onCloseMobile={() => setIsMobileNavOpen(false)}
+        />
+      </div>
+
+      {isMobileNavOpen && (
         <div
-          style={{
-            background: 'rgba(245, 158, 11, 0.12)',
-            borderBottom: '1px solid rgba(245, 158, 11, 0.35)',
-            color: '#fcd34d',
-            fontSize: '12.5px',
-            padding: '7px 14px',
-            display: 'flex',
-            gap: '10px',
-            alignItems: 'center',
-            justifyContent: 'center',
-            flexWrap: 'wrap',
-            flex: '0 0 auto',
-          }}
-          role="status"
-        >
-          <span>Free trial — {trialDaysLeft} day{trialDaysLeft === 1 ? '' : 's'} left on Pro.</span>
-          <button
-            type="button"
-            onClick={() => setMainView('dashboard')}
-            style={{ background: 'none', border: 'none', color: '#fde68a', fontWeight: 700, cursor: 'pointer', textDecoration: 'underline', fontSize: '12.5px', padding: 0 }}
-          >
-            See plans
-          </button>
-        </div>
-      )}
-      {subscriptionExpired && (
-        <div
-          style={{
-            background: 'rgba(239, 68, 68, 0.12)',
-            borderBottom: '1px solid rgba(239, 68, 68, 0.4)',
-            color: '#fca5a5',
-            fontSize: '12.5px',
-            padding: '7px 14px',
-            display: 'flex',
-            gap: '10px',
-            alignItems: 'center',
-            justifyContent: 'center',
-            flexWrap: 'wrap',
-            flex: '0 0 auto',
-          }}
-          role="alert"
-        >
-          <span>Your free trial has ended — the inbox is paused. Pick a plan below to continue.</span>
-          <button
-            type="button"
-            onClick={logout}
-            style={{ background: 'none', border: 'none', color: '#fecaca', fontWeight: 700, cursor: 'pointer', textDecoration: 'underline', fontSize: '12.5px', padding: 0 }}
-          >
-            Sign out
-          </button>
-        </div>
+          className="workspace-nav-mobile-backdrop"
+          onClick={() => setIsMobileNavOpen(false)}
+        />
       )}
 
-      {/* DoubleTick-grade SaaS Global App Switcher Header */}
-      <header className="doubletick-nav-header">
-        <div className="doubletick-nav-brand">
-          <span className="brand-dot" />
-          <span className="brand-title">{tenant?.name || 'TeamBee'}</span>
-          <span className="saas-badge">DoubleTick SaaS</span>
-        </div>
-
-        <nav className="doubletick-nav-tabs">
-          <button
-            type="button"
-            className={`doubletick-tab ${effectiveMainView === 'inbox' ? 'active' : ''}`}
-            onClick={() => setMainView('inbox')}
-          >
-            <MessageSquare size={14} />
-            <span>Inbox</span>
-          </button>
-          <button
-            type="button"
-            className={`doubletick-tab ${effectiveMainView === 'campaigns' ? 'active' : ''}`}
-            onClick={() => setMainView('campaigns')}
-          >
-            <Radio size={14} />
-            <span>Campaigns</span>
-          </button>
-          <button
-            type="button"
-            className={`doubletick-tab ${effectiveMainView === 'commerce' ? 'active' : ''}`}
-            onClick={() => setMainView('commerce')}
-          >
-            <ShoppingBag size={14} />
-            <span>Catalog &amp; Pay</span>
-          </button>
-          <button
-            type="button"
-            className={`doubletick-tab ${effectiveMainView === 'automation' ? 'active' : ''}`}
-            onClick={() => setMainView('automation')}
-          >
-            <Bot size={14} />
-            <span>Automations</span>
-          </button>
-          {(agent.role === 'ADMIN' || agent.role === 'SUPERVISOR') && (
+      <main className="workspace-main" data-name="Workspace content">
+        <header className="workspace-top-bar">
+          <div className="top-bar-left">
             <button
               type="button"
-              className={`doubletick-tab ${effectiveMainView === 'dashboard' ? 'active' : ''}`}
-              onClick={() => setMainView('dashboard')}
+              className="top-bar-mobile-menu-btn"
+              onClick={() => setIsMobileNavOpen(true)}
+              title="Open Navigation"
             >
-              <LayoutDashboard size={14} />
-              <span>Dashboard</span>
+              <Menu size={18} />
             </button>
-          )}
-        </nav>
 
-        <div className="doubletick-nav-actions">
-          <button
-            type="button"
-            className="doubletick-tool-btn"
-            onClick={() => setIsSettingsOpen(true)}
-            title="Meta WABA Settings"
-          >
-            <Settings size={15} />
-          </button>
-        </div>
-      </header>
+            <div className="top-bar-breadcrumbs">
+              <span className="breadcrumb-muted">Workspace</span>
+              <span className="breadcrumb-slash">/</span>
+              <span className="breadcrumb-active">{VIEW_LABELS[currentView] || 'Inbox'}</span>
+            </div>
+          </div>
 
-      {effectiveMainView === 'help' ? (
-        <Suspense fallback={null}>
-          <HelpView
-            onBack={() => setMainView('inbox')}
-            onOpenDashboard={() => setMainView('dashboard')}
-            onOpenTemplates={() => setIsTemplateModalOpen(true)}
-            onOpenAgents={() => setIsAgentsModalOpen(true)}
-            onOpenSettings={() => setIsSettingsOpen(true)}
-            isAdmin={agent.role === 'ADMIN' || agent.role === 'SUPERVISOR'}
-          />
-        </Suspense>
-      ) : effectiveMainView === 'dashboard' ? (
-        <Suspense fallback={null}>
-          <DashboardView
-            onOpenInbox={() => setMainView('inbox')}
-            onOpenSettings={() => setIsSettingsOpen(true)}
-            onOpenTemplates={() => setIsTemplateModalOpen(true)}
-            onOpenBroadcasts={() => setIsBroadcastModalOpen(true)}
-            onOpenAgents={() => setIsAgentsModalOpen(true)}
-          />
-        </Suspense>
-      ) : effectiveMainView === 'commerce' ? (
-        <Suspense fallback={null}>
-          <CommerceView
-            onBack={() => setMainView('inbox')}
-            onOpenInbox={() => setMainView('inbox')}
-          />
-        </Suspense>
-      ) : effectiveMainView === 'automation' ? (
-        <Suspense fallback={null}>
-          <AutomationView
-            onBack={() => setMainView('inbox')}
-            onOpenInbox={() => setMainView('inbox')}
-          />
-        </Suspense>
-      ) : effectiveMainView === 'campaigns' ? (
-        <Suspense fallback={null}>
-          <CampaignsView
-            onBack={() => setMainView('inbox')}
-            onOpenCreateBroadcast={() => setIsBroadcastModalOpen(true)}
-          />
-        </Suspense>
-      ) : (
-      /* 3-Column WhatsApp Shared Inbox Layout */
-      <div className={`inbox-layout ${(activeChat || activeChatId) ? 'has-active-chat' : 'no-active-chat'}`}>
-        {/* Column 1: Navigation & Conversation List */}
-        <ConversationList
-          onOpenSettings={() => setIsSettingsOpen(true)}
-          onOpenTemplates={() => setIsTemplateModalOpen(true)}
-          onOpenBroadcasts={() => setIsBroadcastModalOpen(true)}
-          onOpenAgents={() => setIsAgentsModalOpen(true)}
-          onOpenDashboard={() => setMainView('dashboard')}
-          onOpenHelp={() => setMainView('help')}
-          onOpenCommerce={() => setMainView('commerce')}
-          onOpenAutomation={() => setMainView('automation')}
-          onOpenCampaigns={() => setMainView('campaigns')}
-        />
+          <div className="top-bar-right">
+            <div className="top-bar-search-box">
+              <Search size={14} className="top-search-icon" />
+              <input
+                ref={searchInputRef}
+                type="text"
+                placeholder="Search anything"
+                className="top-search-input"
+                value={searchQuery}
+                onChange={handleGlobalSearchChange}
+              />
+              <span className="top-search-kbd">⌘ K</span>
+            </div>
 
-        {/* Column 2: Active Chat Canvas */}
-        <ChatCanvas
-          onOpenTemplatePicker={() => setIsTemplateModalOpen(true)}
-          onToggleSidebar={() => setIsSidebarOpen(!isSidebarOpen)}
-          isSidebarOpen={isSidebarOpen}
-          onBack={handleMobileBack}
-        />
+            {isAdmin && (
+              <button
+                type="button"
+                className="top-bar-icon-btn"
+                onClick={() => setCurrentView('settings')}
+                title="Channel setup & Sandbox simulator"
+              >
+                <HelpCircle size={18} />
+              </button>
+            )}
+          </div>
+        </header>
 
-        {/* Backdrop for Mobile/Tablet CRM drawer */}
-        {isSidebarOpen && activeChat && (
-          <div
-            className="crm-drawer-backdrop"
-            onClick={() => setIsSidebarOpen(false)}
+        {currentView === 'inbox' ? (
+          <>
+            <div className="workspace-page-header">
+              <div className="page-header-text">
+                <h1 className="page-header-title">Team inbox</h1>
+                <p className="page-header-subtitle">
+                  A little teamwork. A better customer experience.
+                </p>
+              </div>
+
+              <div className="page-header-status-pill">
+                <span className="status-pill-dot">●</span>
+                <span className="status-pill-text">
+                  {onlineTeammatesCount} {onlineTeammatesCount === 1 ? 'teammate' : 'teammates'} online
+                </span>
+              </div>
+            </div>
+
+            <div
+              className={`shared-inbox-card ${(activeChat || activeChatId) ? 'has-active-chat' : 'no-active-chat'}`}
+              data-name="Shared inbox"
+            >
+              <ConversationList onOpenNewChat={() => setIsNewChatOpen(true)} />
+
+              <div className="card-column-divider queue-divider" />
+
+              <ChatCanvas
+                onOpenTemplatePicker={() => setIsTemplateModalOpen(true)}
+                onToggleSidebar={() => setIsSidebarOpen((prev) => !prev)}
+                isSidebarOpen={isSidebarOpen}
+                onBack={() => selectChat(null)}
+              />
+
+              {isSidebarOpen && activeChat && (
+                <>
+                  <div className="card-column-divider details-divider" />
+                  <ContactSidebar onClose={() => setIsSidebarOpen(false)} />
+                </>
+              )}
+
+              {isSidebarOpen && activeChat && (
+                <div
+                  className="crm-drawer-backdrop"
+                  onClick={() => setIsSidebarOpen(false)}
+                />
+              )}
+            </div>
+          </>
+        ) : currentView === 'overview' ? (
+          <OverviewView onNavigateView={setCurrentView} />
+        ) : currentView === 'contacts' ? (
+          <ContactsView
+            onOpenChatInInbox={() => setCurrentView('inbox')}
+            onOpenNewChat={() => setIsNewChatOpen(true)}
           />
+        ) : currentView === 'templates' ? (
+          <TemplatesView
+            onNavigateToBroadcasts={() => setCurrentView('broadcasts')}
+          />
+        ) : currentView === 'broadcasts' ? (
+          <BroadcastsView />
+        ) : currentView === 'automation' ? (
+          <AutomationView />
+        ) : currentView === 'commerce' ? (
+          <CommerceView />
+        ) : currentView === 'team' ? (
+          <TeamView />
+        ) : (
+          <SettingsView onNavigateView={setCurrentView} />
         )}
+      </main>
 
-        {/* Column 3: Contact & CRM Intelligence Sidebar */}
-        {isSidebarOpen && activeChat && (
-          <ContactSidebar
-            onOpenTemplatePicker={() => setIsTemplateModalOpen(true)}
-            onClose={() => setIsSidebarOpen(false)}
-          />
-        )}
-      </div>
-      )}
-
-      <CommandPalette
-        onOpenDashboard={() => setMainView('dashboard')}
-        onOpenInbox={() => setMainView('inbox')}
-        onOpenHelp={() => setMainView('help')}
-        onOpenSettings={() => setIsSettingsOpen(true)}
-        onOpenTemplates={() => setIsTemplateModalOpen(true)}
-        onOpenBroadcasts={() => setIsBroadcastModalOpen(true)}
-        onOpenAgents={() => setIsAgentsModalOpen(true)}
-        isAdmin={agent.role === 'ADMIN' || agent.role === 'SUPERVISOR'}
-      />
-
-      {/* Modals & Consoles */}
-      <Suspense fallback={null}>
-        <MetaOnboardingModal isOpen={isSettingsOpen} onClose={() => setIsSettingsOpen(false)} />
-        <TemplateModal isOpen={isTemplateModalOpen} onClose={() => setIsTemplateModalOpen(false)} />
-        <BroadcastModal isOpen={isBroadcastModalOpen} onClose={() => setIsBroadcastModalOpen(false)} />
-        <AgentManagementModal isOpen={isAgentsModalOpen} onClose={() => setIsAgentsModalOpen(false)} />
-      </Suspense>
+      <TemplateModal isOpen={isTemplateModalOpen} onClose={() => setIsTemplateModalOpen(false)} />
+      <NewChatModal isOpen={isNewChatOpen} onClose={() => setIsNewChatOpen(false)} />
     </div>
-    </ErrorBoundary>
   );
 }

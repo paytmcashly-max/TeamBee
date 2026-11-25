@@ -1,6 +1,6 @@
 const bcrypt = require('bcryptjs');
 const crypto = require('crypto');
-const { hashSecret } = require('../services/credentialCrypto');
+const { encryptSecret, hashSecret } = require('../services/credentialCrypto');
 const prisma = require('./prisma');
 
 function runtimeSecret(name, developmentFallback) {
@@ -43,9 +43,9 @@ async function seed() {
       wabaId: 'WABA_1092837465001',
       phoneNumberId: 'PHONE_ID_919876500001',
       displayPhoneNumber: '+91 98765 00001',
-       accessToken: process.env.APEX_META_ACCESS_TOKEN || 'MOCK_TOKEN',
+       accessToken: encryptSecret(process.env.APEX_META_ACCESS_TOKEN || 'MOCK_TOKEN'),
        webhookVerifyTokenHash: hashSecret(runtimeSecret('APEX_WEBHOOK_VERIFY_TOKEN')),
-       appSecret: runtimeSecret('APEX_META_APP_SECRET'),
+       appSecret: encryptSecret(runtimeSecret('APEX_META_APP_SECRET')),
       plan: 'ENTERPRISE',
     },
   });
@@ -58,9 +58,9 @@ async function seed() {
       wabaId: 'WABA_1092837465002',
       phoneNumberId: 'PHONE_ID_919876500002',
       displayPhoneNumber: '+91 98765 00002',
-       accessToken: process.env.URBANGLAM_META_ACCESS_TOKEN || 'MOCK_TOKEN',
+       accessToken: encryptSecret(process.env.URBANGLAM_META_ACCESS_TOKEN || 'MOCK_TOKEN'),
        webhookVerifyTokenHash: hashSecret(runtimeSecret('URBANGLAM_WEBHOOK_VERIFY_TOKEN')),
-       appSecret: runtimeSecret('URBANGLAM_META_APP_SECRET'),
+       appSecret: encryptSecret(runtimeSecret('URBANGLAM_META_APP_SECRET')),
       plan: 'PRO',
     },
   });

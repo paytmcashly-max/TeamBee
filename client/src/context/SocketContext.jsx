@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useEffect, useState, useRef, useCallback } from 'react';
 import { io } from 'socket.io-client';
 import { useAuth } from './AuthContext';
+import { resolveApiBaseUrl } from '../services/apiClient';
 
 const SocketContext = createContext(null);
 
@@ -8,50 +9,40 @@ export function SocketProvider({ children }) {
   const { token, agent } = useAuth();
   const [connected, setConnected] = useState(false);
   const [activeChatRoom, setActiveChatRoom] = useState(null);
+  const [onlineAgentIds, setOnlineAgentIds] = useState([]);
   const socketRef = useRef(null);
   const activeChatRoomRef = useRef(null);
-  const tokenRef = useRef(token);
 
   useEffect(() => {
     activeChatRoomRef.current = activeChatRoom;
   }, [activeChatRoom]);
 
   useEffect(() => {
-    tokenRef.current = token;
-  }, [token]);
-
-  useEffect(() => {
     if (!agent) {
       if (socketRef.current) {
         socketRef.current.disconnect();
         socketRef.current = null;
-        setConnected(false);
-        activeChatRoomRef.current = null;
-        setActiveChatRoom(null);
       }
+      setConnected(false);
+      setOnlineAgentIds([]);
+      activeChatRoomRef.current = null;
+      setActiveChatRoom(null);
       return;
     }
 
-    // Connect to Socket.io server with JWT authentication handshake
-    const socketUrl = import.meta.env.VITE_API_URL ? import.meta.env.VITE_API_URL.replace(/\/+$/, '') : '/';
+    const baseUrl = resolveApiBaseUrl();
+    const socketUrl = baseUrl || '/';
     const socket = io(socketUrl, {
-      // Evaluated on every (re)connect, so a reconnect never replays a
-      // token that has since been rotated or re-issued.
-      auth: (cb) => cb({ token: tokenRef.current }),
+      auth: token ? { token } : undefined,
       withCredentials: true,
       transports: ['websocket', 'polling'],
-      // Never give up: a capped attempt count left agents silently offline
-      // (stale inbox, no error) after long network drops. Backoff is capped
-      // by reconnectionDelayMax instead.
-      reconnectionAttempts: Infinity,
-      reconnectionDelay: 1000,
-      reconnectionDelayMax: 30000,
+      reconnectionAttempts: 10,
+      reconnectionDelay: 2000,
     });
 
     socketRef.current = socket;
 
     socket.on('connect', () => {
-      console.log('⚡ [Socket.io Connected]: Authenticated as', agent.name);
       setConnected(true);
       const chatId = activeChatRoomRef.current;
       if (chatId) {
@@ -64,13 +55,19 @@ export function SocketProvider({ children }) {
       }
     });
 
-    socket.on('disconnect', (reason) => {
-      console.log('⚠️ [Socket.io Disconnected]:', reason);
+    socket.on('tenant_presence_snapshot', ({ onlineAgentIds: ids } = {}) => {
+      if (Array.isArray(ids)) setOnlineAgentIds(ids);
+    });
+
+    socket.on('agent_presence_changed', ({ onlineAgentIds: ids } = {}) => {
+      if (Array.isArray(ids)) setOnlineAgentIds(ids);
+    });
+
+    socket.on('disconnect', () => {
       setConnected(false);
     });
 
-    socket.on('connect_error', (err) => {
-      console.warn('❌ [Socket.io Connect Error]:', err.message);
+    socket.on('connect_error', () => {
       setConnected(false);
     });
 
@@ -78,16 +75,14 @@ export function SocketProvider({ children }) {
       socket.disconnect();
       socketRef.current = null;
       setConnected(false);
+      setOnlineAgentIds([]);
       activeChatRoomRef.current = null;
       setActiveChatRoom(null);
     };
   }, [token, agent?.id]);
 
-  /**
-   * Securely join specific chat room with server RBAC check
-   */
   const joinChat = useCallback((chatId) => {
-    return new Promise((resolve, reject) => {
+    return new Promise((resolve) => {
       activeChatRoomRef.current = chatId;
       if (!socketRef.current || !socketRef.current.connected) {
         return resolve({ success: false, reason: 'Socket not connected' });
@@ -99,16 +94,12 @@ export function SocketProvider({ children }) {
           resolve(ack);
         } else {
           if (activeChatRoomRef.current === chatId) activeChatRoomRef.current = null;
-          console.warn('Room join rejected:', ack?.error);
           resolve(ack || { success: false });
         }
       });
     });
   }, []);
 
-  /**
-   * Leave chat room
-   */
   const leaveChat = useCallback((chatId) => {
     if (socketRef.current) {
       socketRef.current.emit('leave_chat', { chatId });
@@ -119,9 +110,6 @@ export function SocketProvider({ children }) {
     }
   }, []);
 
-  /**
-   * Emit agent typing indicator
-   */
   const emitTyping = useCallback((chatId, isTyping) => {
     if (socketRef.current) {
       socketRef.current.emit('typing_indicator', { chatId, isTyping });
@@ -134,6 +122,7 @@ export function SocketProvider({ children }) {
         socket: socketRef.current,
         connected,
         activeChatRoom,
+        onlineAgentIds,
         joinChat,
         leaveChat,
         emitTyping,

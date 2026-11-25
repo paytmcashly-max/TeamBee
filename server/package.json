@@ -11,10 +11,11 @@
     "prisma:migrate:deploy": "prisma migrate deploy",
     "prisma:push": "prisma db push",
     "seed": "node src/db/seed.js",
-    "test": "node tests/test-automation-units.js && node tests/test-feature-controllers.js && node tests/test-migrations.pg-mem.js && node tests/test-commerce-automation.js",
+    "test": "node tests/test-automation-units.js && node tests/test-feature-controllers.js && node tests/test-migrations.pg-mem.js && node tests/test-commerce-automation.js && node tests/test-webhook-parser.js && node tests/test-rbac-and-services.js",
     "postinstall": "prisma generate"
   },
   "dependencies": {
+    "@aws-sdk/client-s3": "^3.1175.0",
     "@prisma/client": "^6.3.1",
     "@socket.io/redis-adapter": "^8.3.0",
     "axios": "^1.7.9",
@@ -26,7 +27,6 @@
     "express-rate-limit": "^8.7.1",
     "helmet": "^8.3.0",
     "jsonwebtoken": "^9.0.2",
-    "localtunnel": "^2.0.2",
     "prisma": "^6.3.1",
     "redis": "^6.3.0",
     "socket.io": "^4.8.1",
@@ -35,6 +35,7 @@
     "ioredis": "^5.0.0"
   },
   "devDependencies": {
+    "localtunnel": "^2.0.2",
     "pg-mem": "^3.0.5"
   }
 }

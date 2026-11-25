@@ -541,14 +541,9 @@ class WebhookParserService {
 
     let recipientUpdated = false;
     if (recipient && recipient.broadcast.tenantId === tenant.id) {
-        const statusPriority = { PENDING: 0, SENT: 1, DELIVERED: 2, READ: 3, FAILED: 4 };
         // FAILED is terminal only from pre-delivery states — a late FAILED
         // callback must never regress a DELIVERED/READ record.
-        const previousStatuses = status === 'FAILED'
-          ? ['PENDING', 'SENT']
-          : Object.keys(statusPriority).filter(
-              (candidate) => statusPriority[candidate] < statusPriority[status]
-            );
+        const previousStatuses = WebhookParserService.getAllowedPreviousStatuses(status);
         if (previousStatuses.length === 0) {
           return { updated: false, reason: 'Status already applied' };
         }
@@ -601,12 +596,7 @@ class WebhookParserService {
 
     // Prevent regressing or re-applying status (e.g. don't overwrite READ
     // with DELIVERED, and don't broadcast duplicate READ callbacks).
-    const statusPriority = { PENDING: 0, SENT: 1, DELIVERED: 2, READ: 3, FAILED: 4 };
-    const previousStatuses = status === 'FAILED'
-      ? ['PENDING', 'SENT']
-      : Object.keys(statusPriority).filter(
-          (candidate) => statusPriority[candidate] < statusPriority[status]
-        );
+    const previousStatuses = WebhookParserService.getAllowedPreviousStatuses(status);
     if (previousStatuses.length === 0) {
       return { updated: false, reason: 'Status already higher than update' };
     }
@@ -642,6 +632,20 @@ class WebhookParserService {
     });
 
     return { updated: true, type: 'message', message: updatedMessage };
+  }
+
+  /**
+   * Returns valid predecessor delivery states for Meta callback transitions.
+   * Ensures READ/DELIVERED terminal receipts are never overwritten by late FAILED events.
+   */
+  static getAllowedPreviousStatuses(targetStatus) {
+    const allowedTransitions = {
+      SENT: ['PENDING'],
+      DELIVERED: ['PENDING', 'SENT'],
+      READ: ['PENDING', 'SENT', 'DELIVERED'],
+      FAILED: ['PENDING', 'SENT'],
+    };
+    return allowedTransitions[targetStatus] || [];
   }
 }
 

@@ -27,6 +27,7 @@ const billingRoutes = require('./routes/billingRoutes');
 const simulatorRoutes = require('./routes/simulatorRoutes');
 const commerceRoutes = require('./routes/commerceRoutes');
 const automationRoutes = require('./routes/automationRoutes');
+const mediaRoutes = require('./routes/mediaRoutes');
 
 const app = express();
 const server = http.createServer(app);
@@ -79,21 +80,24 @@ app.use(
 app.use(
   compression({
     filter: (req, res) => {
-      if (req.path.startsWith('/api/messages/media/')) return false;
+      if (req.path.startsWith('/api/messages/media/') || req.path.startsWith('/api/media/')) return false;
       return compression.filter(req, res);
     },
   })
 );
 
-// Express JSON body parser preserving raw body buffer for Webhook HMAC signature verification
-app.use(
-  express.json({
-    limit: '1mb',
-    verify: (req, res, buf) => {
-      req.rawBody = buf;
-    },
-  })
-);
+// Express JSON body parser preserving raw body buffer for Webhook HMAC signature verification.
+// Media upload handles larger Base64 payloads on its dedicated route middleware.
+const defaultJsonParser = express.json({
+  limit: '1mb',
+  verify: (req, res, buf) => {
+    req.rawBody = buf;
+  },
+});
+app.use((req, res, next) => {
+  if (req.path === '/api/media/upload') return next();
+  return defaultJsonParser(req, res, next);
+});
 app.use(express.urlencoded({ extended: false, limit: '100kb' }));
 
 // Health Check
@@ -166,6 +170,7 @@ app.use('/api/analytics', analyticsRoutes);
 app.use('/api/billing', billingRoutes);
 app.use('/api/commerce', commerceRoutes);
 app.use('/api/automation', automationRoutes);
+app.use('/api/media', mediaRoutes);
 // Dev-only tool: the simulator injects fake inbound messages and statuses,
 // so it is mounted only when explicitly enabled (staging), never by default.
 if (process.env.ENABLE_SIMULATOR === 'true') {

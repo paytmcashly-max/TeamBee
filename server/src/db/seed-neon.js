@@ -91,14 +91,17 @@ async function seed() {
   });
   console.log('✅ Staff Agent ready:', staffAgent.name);
 
-  // 4. Create User Contact
+  const sampleContactWaId = String(process.env.SEED_SAMPLE_CONTACT_PHONE || '919876543210').replace(/\D/g, '');
+  const sampleContactName = String(process.env.SEED_SAMPLE_CONTACT_NAME || 'Sample Lead').trim();
+
+  // 4. Create Sample Lead Contact
   const userContact = await prisma.contact.upsert({
-    where: { tenantId_waId: { tenantId: tenant.id, waId: '916203386747' } },
-    update: { name: 'Kishan (Lead)' },
+    where: { tenantId_waId: { tenantId: tenant.id, waId: sampleContactWaId } },
+    update: { name: sampleContactName },
     create: {
       tenantId: tenant.id,
-      waId: '916203386747',
-      name: 'Kishan (Lead)',
+      waId: sampleContactWaId,
+      name: sampleContactName,
       customAttributes: JSON.stringify({
         leadStage: 'Demo Attended',
         targetExam: 'NEET 2026',

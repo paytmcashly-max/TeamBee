@@ -4,6 +4,7 @@ const { decryptSecret } = require('../services/credentialCrypto');
 const { broadcastNewMessage, broadcastNoteMentions } = require('../services/socketService');
 const { canAccessChat } = require('../middleware/authMiddleware');
 const { resolveReplySnapshot, parseRawPayload } = require('../services/replyContext');
+const { getExternalBaseUrl } = require('../utils/requestUtils');
 
 class MessageController {
   /**
@@ -182,22 +183,25 @@ class MessageController {
          return res.status(400).json({ success: false, error: 'Message content is too long' });
        }
        if (typeof mediaUrl !== 'undefined' && mediaUrl !== null) {
-         let parsedMediaUrl = null;
-         try {
-           parsedMediaUrl = typeof mediaUrl === 'string' ? new URL(mediaUrl) : null;
-         } catch (parseError) {
-           parsedMediaUrl = null;
-         }
-         if (
-           typeof mediaUrl !== 'string' ||
-           mediaUrl.length > 2048 ||
-           !parsedMediaUrl ||
-           parsedMediaUrl.protocol !== 'https:' ||
-           !parsedMediaUrl.hostname ||
-           parsedMediaUrl.username ||
-           parsedMediaUrl.password
-         ) {
-           return res.status(400).json({ success: false, error: 'mediaUrl must be a valid HTTPS URL without embedded credentials' });
+         const isSafeLocalUpload = typeof mediaUrl === 'string' && /^\/api\/media\/file\/[a-zA-Z0-9._-]+$/.test(mediaUrl);
+         if (!isSafeLocalUpload) {
+           let parsedMediaUrl = null;
+           try {
+             parsedMediaUrl = typeof mediaUrl === 'string' ? new URL(mediaUrl) : null;
+           } catch (parseError) {
+             parsedMediaUrl = null;
+           }
+           if (
+             typeof mediaUrl !== 'string' ||
+             mediaUrl.length > 2048 ||
+             !parsedMediaUrl ||
+             parsedMediaUrl.protocol !== 'https:' ||
+             !parsedMediaUrl.hostname ||
+             parsedMediaUrl.username ||
+             parsedMediaUrl.password
+           ) {
+             return res.status(400).json({ success: false, error: 'mediaUrl must be a valid HTTPS URL or uploaded media path' });
+           }
          }
        }
        if (typeof mediaFilename !== 'undefined' && mediaFilename !== null &&
@@ -444,9 +448,12 @@ class MessageController {
         } else if (messageType === 'TEXT') {
           apiResult = await MetaApiService.sendTextMessage(chat.tenant, chat.contact.waId, content, contextMessageId);
         } else {
+          const outboundMediaUrl = mediaUrl && mediaUrl.startsWith('/')
+            ? `${getExternalBaseUrl(req)}${mediaUrl}`
+            : mediaUrl;
           apiResult = await MetaApiService.sendMediaMessage(chat.tenant, chat.contact.waId, {
             type: messageType,
-            mediaUrl,
+            mediaUrl: outboundMediaUrl,
             caption: content,
             filename: mediaFilename,
           }, contextMessageId);

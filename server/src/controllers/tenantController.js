@@ -1,5 +1,8 @@
 const prisma = require('../db/prisma');
 const { encryptSecret, hashSecret } = require('../services/credentialCrypto');
+const { getExternalBaseUrl } = require('../utils/requestUtils');
+const { PLANS } = require('../data/plans');
+const { effectivePlanKey } = require('../services/planLimits');
 
 class TenantController {
   /**
@@ -34,15 +37,41 @@ class TenantController {
         return res.status(404).json({ success: false, error: 'Tenant not found' });
       }
 
+      const activeAgentsCount = await req.db((db) =>
+        db.agent.count({ where: { tenantId: req.tenantId, isActive: true } })
+      );
+      const startOfMonth = new Date(new Date().getFullYear(), new Date().getMonth(), 1);
+      const messagesThisMonth = await req.db((db) =>
+        db.message.count({ where: { tenantId: req.tenantId, createdAt: { gte: startOfMonth } } })
+      );
+      const broadcastsCount = await req.db((db) =>
+        db.broadcast.count({ where: { tenantId: req.tenantId } })
+      );
+      const planKey = effectivePlanKey(tenant);
+      const planInfo = PLANS[planKey] || PLANS.PRO;
+      const baseWebhookUrl = (
+        process.env.PUBLIC_API_URL ||
+        process.env.RENDER_EXTERNAL_URL ||
+        getExternalBaseUrl(req)
+      ).replace(/\/+$/, '');
+
       return res.json({
         success: true,
         settings: {
           ...tenant,
           // Credential values are intentionally never returned to clients.
-         isConfigured: Boolean(tenant.phoneNumberId && tenant.wabaId && req.tenant.accessToken),
-          // Built from the configured public API base — never from request
-        // headers, which a spoofed X-Forwarded-Host could poison.
-        webhookUrl: `${(process.env.PUBLIC_API_URL || process.env.RENDER_EXTERNAL_URL || `${req.protocol}://${req.get('host')}`).replace(/\/+$/, '')}/webhook`,
+          isConfigured: Boolean(tenant.phoneNumberId && tenant.wabaId && req.tenant.accessToken),
+          webhookUrl: `${baseWebhookUrl}/webhook`,
+          billing: {
+            plan: planKey,
+            planName: planInfo.name,
+            priceMonthlyInr: Math.round((planInfo.amountPaise || 0) / 100),
+            maxAgents: planInfo.agents,
+            agentsUsed: activeAgentsCount,
+            messagesUsed: messagesThisMonth,
+            broadcastsCount,
+            availablePlans: PLANS,
+          },
         },
       });
     } catch (error) {

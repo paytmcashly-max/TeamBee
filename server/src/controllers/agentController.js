@@ -2,6 +2,7 @@ const bcrypt = require('bcryptjs');
 const prisma = require('../db/prisma');
 const { logAuditEvent } = require('../services/auditLog');
 const { invalidateAgentCache } = require('../middleware/authMiddleware');
+const { getOnlineAgentIds } = require('../services/socketService');
 
 class AgentController {
   /**
@@ -34,13 +35,19 @@ class AgentController {
       );
 
       const includeEmail = req.agent.role !== 'AGENT';
+      const liveOnlineSet = new Set(getOnlineAgentIds(req.tenantId));
       const formatted = agents.map((a) => ({
         ...a,
         ...(includeEmail ? {} : { email: undefined }),
         activeChatCount: a._count.assignedChats,
+        isLiveOnline: liveOnlineSet.has(a.id) || a.status === 'ONLINE',
       }));
 
-      return res.json({ success: true, agents: formatted });
+      return res.json({
+        success: true,
+        agents: formatted,
+        onlineAgentIds: Array.from(liveOnlineSet),
+      });
     } catch (error) {
       console.error('[List Agents Error]:', error);
       return res.status(500).json({ success: false, error: 'Failed to load staff list' });

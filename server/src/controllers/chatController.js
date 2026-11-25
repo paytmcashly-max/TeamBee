@@ -1,10 +1,22 @@
 const prisma = require('../db/prisma');
 const {
+  broadcastNewMessage,
   broadcastChatAssignment,
   broadcastChatStatusTransition,
   broadcastChatSnoozeChanged,
 } = require('../services/socketService');
 const { canAccessChat } = require('../middleware/authMiddleware');
+
+function buildRoleVisibilityClause(role, agentId, filter) {
+  if (role === 'AGENT') {
+    if (filter === 'mine') return { assignedAgentId: agentId };
+    if (filter === 'unassigned') return { status: 'UNASSIGNED' };
+    return { OR: [{ assignedAgentId: agentId }, { status: 'UNASSIGNED' }] };
+  }
+  if (filter === 'mine') return { assignedAgentId: agentId };
+  if (filter === 'unassigned') return { status: 'UNASSIGNED' };
+  return null;
+}
 
 class ChatController {
   /**
@@ -32,60 +44,30 @@ class ChatController {
           return res.status(400).json({ success: false, error: 'limit must be between 1 and 100' });
         }
 
-      const whereClause = {
-        tenantId,
-      };
+      const baseConditions = [{ tenantId }];
 
-      // 1. ROLE-BASED ACCESS CONTROL FILTERING
-       if (role === 'AGENT') {
-        // Regular Agents can ONLY see chats assigned to them OR in the global unassigned pool
-        if (filter === 'mine') {
-          whereClause.assignedAgentId = agentId;
-        } else if (filter === 'unassigned') {
-          whereClause.status = 'UNASSIGNED';
-        } else {
-          // If viewing general feed, combine assigned to me OR unassigned
-          whereClause.OR = [
-            { assignedAgentId: agentId },
-            { status: 'UNASSIGNED' },
-          ];
-        }
-      } else {
-        // ADMIN / SUPERVISOR: Complete operational visibility
-        if (filter === 'mine') {
-          whereClause.assignedAgentId = agentId;
-        } else if (filter === 'unassigned') {
-          whereClause.status = 'UNASSIGNED';
-        }
-        // If filter === 'all', no restriction on assigned agent
-      }
-
-      // 2. STATUS FILTERING
-      if (status && status !== 'ALL') {
-        whereClause.status = status;
-      }
-
-      // 3. SEARCH FILTERING
+      // 1. SEARCH FILTERING (shared across tabs and list)
       if (search) {
-        whereClause.contact = {
-          OR: [
-            { name: { contains: search } },
-            { waId: { contains: search } },
-          ],
-        };
+        baseConditions.push({
+          contact: {
+            OR: [
+              { name: { contains: search, mode: 'insensitive' } },
+              { waId: { contains: search } },
+            ],
+          },
+        });
       }
 
-      // filter and status INTERSECT: the old code let the status parameter
-      // silently overwrite the unassigned-queue restriction, widening what
-      // an AGENT-role caller could list.
-      if (whereClause.status && status && status !== 'ALL' && whereClause.status !== status) {
-        return res.json({ success: true, chats: [], pagination: { hasMore: false, nextCursor: null } });
+      // 2. STRICT RBAC + TAB + STATUS INTERSECTION (AND ensures status never widens RBAC)
+      const roleAllClause = buildRoleVisibilityClause(role, agentId, 'all');
+      const activeRoleClause = buildRoleVisibilityClause(role, agentId, filter);
+      const listConditions = [...baseConditions];
+      if (activeRoleClause) listConditions.push(activeRoleClause);
+      if (status && status !== 'ALL') {
+        listConditions.push({ status });
       }
 
       if (cursor) {
-        // Composite cursor "<iso>|<id>": Meta timestamps repeat at second
-        // precision, so a bare timestamp cursor skips tied rows. A legacy
-        // bare-ISO cursor keeps the old strict-less-than behaviour.
         const separatorIndex = cursor.lastIndexOf('|');
         const cursorDatePart = separatorIndex >= 0 ? cursor.slice(0, separatorIndex) : cursor;
         const cursorId = separatorIndex >= 0 ? cursor.slice(separatorIndex + 1) : null;
@@ -93,39 +75,48 @@ class ChatController {
           if (!cursorId) {
             return res.status(400).json({ success: false, error: 'Invalid chat cursor' });
           }
-          whereClause.lastMessageAt = null;
-          whereClause.id = { lt: cursorId };
+          listConditions.push({ lastMessageAt: null, id: { lt: cursorId } });
         } else {
           const cursorDate = new Date(cursorDatePart);
           if (Number.isNaN(cursorDate.getTime())) {
             return res.status(400).json({ success: false, error: 'Invalid chat cursor' });
           }
           if (cursorId) {
-            const cursorCondition = {
+            listConditions.push({
               OR: [
                 { lastMessageAt: { lt: cursorDate } },
                 { lastMessageAt: cursorDate, id: { lt: cursorId } },
               ],
-            };
-            whereClause.AND = [...(whereClause.AND || []), cursorCondition];
+            });
           } else {
-            whereClause.lastMessageAt = { lt: cursorDate };
+            listConditions.push({ lastMessageAt: { lt: cursorDate } });
           }
         }
       }
 
-      const rows = await req.db((db) =>
-        db.chat.findMany({
-          where: whereClause,
-          include: {
-            contact: true,
-            assignedAgent: {
-              select: { id: true, name: true, email: true, avatarUrl: true, role: true },
+      const allCountConditions = roleAllClause ? [...baseConditions, roleAllClause] : [...baseConditions];
+      const unassignedCountConditions = roleAllClause
+        ? [...baseConditions, roleAllClause, { status: 'UNASSIGNED' }]
+        : [...baseConditions, { status: 'UNASSIGNED' }];
+      const mineCountConditions = [...baseConditions, { assignedAgentId: agentId }];
+
+      const [rows, allCount, unassignedCount, mineCount] = await req.db((db) =>
+        Promise.all([
+          db.chat.findMany({
+            where: { AND: listConditions },
+            include: {
+              contact: true,
+              assignedAgent: {
+                select: { id: true, name: true, email: true, avatarUrl: true, role: true },
+              },
             },
-          },
-          orderBy: [{ lastMessageAt: 'desc' }, { id: 'desc' }],
-          take: requestedLimit + 1,
-        })
+            orderBy: [{ lastMessageAt: 'desc' }, { id: 'desc' }],
+            take: requestedLimit + 1,
+          }),
+          db.chat.count({ where: { AND: allCountConditions } }),
+          db.chat.count({ where: { AND: unassignedCountConditions } }),
+          db.chat.count({ where: { AND: mineCountConditions } }),
+        ])
       );
       const hasMore = rows.length > requestedLimit;
       const chats = hasMore ? rows.slice(0, requestedLimit) : rows;
@@ -134,7 +125,16 @@ class ChatController {
         ? `${lastRow.lastMessageAt ? lastRow.lastMessageAt.toISOString() : 'null'}|${lastRow.id}`
         : null;
 
-      return res.json({ success: true, chats, pagination: { hasMore, nextCursor } });
+      return res.json({
+        success: true,
+        chats,
+        counts: {
+          all: allCount,
+          unassigned: unassignedCount,
+          mine: mineCount,
+        },
+        pagination: { hasMore, nextCursor },
+      });
     } catch (error) {
       console.error('[List Chats Error]:', error);
       return res.status(500).json({ success: false, error: 'Failed to load conversations' });
@@ -292,7 +292,7 @@ class ChatController {
         ? `Assigned to ${assignedAgent.name} by ${requesterName}`
         : `Unassigned by ${requesterName}`;
 
-      await req.db((db) =>
+      const systemMessage = await req.db((db) =>
         db.message.create({
           data: {
             chatId: chat.id,
@@ -304,6 +304,8 @@ class ChatController {
           },
         })
       );
+
+      broadcastNewMessage(req.tenantId, chat.id, systemMessage, targetAgentId || null);
 
       // Broadcast assignment via WebSockets
       broadcastChatAssignment(req.tenantId, chat.id, {
@@ -364,7 +366,7 @@ class ChatController {
       );
 
       // System message
-      await req.db((db) =>
+      const systemMessage = await req.db((db) =>
         db.message.create({
           data: {
             chatId: chat.id,
@@ -376,6 +378,8 @@ class ChatController {
           },
         })
       );
+
+      broadcastNewMessage(req.tenantId, chat.id, systemMessage, updatedChat.assignedAgentId);
 
       // WebSocket broadcast
       broadcastChatStatusTransition(req.tenantId, chat.id, {
@@ -547,6 +551,113 @@ class ChatController {
     } catch (error) {
       console.error('[Update Contact Error]:', error);
       return res.status(500).json({ success: false, error: 'Failed to update contact' });
+    }
+  }
+
+  /**
+   * POST /api/chats/initiate: Start or open a 1-on-1 WhatsApp conversation by phone number
+   */
+  static async initiateChat(req, res) {
+    try {
+      const rawPhone = typeof req.body?.phone === 'string' ? req.body.phone : '';
+      const name = typeof req.body?.name === 'string' ? req.body.name.trim().slice(0, 120) : '';
+      const initialMessage = typeof req.body?.initialMessage === 'string' ? req.body.initialMessage.trim() : '';
+      const { id: agentId, tenantId } = req.agent;
+
+      const cleanPhone = rawPhone.replace(/\D/g, '');
+      if (!cleanPhone || cleanPhone.length < 8 || cleanPhone.length > 20) {
+        return res.status(400).json({
+          success: false,
+          error: 'Please enter a valid phone number with country code (e.g. 919876543210)',
+        });
+      }
+
+      let contact = await req.db((db) =>
+        db.contact.findUnique({ where: { tenantId_waId: { tenantId, waId: cleanPhone } } })
+      );
+      if (!contact) {
+        contact = await req.db((db) =>
+          db.contact.create({ data: { tenantId, waId: cleanPhone, name: name || `+${cleanPhone}` } })
+        );
+      } else if (name && contact.name !== name) {
+        contact = await req.db((db) =>
+          db.contact.update({ where: { id: contact.id }, data: { name } })
+        );
+      }
+
+      let chat = await req.db((db) =>
+        db.chat.findFirst({
+          where: { tenantId, contactId: contact.id },
+          include: {
+            contact: true,
+            assignedAgent: { select: { id: true, name: true, avatarUrl: true, role: true } },
+          },
+        })
+      );
+      const now = new Date();
+      if (!chat) {
+        chat = await req.db((db) =>
+          db.chat.create({
+            data: {
+              tenantId,
+              contactId: contact.id,
+              assignedAgentId: agentId,
+              status: 'OPEN',
+              lastMessagePreview: initialMessage || 'Conversation initiated by staff',
+              lastMessageAt: now,
+            },
+            include: {
+              contact: true,
+              assignedAgent: { select: { id: true, name: true, avatarUrl: true, role: true } },
+            },
+          })
+        );
+      } else {
+        chat = await req.db((db) =>
+          db.chat.update({
+            where: { id: chat.id },
+            data: { status: 'OPEN', assignedAgentId: chat.assignedAgentId || agentId, lastMessageAt: now },
+            include: {
+              contact: true,
+              assignedAgent: { select: { id: true, name: true, avatarUrl: true, role: true } },
+            },
+          })
+        );
+      }
+
+      let sentMessage = null;
+      if (initialMessage) {
+        const tenant = await req.db((db) => db.tenant.findUnique({ where: { id: tenantId } }));
+        const MetaApiService = require('../services/metaApiService');
+        const apiResult = await MetaApiService.sendTextMessage(tenant, cleanPhone, initialMessage);
+        sentMessage = await req.db((db) =>
+          db.message.create({
+            data: {
+              chatId: chat.id,
+              tenantId,
+              senderType: 'AGENT',
+              senderId: agentId,
+              messageType: 'TEXT',
+              content: initialMessage,
+              direction: 'OUTBOUND',
+              status: apiResult.success ? 'SENT' : 'FAILED',
+              waMessageId: apiResult.wamid || null,
+              errorCode: apiResult.success ? null : (apiResult.code || 'META_API_ERROR'),
+              errorMessage: apiResult.success ? null : (apiResult.error || 'Failed to dispatch'),
+            },
+            include: { senderAgent: { select: { id: true, name: true, avatarUrl: true } } },
+          })
+        );
+        await req.db((db) =>
+          db.chat.update({ where: { id: chat.id }, data: { lastMessagePreview: initialMessage, lastMessageAt: new Date() } })
+        );
+        broadcastNewMessage(tenantId, chat.id, sentMessage, chat.assignedAgentId || agentId);
+      }
+
+      return res.status(201).json({ success: true, chat, message: sentMessage });
+    } catch (error) {
+      console.error('[Initiate Chat Error]:', error);
+      return res.status(500).json({ success: false, error: 'Failed to initiate conversation' });
     }
   }
 }

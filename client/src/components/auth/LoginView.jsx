@@ -1,282 +1,403 @@
-import React, { useState, useEffect } from 'react';
-import { MessageSquare, ArrowRight, ArrowLeft, ChevronRight, Check, Eye, EyeOff } from 'lucide-react';
+import React, { useState } from 'react';
+import { MessageSquare, ArrowUpRight } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
+import ForgotPasswordView from './ForgotPasswordView';
 
-export default function LoginView({ onShowSignup, onBack, onForgot } = {}) {
-  const { login, lookupWorkspaces } = useAuth();
-  const [email, setEmail] = useState(() => {
-    try {
-      return sessionStorage.getItem('teambee:lastEmail') || '';
-    } catch (storageError) {
-      return '';
-    }
-  });
+export default function LoginView() {
+  const { login, registerTenant } = useAuth();
+  const [authMode, setAuthMode] = useState('login'); // 'login' | 'register' | 'forgot'
+
+  const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [tenantSlug, setTenantSlug] = useState(
+    () => localStorage.getItem('teambee_workspace_slug') || ''
+  );
+  const [workspaceChoices, setWorkspaceChoices] = useState([]);
   const [showPassword, setShowPassword] = useState(false);
+  const [rememberMe, setRememberMe] = useState(true);
+
+  const [businessName, setBusinessName] = useState('');
+  const [regSlug, setRegSlug] = useState('');
+  const [adminName, setAdminName] = useState('');
+  const [regEmail, setRegEmail] = useState('');
+  const [regPassword, setRegPassword] = useState('');
+
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
-  const [notice, setNotice] = useState(() => {
-    try {
-      const switching = sessionStorage.getItem('teambee:switchWorkspace');
-      if (switching) sessionStorage.removeItem('teambee:switchWorkspace');
-      return switching ? 'Enter your password again to switch workspace.' : null;
-    } catch (storageError) {
-      return null;
-    }
-  });
+  const [successNotice, setSuccessNotice] = useState(null);
 
-  // Post-password picker (fallback): when sign-in was attempted without a
-  // chosen workspace and the account lives in several (same password), the
-  // server answers with a picker payload instead of a session.
-  const [workspaces, setWorkspaces] = useState(null);
-  const [selectingSlug, setSelectingSlug] = useState(null);
-
-  // Login-page workspace discovery: when an email is entered, its active
-  // workspaces are fetched from the database. Exactly one -> the chooser
-  // stays hidden and the login scopes to it silently. Two or more -> a
-  // chooser renders right here on the login page. A failed lookup never
-  // blocks sign-in; the post-password picker above remains the fallback.
-  const [emailWorkspaces, setEmailWorkspaces] = useState([]);
-  const [lookupEmail, setLookupEmail] = useState('');
-  const [selectedSlug, setSelectedSlug] = useState(null);
-  const [lookingUp, setLookingUp] = useState(false);
-
-  const runLookup = async (rawEmail) => {
-    const target = (rawEmail || '').trim();
-    if (!target || !target.includes('@')) {
-      setEmailWorkspaces([]);
-      setLookupEmail(target);
-      return [];
-    }
-    setLookingUp(true);
-    try {
-      const found = await lookupWorkspaces(target);
-      setEmailWorkspaces(found);
-      setLookupEmail(target);
-      setSelectedSlug((current) =>
-        current && found.some((ws) => ws.slug === current) ? current : null
-      );
-      return found;
-    } catch (lookupError) {
-      setEmailWorkspaces([]);
-      setLookupEmail(target);
-      return [];
-    } finally {
-      setLookingUp(false);
-    }
+  const handleBusinessNameChange = (e) => {
+    const val = e.target.value;
+    setBusinessName(val);
+    setRegSlug(
+      val
+        .toLowerCase()
+        .trim()
+        .replace(/[^a-z0-9]+/g, '-')
+        .replace(/^-+|-+$/g, '')
+        .slice(0, 50)
+    );
   };
 
-  // Arriving with a prefilled email (e.g. Switch workspace from the inbox):
-  // discover its workspaces immediately so the chooser is already there.
-  useEffect(() => {
-    if (email) runLookup(email);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  const lookupCurrent = lookupEmail === email.trim();
-  const chooserWorkspaces = lookupCurrent ? emailWorkspaces : [];
-  const singleWorkspaceSlug =
-    chooserWorkspaces.length === 1 ? chooserWorkspaces[0].slug : null;
-
-  const handleSubmit = async (e) => {
+  const handleLoginSubmit = async (e, explicitSlug = null) => {
     if (e) e.preventDefault();
     setLoading(true);
     setError(null);
-    setNotice(null);
+    const chosenSlug = explicitSlug !== null ? explicitSlug : tenantSlug.trim();
+
     try {
-      // Make sure discovery ran for the email exactly as submitted.
-      let available = chooserWorkspaces;
-      if (!lookupCurrent) {
-        available = await runLookup(email);
+      if (rememberMe && chosenSlug) {
+        localStorage.setItem('teambee_workspace_slug', chosenSlug);
       }
-      let chosenSlug = selectedSlug || singleWorkspaceSlug || undefined;
-      if (!chosenSlug && available.length >= 2) {
-        // Several workspaces and none picked yet: if they all share this
-        // password the post-password picker could sort it out, but the
-        // explicit on-page choice is clearer — ask for it.
-        setError('Please choose your workspace above before signing in.');
-        return;
-      }
-      const result = await login(email, password, chosenSlug);
-      if (result && result.code === 'WORKSPACE_SELECTION_REQUIRED') {
-        setWorkspaces(result.workspaces || []);
-      }
+      await login(email, password, chosenSlug || undefined);
     } catch (err) {
-      setError(err.message);
+      if (err.code === 'WORKSPACE_SELECTION_REQUIRED' && Array.isArray(err.data?.workspaces)) {
+        setWorkspaceChoices(err.data.workspaces);
+        setError('Multiple workspaces match this account. Choose your workspace below:');
+      } else {
+        setError(err.message || 'Login failed. Please check your credentials.');
+      }
     } finally {
       setLoading(false);
     }
   };
 
-  const handlePickWorkspace = async (workspace) => {
-    setSelectingSlug(workspace.slug);
+  const handleRegisterSubmit = async (e) => {
+    e.preventDefault();
+    setLoading(true);
     setError(null);
     try {
-      await login(email, password, workspace.slug);
-      // A successful login sets the session in AuthContext and App swaps
-      // this view for the inbox automatically.
+      if (regPassword.length < 10) {
+        throw new Error('Password must be at least 10 characters long');
+      }
+      await registerTenant({
+        businessName: businessName.trim(),
+        adminName: adminName.trim(),
+        email: regEmail.trim(),
+        password: regPassword,
+        slug: regSlug.trim() || undefined,
+      });
+      setSuccessNotice('Workspace created! Signing you in...');
     } catch (err) {
-      setError(err.message);
-      setSelectingSlug(null);
+      setError(err.message || 'Organization registration failed.');
+    } finally {
+      setLoading(false);
     }
   };
 
-  const handleBackToCredentials = () => {
-    setWorkspaces(null);
-    setSelectingSlug(null);
-    setError(null);
-    setPassword('');
-  };
-
   return (
-    <div className="auth-shell">
-      <div className="auth-card">
-        <div className="auth-center">
-          <div className="auth-logo"><MessageSquare size={24} /></div>
-          <h1>TeamBee</h1>
-          <p>WhatsApp Shared Team Inbox</p>
+    <div className="auth-split-wrapper" data-node-id="2:853" data-name="Access · Workspace sign in">
+      <section className="auth-hero-section" data-name="TeamBee introduction">
+        <div className="auth-brand-header">
+          <div className="auth-brand-logo-row">
+            <div className="auth-brand-icon">
+              <MessageSquare size={18} />
+            </div>
+            <span className="auth-brand-name">TeamBee</span>
+          </div>
         </div>
 
-        {notice && !error && <div className="notice-info">{notice}</div>}
-        {error && <div className="form-error" role="alert" style={{ marginBottom: 'var(--space-4)' }}>{error}</div>}
+        <div className="auth-hero-copy">
+          <span className="auth-hero-tagline">
+            CUSTOMER CONVERSATIONS, BETTER TOGETHER
+          </span>
+          <h1 className="auth-hero-headline">
+            <span>One inbox.</span>
+            <span>A whole team</span>
+            <span>behind every reply.</span>
+          </h1>
+          <p className="auth-hero-subtext">
+            Turn WhatsApp conversations into lasting customer relationships.
+            Together, without the chaos.
+          </p>
+        </div>
 
-        {workspaces ? (
-          <div>
-            <div style={{ marginBottom: 'var(--space-4)' }}>
-              <h2 className="t-h3">Choose your workspace</h2>
-              <p className="t-small" style={{ marginTop: 'var(--space-1)' }}>
-                <strong style={{ color: 'var(--text-main)' }}>{email}</strong> has access to {workspaces.length} workspaces.
-                Pick the one you want to open.
-              </p>
+        <div className="auth-collab-card" data-name="Collaboration example">
+          <span className="auth-collab-card-label">
+            A LITTLE TEAMWORK GOES A LONG WAY
+          </span>
+
+          <div className="auth-collab-inquiry">
+            <div className="collab-inquiry-top">
+              <span className="collab-customer-name">Olivia Martin</span>
+              <span className="collab-timestamp">Just now</span>
             </div>
-
-            <div className="form-stack">
-              {workspaces.map((workspace) => (
-                <button
-                  key={workspace.tenantId}
-                  type="button"
-                  className="ws-option"
-                  disabled={Boolean(selectingSlug)}
-                  onClick={() => handlePickWorkspace(workspace)}
-                  style={selectingSlug && selectingSlug !== workspace.slug ? { opacity: 0.55 } : undefined}
-                >
-                  <span className="ws-avatar">{(workspace.name || 'W').trim().charAt(0).toUpperCase()}</span>
-                  <span className="ws-main">
-                    <span className="ws-name">{workspace.name}</span>
-                    <span className="ws-meta">{workspace.displayPhoneNumber || workspace.slug}</span>
-                  </span>
-                  <span className={`ws-role${workspace.role === 'ADMIN' ? ' admin' : ''}`}>{workspace.role}</span>
-                  {selectingSlug === workspace.slug ? (
-                    <span className="t-caption" style={{ color: 'var(--wa-primary)', whiteSpace: 'nowrap' }}>Opening…</span>
-                  ) : (
-                    <ChevronRight size={16} style={{ color: 'var(--text-muted)', flexShrink: 0 }} />
-                  )}
-                </button>
-              ))}
-            </div>
-
-            <button type="button" onClick={handleBackToCredentials} className="btn btn-ghost btn-sm" style={{ marginTop: 'var(--space-4)' }}>
-              <ArrowLeft size={14} /> Use different credentials
-            </button>
+            <p className="collab-message-text">
+              Can I exchange my order for a smaller size?
+            </p>
           </div>
-        ) : (
-          <form onSubmit={handleSubmit} className="form-stack">
-            <div className="field">
-              <label className="label" htmlFor="login-email">Work email</label>
-              <input
-                id="login-email"
-                className="input"
-                type="email"
-                autoComplete="email"
-                value={email}
-                onChange={(e) => {
-                  setEmail(e.target.value);
-                  setEmailWorkspaces([]);
-                  setLookupEmail('');
-                  setSelectedSlug(null);
-                }}
-                onBlur={() => {
-                  if (email.trim() && lookupEmail !== email.trim()) runLookup(email);
-                }}
-                required
-                placeholder="you@business.com"
-              />
-            </div>
 
-            {lookingUp && <p className="t-caption">Checking your workspaces…</p>}
+          <div className="auth-collab-step-row">
+            <span className="collab-arrow-down">↓</span>
+            <span className="collab-step-text">
+              Claimed by Maya · Private note added
+            </span>
+          </div>
 
-            {chooserWorkspaces.length >= 2 && (
-              <div className="field">
-                <span className="label" id="workspace-chooser-label">Choose your workspace</span>
-                <div role="radiogroup" aria-labelledby="workspace-chooser-label" className="form-stack" style={{ gap: 'var(--space-2)' }}>
-                  {chooserWorkspaces.map((workspace) => {
-                    const selected = selectedSlug === workspace.slug;
-                    return (
-                      <button
-                        key={workspace.tenantId}
-                        type="button"
-                        role="radio"
-                        aria-checked={selected}
-                        onClick={() => setSelectedSlug(workspace.slug)}
-                        className={`ws-option${selected ? ' selected' : ''}`}
-                      >
-                        <span className="ws-avatar" style={{ width: '34px', height: '34px', minWidth: '34px', fontSize: '13px' }}>{(workspace.name || 'W').trim().charAt(0).toUpperCase()}</span>
-                        <span className="ws-main">
-                          <span className="ws-name">{workspace.name}</span>
-                          <span className="ws-meta">{workspace.slug}</span>
-                        </span>
-                        {selected && <Check size={16} style={{ color: 'var(--wa-primary)', flexShrink: 0 }} />}
-                      </button>
-                    );
-                  })}
+          <div className="auth-collab-resolved">
+            <span className="collab-resolved-text">
+              ✓ One happy customer. Nothing missed.
+            </span>
+          </div>
+        </div>
+
+        <div className="auth-hero-footer">
+          <span className="auth-footer-highlight">
+            Built for people. Connected by official WhatsApp.
+          </span>
+          <span className="auth-footer-meta">
+            Powered by Meta Cloud API
+          </span>
+        </div>
+      </section>
+
+      <section className="auth-form-section" data-name="Workspace sign-in form">
+        <div className="auth-top-support-bar">
+          <a
+            href="mailto:support@teambee.app"
+            className="auth-support-link"
+            target="_blank"
+            rel="noreferrer"
+          >
+            <span>Need a hand? Contact support</span>
+            <ArrowUpRight size={14} />
+          </a>
+        </div>
+
+        <div className="auth-form-container">
+          <span className="auth-eyebrow">
+            {authMode === 'login' ? 'WELCOME BACK' : authMode === 'register' ? 'NEW WORKSPACE' : 'ACCOUNT RECOVERY'}
+          </span>
+          <h2 className="auth-form-title">
+            {authMode === 'login'
+              ? 'Sign in to TeamBee'
+              : authMode === 'register'
+                ? 'Create your workspace'
+                : 'Reset your password'}
+          </h2>
+          <p className="auth-form-subtitle">
+            {authMode === 'login'
+              ? 'Enter your email and password to join your team in the inbox.'
+              : authMode === 'register'
+                ? 'Set up a shared WhatsApp Business workspace with a 14-day trial.'
+                : 'We will email you a secure single-use password reset link.'}
+          </p>
+
+          {error && <div className="tb-alert error" style={{ marginBottom: '14px' }}>{error}</div>}
+          {successNotice && <div className="tb-alert success" style={{ marginBottom: '14px' }}>{successNotice}</div>}
+
+          {authMode === 'forgot' ? (
+            <ForgotPasswordView onBack={() => { setError(null); setAuthMode('login'); }} />
+          ) : authMode === 'login' ? (
+            <form onSubmit={handleLoginSubmit} className="auth-form">
+              <div className="auth-field-group">
+                <label className="auth-field-label">Work Email</label>
+                <input
+                  type="email"
+                  required
+                  className="auth-input"
+                  placeholder="you@company.com"
+                  value={email}
+                  onChange={(e) => {
+                    setEmail(e.target.value);
+                    setWorkspaceChoices([]);
+                  }}
+                />
+              </div>
+
+              <div className="auth-field-group">
+                <label className="auth-field-label">Password</label>
+                <div className="auth-password-wrapper">
+                  <input
+                    type={showPassword ? 'text' : 'password'}
+                    required
+                    className="auth-input-password"
+                    placeholder="••••••••••••"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                  />
+                  <button
+                    type="button"
+                    className="auth-show-btn"
+                    onClick={() => setShowPassword(!showPassword)}
+                  >
+                    {showPassword ? 'Hide' : 'Show'}
+                  </button>
                 </div>
               </div>
-            )}
 
-            <div className="field">
-              <label className="label" htmlFor="login-password">Password</label>
-              <div className="input-wrap">
+              <div className="auth-field-group">
+                <label className="auth-field-label">Workspace Slug (optional)</label>
                 <input
-                  id="login-password"
-                  className="input"
-                  type={showPassword ? 'text' : 'password'}
-                  autoComplete="current-password"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  required
-                  placeholder="Your password"
+                  type="text"
+                  className="auth-input"
+                  placeholder="Auto-detected if you have one workspace"
+                  value={tenantSlug}
+                  onChange={(e) => setTenantSlug(e.target.value)}
                 />
-                <button type="button" className="input-eye" onClick={() => setShowPassword((v) => !v)} aria-label={showPassword ? 'Hide password' : 'Show password'}>
-                  {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+              </div>
+
+              {workspaceChoices.length > 0 && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                  {workspaceChoices.map((ws) => (
+                    <button
+                      key={ws.tenantId}
+                      type="button"
+                      className="btn btn-secondary"
+                      style={{ justifyContent: 'space-between' }}
+                      onClick={() => {
+                        setTenantSlug(ws.slug);
+                        handleLoginSubmit(null, ws.slug);
+                      }}
+                    >
+                      <span>{ws.name} ({ws.role})</span>
+                      <span className="tb-hint">{ws.slug} →</span>
+                    </button>
+                  ))}
+                </div>
+              )}
+
+              <div className="auth-options-row">
+                <label className="auth-remember-checkbox">
+                  <input
+                    type="checkbox"
+                    checked={rememberMe}
+                    onChange={(e) => setRememberMe(e.target.checked)}
+                  />
+                  <span>Remember workspace</span>
+                </label>
+                <button
+                  type="button"
+                  className="auth-forgot-link"
+                  onClick={() => { setError(null); setAuthMode('forgot'); }}
+                >
+                  Forgot password?
                 </button>
               </div>
-            </div>
 
-            <button type="submit" disabled={loading} className="btn btn-primary btn-block btn-lg">
-              {loading ? 'Signing in…' : 'Sign in'}
-              <ArrowRight size={15} />
-            </button>
-          </form>
-        )}
-        {(onShowSignup || onBack) && (
-          <p className="auth-links">
-            New to TeamBee?{' '}
-            <button type="button" className="link-btn" onClick={onShowSignup}>Start your free trial</button>
-            {onBack && (
-              <>
-                {'  ·  '}
-                <button type="button" className="link-quiet" onClick={onBack}>Back to home</button>
-              </>
-            )}
-            {onForgot && (
-              <>
-                {'  ·  '}
-                <button type="button" className="link-quiet" onClick={onForgot}>Forgot password?</button>
-              </>
-            )}
+              <button type="submit" className="auth-submit-btn" disabled={loading}>
+                <span>{loading ? 'Signing in...' : 'Sign in to workspace →'}</span>
+              </button>
+
+              <div className="auth-switch-mode-row">
+                <span className="switch-prompt">New to TeamBee?</span>
+                <button
+                  type="button"
+                  className="switch-action-btn"
+                  onClick={() => {
+                    setError(null);
+                    setAuthMode('register');
+                  }}
+                >
+                  Create a workspace ↗
+                </button>
+              </div>
+            </form>
+          ) : (
+            <form onSubmit={handleRegisterSubmit} className="auth-form">
+              <div className="auth-field-group">
+                <label className="auth-field-label">Business or Brand Name</label>
+                <input
+                  type="text"
+                  required
+                  className="auth-input"
+                  placeholder="Acme Studio"
+                  value={businessName}
+                  onChange={handleBusinessNameChange}
+                />
+              </div>
+
+              <div className="auth-field-group">
+                <label className="auth-field-label">Workspace URL</label>
+                <div className="auth-slug-input-wrapper">
+                  <input
+                    type="text"
+                    required
+                    className="auth-input-slug"
+                    placeholder="acme-retail"
+                    value={regSlug}
+                    onChange={(e) => setRegSlug(e.target.value)}
+                  />
+                  <span className="auth-slug-suffix">.teambee.app</span>
+                </div>
+              </div>
+
+              <div className="auth-field-group">
+                <label className="auth-field-label">Your Full Name</label>
+                <input
+                  type="text"
+                  required
+                  className="auth-input"
+                  placeholder="Maya Shah"
+                  value={adminName}
+                  onChange={(e) => setAdminName(e.target.value)}
+                />
+              </div>
+
+              <div className="auth-field-group">
+                <label className="auth-field-label">Work Email</label>
+                <input
+                  type="email"
+                  required
+                  className="auth-input"
+                  placeholder="maya@company.com"
+                  value={regEmail}
+                  onChange={(e) => setRegEmail(e.target.value)}
+                />
+              </div>
+
+              <div className="auth-field-group">
+                <label className="auth-field-label">Password (min 10 characters)</label>
+                <div className="auth-password-wrapper">
+                  <input
+                    type={showPassword ? 'text' : 'password'}
+                    required
+                    minLength={10}
+                    className="auth-input-password"
+                    placeholder="••••••••••••"
+                    value={regPassword}
+                    onChange={(e) => setRegPassword(e.target.value)}
+                  />
+                  <button
+                    type="button"
+                    className="auth-show-btn"
+                    onClick={() => setShowPassword(!showPassword)}
+                  >
+                    {showPassword ? 'Hide' : 'Show'}
+                  </button>
+                </div>
+              </div>
+
+              <button type="submit" className="auth-submit-btn" disabled={loading}>
+                <span>{loading ? 'Creating workspace...' : 'Create workspace →'}</span>
+              </button>
+
+              <div className="auth-switch-mode-row">
+                <span className="switch-prompt">Already have a workspace?</span>
+                <button
+                  type="button"
+                  className="switch-action-btn"
+                  onClick={() => {
+                    setError(null);
+                    setAuthMode('login');
+                  }}
+                >
+                  Sign in to workspace →
+                </button>
+              </div>
+            </form>
+          )}
+
+          <div className="auth-form-divider" />
+          <p className="auth-security-subtext">
+            Your team’s conversations stay isolated inside your workspace.
           </p>
-        )}
-      </div>
+          <div className="auth-legal-row">
+            <span className="legal-links">Official WhatsApp Business Platform</span>
+            <span className="legal-copy">© 2026 TeamBee</span>
+          </div>
+        </div>
+      </section>
     </div>
   );
 }

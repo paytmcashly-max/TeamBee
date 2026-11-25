@@ -1,0 +1,168 @@
+/* ==========================================================================
+   MODALS & DIALOGS (Light Theme Refresh)
+   ========================================================================== */
+
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(21, 46, 43, 0.45);
+  backdrop-filter: blur(4px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  padding: 16px;
+  animation: fadeIn 0.18s ease-out;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.modal-content {
+  background: #ffffff;
+  border: 1px solid var(--tb-border-color);
+  border-radius: 12px;
+  box-shadow: var(--tb-popover-shadow);
+  width: 100%;
+  max-width: 580px;
+  max-height: 90vh;
+  overflow-y: auto;
+  position: relative;
+  color: var(--tb-text-primary);
+}
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 8px 14px;
+  border-radius: 7px;
+  font-size: 12.5px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s;
+  border: 1px solid transparent;
+}
+
+.btn-primary {
+  background-color: var(--tb-primary-green);
+  color: #ffffff;
+}
+
+.btn-primary:hover {
+  background-color: var(--tb-primary-hover);
+}
+
+.btn-secondary {
+  background-color: #ffffff;
+  border: 1px solid var(--tb-border-color);
+  color: var(--tb-text-primary);
+}
+
+.btn-secondary:hover {
+  background-color: var(--tb-light-bg);
+}
+
+.btn-ghost {
+  background: transparent;
+  color: var(--tb-text-secondary);
+}
+
+.btn-ghost:hover {
+  background: var(--tb-light-bg);
+  color: var(--tb-text-primary);
+}
+
+
+/* Figma Light-Mode Modal Extensions (Template Modal 2:526 & New Chat Modal) */
+.modal-header-bar {
+  padding: 18px 22px;
+  border-bottom: 1px solid var(--tb-border-color);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.modal-header-title {
+  font-size: 17px;
+  font-weight: 600;
+  color: var(--tb-text-primary);
+}
+
+.modal-header-subtitle {
+  font-size: 12px;
+  color: var(--tb-text-secondary);
+  margin-top: 2px;
+}
+
+.modal-body-pad {
+  padding: 20px 22px;
+}
+
+.modal-footer-bar {
+  padding: 14px 22px;
+  border-top: 1px solid var(--tb-border-color);
+  background: var(--tb-app-bg);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.template-modal-grid {
+  display: grid;
+  grid-template-columns: 280px minmax(0, 1fr);
+  min-height: 430px;
+}
+
+.template-modal-list {
+  border-right: 1px solid var(--tb-border-color);
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  max-height: 520px;
+  overflow-y: auto;
+}
+
+.template-list-card {
+  width: 100%;
+  text-align: left;
+  padding: 12px;
+  border-radius: 9px;
+  border: 1px solid var(--tb-border-color);
+  background: #ffffff;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.template-list-card:hover {
+  border-color: var(--tb-border-card);
+}
+
+.template-list-card.selected {
+  background: var(--tb-green-pill-bg);
+  border-color: var(--tb-primary-green);
+}
+
+.template-modal-detail {
+  padding: 20px 22px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+@media (max-width: 768px) {
+  .template-modal-grid {
+    grid-template-columns: 1fr;
+  }
+  .template-modal-list {
+    border-right: none;
+    border-bottom: 1px solid var(--tb-border-color);
+    max-height: 220px;
+  }
+}

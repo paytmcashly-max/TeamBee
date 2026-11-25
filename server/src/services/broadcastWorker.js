@@ -119,7 +119,7 @@ async function processRecipient(recipientId, tenantId) {
               data: {
                 tenantId: broadcast.tenantId,
                 contactId: contact.id,
-                status: 'OPEN',
+                status: 'UNASSIGNED',
                 lastMessagePreview: renderedBody.slice(0, 80),
                 lastMessageAt: now,
               },
@@ -266,6 +266,7 @@ async function drainPendingBroadcasts(limit = 20) {
 }
 
 module.exports = {
+  processRecipient,
   processBroadcast,
   drainPendingBroadcasts,
 };

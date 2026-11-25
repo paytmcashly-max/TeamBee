@@ -3,6 +3,7 @@ const { processBroadcast } = require('../services/broadcastWorker');
 const { withTenantDb, rlsContextEnabled } = require('../db/withTenant');
 
 const MAX_RECIPIENTS = 10000;
+const DB_BATCH_SIZE = 500;
 
 function normalizeVariables(variables) {
   if (!variables || typeof variables !== 'object' || Array.isArray(variables)) return null;
@@ -12,6 +13,59 @@ function normalizeVariables(variables) {
     normalized[key] = String(value).slice(0, 1024);
   }
   return normalized;
+}
+
+async function resolveBroadcastContacts(db, tenantId, importedRecipients, contactIds) {
+  const targetMap = new Map();
+  const importedMap = new Map();
+
+  for (const item of importedRecipients.slice(0, MAX_RECIPIENTS)) {
+    const rawPhone = typeof item === 'string' ? item : item?.phone;
+    const contactName = typeof item === 'object' && item?.name ? String(item.name).trim().slice(0, 120) : null;
+    const cleanPhone = String(rawPhone || '').replace(/\D/g, '');
+    if (cleanPhone.length >= 8 && cleanPhone.length <= 20) {
+      importedMap.set(cleanPhone, contactName || importedMap.get(cleanPhone) || null);
+    }
+  }
+
+  if (importedMap.size > 0) {
+    const waIds = Array.from(importedMap.keys());
+    const existing = await db.contact.findMany({
+      where: { tenantId, waId: { in: waIds } },
+      select: { id: true, waId: true, name: true },
+    });
+    const existingByWaId = new Map(existing.map((c) => [c.waId, c]));
+    const toCreate = [];
+    const toUpdate = [];
+    for (const [waId, name] of importedMap.entries()) {
+      const match = existingByWaId.get(waId);
+      if (!match) toCreate.push({ tenantId, waId, name: name || `+${waId}` });
+      else if (name && match.name !== name) toUpdate.push({ id: match.id, name });
+    }
+    for (let i = 0; i < toCreate.length; i += DB_BATCH_SIZE) {
+      await db.contact.createMany({ data: toCreate.slice(i, i + DB_BATCH_SIZE), skipDuplicates: true });
+    }
+    for (let i = 0; i < toUpdate.length; i += 25) {
+      await Promise.all(
+        toUpdate.slice(i, i + 25).map((entry) => db.contact.update({ where: { id: entry.id }, data: { name: entry.name } }))
+      );
+    }
+    const hydrated = await db.contact.findMany({
+      where: { tenantId, waId: { in: waIds } },
+      select: { id: true, waId: true, name: true },
+    });
+    hydrated.forEach((c) => targetMap.set(c.id, c));
+  }
+
+  if (contactIds.length > 0) {
+    const found = await db.contact.findMany({
+      where: { tenantId, id: { in: [...new Set(contactIds)] } },
+      select: { id: true, waId: true, name: true },
+    });
+    found.forEach((c) => targetMap.set(c.id, c));
+  }
+
+  return Array.from(targetMap.values());
 }
 
 class BroadcastController {
@@ -46,11 +100,13 @@ class BroadcastController {
     try {
       const name = typeof req.body?.name === 'string' ? req.body.name.trim() : '';
       const templateId = req.body?.templateId;
-      const contactIds = req.body?.contactIds;
+      const contactIds = Array.isArray(req.body?.contactIds) ? req.body.contactIds : [];
+      const importedRecipients = Array.isArray(req.body?.importedRecipients) ? req.body.importedRecipients : [];
       const variables = normalizeVariables(req.body?.variables || {});
 
-      if (!name || name.length > 120 || typeof templateId !== 'string' || !Array.isArray(contactIds) ||
-        contactIds.length === 0 || contactIds.length > MAX_RECIPIENTS ||
+      if (!name || name.length > 120 || typeof templateId !== 'string' ||
+        (!contactIds.length && !importedRecipients.length) ||
+        contactIds.length > MAX_RECIPIENTS ||
         contactIds.some((contactId) => typeof contactId !== 'string') || !variables) {
         return res.status(400).json({
           success: false,
@@ -67,13 +123,10 @@ class BroadcastController {
       if (!template) return res.status(404).json({ success: false, error: 'Approved template not found' });
 
       const targetContacts = await req.db((db) =>
-        db.contact.findMany({
-          where: { tenantId, id: { in: [...new Set(contactIds)] } },
-          select: { id: true, waId: true, name: true },
-        })
+        resolveBroadcastContacts(db, tenantId, importedRecipients, contactIds)
       );
-      if (targetContacts.length === 0) {
-        return res.status(400).json({ success: false, error: 'No contacts selected or found for broadcast' });
+      if (targetContacts.length === 0 || targetContacts.length > MAX_RECIPIENTS) {
+        return res.status(400).json({ success: false, error: `No valid contacts found or limit exceeded (max ${MAX_RECIPIENTS})` });
       }
 
       const runBroadcastTx = rlsContextEnabled()

@@ -27,7 +27,7 @@ class WebhookController {
              ],
            },
          }));
-         const configuredGlobalToken = process.env.META_WEBHOOK_VERIFY_TOKEN;
+         const configuredGlobalToken = process.env.META_WEBHOOK_VERIFY_TOKEN || process.env.WEBHOOK_VERIFY_TOKEN;
          const globalTokenMatches = configuredGlobalToken && timingSafeEqualStrings(token, configuredGlobalToken);
 
          if (tenant || globalTokenMatches) {

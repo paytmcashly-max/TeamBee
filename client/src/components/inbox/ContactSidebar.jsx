@@ -1,36 +1,15 @@
 import React, { useState } from 'react';
-import {
-  Phone,
-  Calendar,
-  Tag,
-  FileText,
-  User,
-  MapPin,
-  GraduationCap,
-  Sparkles,
-  ExternalLink,
-  Plus,
-  X,
-  Clock,
-  ShieldCheck,
-  Edit2,
-  Check,
-  Mail,
-  Award,
-} from 'lucide-react';
+import { Phone, X, Edit2 } from 'lucide-react';
 import { useChat } from '../../context/ChatContext';
-import { useToast } from '../../context/ToastContext';
+import { formatFullDate, formatTimeShort, parseJsonArray, parseJsonObject } from '../../utils/formatters';
 
-export default function ContactSidebar({ onOpenTemplatePicker, onClose }) {
+export default function ContactSidebar({ onClose }) {
   const { activeChat, updateChatTags, updateContact, messagingWindow } = useChat();
-  const toast = useToast();
 
   const [isEditingName, setIsEditingName] = useState(false);
   const [nameInput, setNameInput] = useState('');
   const [newTagInput, setNewTagInput] = useState('');
   const [isAddingTag, setIsAddingTag] = useState(false);
-
-  // Custom Lead Field Editor
   const [isAddingField, setIsAddingField] = useState(false);
   const [fieldKey, setFieldKey] = useState('');
   const [fieldVal, setFieldVal] = useState('');
@@ -38,80 +17,37 @@ export default function ContactSidebar({ onOpenTemplatePicker, onClose }) {
   if (!activeChat) return null;
 
   const contact = activeChat.contact;
-  let customAttrs = {};
-  try {
-    customAttrs = contact?.customAttributes ? JSON.parse(contact.customAttributes) : {};
-  } catch (e) {
-    customAttrs = {};
-  }
-
-  let tags = [];
-  try {
-    const parsedTags = activeChat.tags ? JSON.parse(activeChat.tags) : [];
-    tags = Array.isArray(parsedTags) ? parsedTags : [];
-  } catch {
-    tags = [];
-  }
+  const customAttrs = parseJsonObject(contact?.customAttributes);
+  const tags = parseJsonArray(activeChat.tags);
 
   const handleSaveName = async () => {
     if (!nameInput.trim()) return;
-    try {
-      const result = await updateContact(activeChat.id, { name: nameInput.trim() });
-      if (!result?.success) {
-        toast.error(result?.error || 'Failed to save the contact name');
-        return;
-      }
-      setIsEditingName(false);
-    } catch (err) {
-      toast.error(err.message || 'Failed to save the contact name');
-    }
+    await updateContact(activeChat.id, { name: nameInput.trim() });
+    setIsEditingName(false);
   };
 
   const handleAddTag = async () => {
-    if (!newTagInput.trim()) return;
     const tag = newTagInput.trim();
+    if (!tag) return;
     if (!tags.includes(tag)) {
-      try {
-        const result = await updateChatTags(activeChat.id, [...tags, tag]);
-        if (!result?.success) {
-          toast.error(result?.error || 'Failed to add the tag');
-          return;
-        }
-      } catch (err) {
-        toast.error(err.message || 'Failed to add the tag');
-        return;
-      }
+      await updateChatTags(activeChat.id, [...tags, tag]);
     }
     setNewTagInput('');
     setIsAddingTag(false);
   };
 
   const handleRemoveTag = async (tagToRemove) => {
-    const updated = tags.filter((t) => t !== tagToRemove);
-    try {
-      const result = await updateChatTags(activeChat.id, updated);
-      if (!result?.success) toast.error(result?.error || 'Failed to remove the tag');
-    } catch (err) {
-      toast.error(err.message || 'Failed to remove the tag');
-    }
+    await updateChatTags(activeChat.id, tags.filter((t) => t !== tagToRemove));
   };
 
   const handleSaveCustomField = async () => {
     if (!fieldKey.trim() || !fieldVal.trim()) return;
-    const updatedAttrs = {
-      ...customAttrs,
-      [fieldKey.trim()]: fieldVal.trim(),
-    };
-    try {
-      const result = await updateContact(activeChat.id, { customAttributes: updatedAttrs });
-      if (!result?.success) {
-        toast.error(result?.error || 'Failed to save the field');
-        return;
-      }
-    } catch (err) {
-      toast.error(err.message || 'Failed to save the field');
-      return;
-    }
+    await updateContact(activeChat.id, {
+      customAttributes: {
+        ...customAttrs,
+        [fieldKey.trim()]: fieldVal.trim(),
+      },
+    });
     setFieldKey('');
     setFieldVal('');
     setIsAddingField(false);
@@ -120,406 +56,254 @@ export default function ContactSidebar({ onOpenTemplatePicker, onClose }) {
   const handleRemoveCustomField = async (keyToRemove) => {
     const updatedAttrs = { ...customAttrs };
     delete updatedAttrs[keyToRemove];
-    try {
-      const result = await updateContact(activeChat.id, { customAttributes: updatedAttrs });
-      if (!result?.success) toast.error(result?.error || 'Failed to remove the field');
-    } catch (err) {
-      toast.error(err.message || 'Failed to remove the field');
-    }
+    await updateContact(activeChat.id, { customAttributes: updatedAttrs });
   };
 
-  const hoursRemaining = parseFloat(messagingWindow?.hoursRemaining || 0);
-  const slaPercentage = Math.min(100, Math.max(0, (hoursRemaining / 24) * 100));
+  const contactName = contact?.name || contact?.waId || 'WhatsApp User';
+  const contactEmail = customAttrs.Email || contact?.email || '';
+  const contactPhone = contact?.waId ? `+${contact.waId}` : '';
+  const customerSince = formatFullDate(contact?.createdAt);
+  const customerId = contact?.id ? `TB-${contact.id.slice(0, 6).toUpperCase()}` : 'Not assigned';
+  const customEntries = Object.entries(customAttrs).filter(([k]) => k !== 'Email');
 
   return (
-    <aside className="col-crm-sidebar">
-      {/* 1. Top Profile Summary */}
-      <div className="side-profile">
-        {/* Close Button for Drawer (Tablet / Mobile) */}
+    <aside className="customer-details-panel" data-name="Customer details">
+      <div className="details-header">
+        <h3 className="details-header-title">Customer details</h3>
         {onClose && (
           <button
+            type="button"
+            className="details-close-btn"
             onClick={onClose}
-            className="btn btn-ghost btn-sm drawer-close"
-            title="Close CRM Sidebar"
+            title="Close customer panel"
           >
-            <X size={18} />
+            <X size={16} />
           </button>
         )}
-        <div className="profile-avatar">
-          {contact?.name ? contact.name.charAt(0).toUpperCase() : 'C'}
-        </div>
+      </div>
 
-        {/* Name with inline editing */}
+      <div className="details-profile-section">
         {isEditingName ? (
-          <div className="name-row" style={{ marginBottom: 'var(--space-2)' }}>
+          <div className="details-name-edit-box">
             <input
               type="text"
+              className="details-name-input"
               value={nameInput}
               onChange={(e) => setNameInput(e.target.value)}
-              onKeyDown={(e) => e.key === 'Enter' && handleSaveName()}
+              placeholder="Enter contact name"
               autoFocus
-              className="name-input"
             />
-            <button
-              onClick={handleSaveName}
-              className="btn btn-primary btn-xs"
-            >
-              <Check size={13} />
-            </button>
-            <button
-              onClick={() => setIsEditingName(false)}
-              className="btn btn-ghost btn-xs"
-            >
-              ✕
-            </button>
+            <div className="details-name-edit-actions">
+              <button type="button" className="details-save-name-btn" onClick={handleSaveName}>
+                Save
+              </button>
+              <button type="button" className="details-cancel-name-btn" onClick={() => setIsEditingName(false)}>
+                Cancel
+              </button>
+            </div>
           </div>
         ) : (
-          <div className="name-row">
-            <h3 className="profile-name">
-              {contact?.name || 'Customer'}
-            </h3>
+          <div className="details-name-row">
+            <h2 className="details-customer-name">{contactName}</h2>
             <button
+              type="button"
+              className="details-edit-icon-btn"
               onClick={() => {
-                setNameInput(contact?.name || '');
+                setNameInput(contactName);
                 setIsEditingName(true);
               }}
-              className="btn btn-ghost btn-xs"
-              title="Edit contact name"
+              title="Edit name"
             >
-              <Edit2 size={12} />
+              <Edit2 size={13} />
             </button>
           </div>
         )}
 
-        <div className="phone-line">
-          <Phone size={13} style={{ color: 'var(--wa-primary)' }} />
-          <span>+{contact?.waId}</span>
-        </div>
+        <span className="details-customer-email">
+          {contactEmail || contactPhone || 'No email recorded'}
+        </span>
 
-        <div>
+        {contactPhone && (
           <a
-            href={`https://wa.me/${contact?.waId}?text=${encodeURIComponent('Namaste! Connecting regarding your query on TeamBee.')}`}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="btn btn-secondary btn-block btn-sm"
-            style={{ textDecoration: 'none' }}
+            href={`tel:${contactPhone}`}
+            className="details-call-btn"
+            title={`Call ${contactName}`}
           >
-            <ExternalLink size={13} /> Direct WhatsApp Web
+            <Phone size={13} />
+            <span>Call {contactPhone}</span>
           </a>
-        </div>
+        )}
       </div>
 
-      {/* 2. Meta 24-Hour SLA Window Progress Meter */}
-      <div className="side-section">
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
-          <span className="side-label">
-            24h WhatsApp SLA Window
-          </span>
-          <span
-            style={{
-              fontSize: '11.5px',
-              fontWeight: '700',
-              color: messagingWindow?.isOpen ? '#10b981' : '#f87171',
-            }}
-          >
-            {messagingWindow?.isOpen ? `${hoursRemaining}h remaining` : 'EXPIRED'}
-          </span>
-        </div>
-        <div
-          style={{
-            height: '6px',
-            width: '100%',
-            background: 'rgba(15, 23, 42, 0.08)',
-            borderRadius: '999px',
-            overflow: 'hidden',
-          }}
-        >
-          <div
-            style={{
-              height: '100%',
-              width: `${slaPercentage}%`,
-              background:
-                slaPercentage > 50
-                  ? 'linear-gradient(90deg, #10b981, #25D366)'
-                  : slaPercentage > 20
-                  ? 'linear-gradient(90deg, #f59e0b, #fbbf24)'
-                  : 'linear-gradient(90deg, #ef4444, #f87171)',
-              transition: 'width 0.3s ease',
-            }}
-          />
-        </div>
-        <p style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '6px', lineHeight: 1.3 }}>
-          {messagingWindow?.isOpen
-            ? 'Free inbound/outbound session active. Send any message.'
-            : 'Session expired. Send Meta pre-approved template to restart timer.'}
-        </p>
-      </div>
+      <div className="details-section">
+        <span className="details-section-label">LABELS</span>
 
-      {/* 3. CRM Intelligence / Custom Attributes */}
-      <div className="side-section">
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
-          <span
-            style={{
-              fontSize: '11px',
-              fontWeight: '700',
-              color: 'var(--text-muted)',
-              textTransform: 'uppercase',
-              letterSpacing: '0.05em',
-            }}
-          >
-            Lead & CRM Profile
-          </span>
-          <button
-            onClick={() => setIsAddingField(true)}
-            className="btn btn-ghost btn-xs"
-          >
-            <Plus size={13} /> Field
-          </button>
-        </div>
-
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', fontSize: '12.5px' }}>
-          {Object.entries(customAttrs).map(([key, val]) => (
-            <div key={key} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <span style={{ color: 'var(--text-muted)', textTransform: 'capitalize' }}>{key}:</span>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                <span
-                  style={{
-                    color: 'var(--text-main)',
-                    fontWeight: '600',
-                    background: 'rgba(15, 23, 42, 0.05)',
-                    padding: '2px 6px',
-                    borderRadius: '4px',
-                    fontSize: '11.5px',
-                  }}
-                >
-                  {String(val)}
-                </span>
+        <div className="details-tags-list">
+          {tags.length > 0 ? (
+            tags.map((tag, idx) => (
+              <span
+                key={idx}
+                className={`details-tag-pill ${tag.toLowerCase().includes('vip') ? 'vip' : 'normal'}`}
+              >
+                <span>{tag}</span>
                 <button
-                  onClick={() => handleRemoveCustomField(key)}
-                  style={{
-                    background: 'none',
-                    border: 'none',
-                    color: 'var(--text-muted)',
-                    cursor: 'pointer',
-                    padding: 0,
-                  }}
+                  type="button"
+                  className="details-tag-remove"
+                  onClick={() => handleRemoveTag(tag)}
+                  title={`Remove ${tag}`}
+                >
+                  <X size={10} />
+                </button>
+              </span>
+            ))
+          ) : (
+            <span className="details-empty-note">No labels assigned yet</span>
+          )}
+        </div>
+
+        {isAddingTag ? (
+          <div className="details-add-tag-box">
+            <input
+              type="text"
+              className="details-add-tag-input"
+              placeholder="Tag name (e.g. Priority, Billing)"
+              value={newTagInput}
+              onChange={(e) => setNewTagInput(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && handleAddTag()}
+              autoFocus
+            />
+            <div className="details-add-tag-actions">
+              <button type="button" className="details-add-tag-confirm" onClick={handleAddTag}>
+                Add
+              </button>
+              <button type="button" className="details-add-tag-cancel" onClick={() => setIsAddingTag(false)}>
+                Cancel
+              </button>
+            </div>
+          </div>
+        ) : (
+          <button
+            type="button"
+            className="details-add-tag-btn"
+            onClick={() => setIsAddingTag(true)}
+          >
+            + Add label
+          </button>
+        )}
+      </div>
+
+      <div className="details-divider" />
+
+      <div className="details-section">
+        <span className="details-section-label">DETAILS</span>
+
+        <div className="details-kv-table">
+          {contactPhone && (
+            <div className="details-kv-row">
+              <span className="details-k">WhatsApp</span>
+              <span className="details-v">{contactPhone}</span>
+            </div>
+          )}
+
+          <div className="details-kv-row">
+            <span className="details-k">Customer since</span>
+            <span className="details-v">{customerSince}</span>
+          </div>
+
+          <div className="details-kv-row">
+            <span className="details-k">Customer ID</span>
+            <span className="details-v">{customerId}</span>
+          </div>
+
+          {customEntries.map(([k, v]) => (
+            <div key={k} className="details-kv-row">
+              <span className="details-k">{k}</span>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                <span className="details-v">{String(v)}</span>
+                <button
+                  type="button"
+                  onClick={() => handleRemoveCustomField(k)}
+                  className="details-tag-remove"
                   title="Remove field"
                 >
-                  <X size={11} />
+                  <X size={10} />
                 </button>
               </div>
             </div>
           ))}
-
-          {isAddingField && (
-            <div
-              style={{
-                display: 'flex',
-                flexDirection: 'column',
-                gap: '6px',
-                background: 'var(--bg-surface)',
-                padding: '8px',
-                borderRadius: '6px',
-                marginTop: '6px',
-              }}
-            >
-              <input
-                type="text"
-                placeholder="Field name (e.g. Budget, City)"
-                value={fieldKey}
-                onChange={(e) => setFieldKey(e.target.value)}
-                style={{
-                  background: 'var(--bg-input)',
-                  border: '1px solid var(--border-medium)',
-                  borderRadius: '4px',
-                  color: 'var(--text-main)',
-                  padding: '4px 6px',
-                  fontSize: '11.5px',
-                  outline: 'none',
-                }}
-              />
-              <input
-                type="text"
-                placeholder="Value (e.g. ₹85,000, Mumbai)"
-                value={fieldVal}
-                onChange={(e) => setFieldVal(e.target.value)}
-                style={{
-                  background: 'var(--bg-input)',
-                  border: '1px solid var(--border-medium)',
-                  borderRadius: '4px',
-                  color: 'var(--text-main)',
-                  padding: '4px 6px',
-                  fontSize: '11.5px',
-                  outline: 'none',
-                }}
-              />
-              <div style={{ display: 'flex', gap: '4px', justifyContent: 'flex-end' }}>
-                <button
-                  onClick={handleSaveCustomField}
-                  className="btn btn-primary btn-xs"
-                >
-                  Save
-                </button>
-                <button
-                  onClick={() => setIsAddingField(false)}
-                  className="btn btn-ghost btn-xs"
-                >
-                  Cancel
-                </button>
-              </div>
-            </div>
-          )}
-
-          <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '4px' }}>
-            <span style={{ color: 'var(--text-muted)' }}>First Contact:</span>
-            <span style={{ color: 'var(--text-secondary)' }}>
-              {contact?.createdAt
-                ? new Date(contact.createdAt).toLocaleDateString('en-IN', {
-                    month: 'short',
-                    day: 'numeric',
-                    year: 'numeric',
-                  })
-                : '—'}
-            </span>
-          </div>
-        </div>
-      </div>
-
-      {/* 4. Dynamic Tags Manager */}
-      <div className="side-section">
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
-          <span
-            style={{
-              fontSize: '11px',
-              fontWeight: '700',
-              color: 'var(--text-muted)',
-              textTransform: 'uppercase',
-              letterSpacing: '0.05em',
-            }}
-          >
-            Tags & Segments
-          </span>
-          <button
-            onClick={() => setIsAddingTag(true)}
-            className="btn btn-ghost btn-xs"
-          >
-            <Plus size={13} /> Add
-          </button>
         </div>
 
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
-          {tags.map((tag) => (
-            <span
-              key={tag}
-              style={{
-                fontSize: '11.5px',
-                background: 'rgba(15, 23, 42, 0.06)',
-                color: 'var(--text-main)',
-                padding: '3px 8px',
-                borderRadius: '4px',
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: '5px',
-              }}
-            >
-              <Tag size={10} style={{ color: 'var(--wa-primary)' }} />
-              <span>{tag}</span>
-              <button
-                onClick={() => handleRemoveTag(tag)}
-                style={{
-                  background: 'none',
-                  border: 'none',
-                  color: 'var(--text-muted)',
-                  cursor: 'pointer',
-                  padding: 0,
-                  display: 'flex',
-                }}
-              >
-                <X size={11} />
-              </button>
-            </span>
-          ))}
-
-          {isAddingTag && (
-            <div style={{ display: 'flex', gap: '4px', width: '100%', marginTop: '6px' }}>
-              <input
-                type="text"
-                placeholder="New tag..."
-                value={newTagInput}
-                onChange={(e) => setNewTagInput(e.target.value)}
-                onKeyDown={(e) => e.key === 'Enter' && handleAddTag()}
-                autoFocus
-                style={{
-                  flex: 1,
-                  background: 'var(--bg-surface)',
-                  border: '1px solid var(--border-medium)',
-                  borderRadius: '4px',
-                  color: 'var(--text-main)',
-                  padding: '4px 8px',
-                  fontSize: '12px',
-                  outline: 'none',
-                }}
-              />
-              <button onClick={handleAddTag} className="btn btn-primary btn-xs">
+        {isAddingField ? (
+          <div className="details-add-field-box">
+            <input
+              type="text"
+              placeholder="Field name (e.g. City)"
+              className="details-add-field-input"
+              value={fieldKey}
+              onChange={(e) => setFieldKey(e.target.value)}
+            />
+            <input
+              type="text"
+              placeholder="Value"
+              className="details-add-field-input"
+              value={fieldVal}
+              onChange={(e) => setFieldVal(e.target.value)}
+            />
+            <div className="details-add-field-actions">
+              <button type="button" className="details-add-field-confirm" onClick={handleSaveCustomField}>
                 Save
               </button>
-              <button onClick={() => setIsAddingTag(false)} className="btn btn-ghost btn-xs">
-                ✕
+              <button type="button" className="details-add-field-cancel" onClick={() => setIsAddingField(false)}>
+                Cancel
               </button>
             </div>
+          </div>
+        ) : (
+          <button
+            type="button"
+            className="details-add-tag-btn"
+            onClick={() => setIsAddingField(true)}
+            style={{ marginTop: '10px' }}
+          >
+            + Add detail
+          </button>
+        )}
+      </div>
+
+      <div className="details-divider" />
+
+      <div className="details-section">
+        <span className="details-section-label">CONVERSATION STATE</span>
+
+        <div className="details-activity-list">
+          <div className="activity-item">
+            <span className="activity-title">
+              ● Owner: {activeChat.assignedAgent?.name || 'Unassigned queue'}
+            </span>
+            <span className="activity-timestamp">
+              Status: {activeChat.status || 'OPEN'}
+            </span>
+          </div>
+
+          <div className="activity-item">
+            <span className="activity-title">
+              ● {messagingWindow?.isOpen ? 'Care window active' : 'Care window expired'}
+            </span>
+            <span className="activity-timestamp">
+              {messagingWindow?.isOpen
+                ? `${messagingWindow.hoursRemaining}h remaining`
+                : 'Send approved template to re-engage'}
+            </span>
+          </div>
+
+          {activeChat.lastMessageAt && (
+            <div className="activity-item">
+              <span className="activity-title">● Last activity</span>
+              <span className="activity-timestamp">
+                {formatFullDate(activeChat.lastMessageAt)} · {formatTimeShort(activeChat.lastMessageAt)}
+              </span>
+            </div>
           )}
-        </div>
-      </div>
-
-      {/* 5. Meta WhatsApp Quick Template Launcher */}
-      <div className="side-section">
-        <div
-          style={{
-            fontSize: '11px',
-            fontWeight: '700',
-            color: 'var(--text-muted)',
-            textTransform: 'uppercase',
-            letterSpacing: '0.05em',
-            marginBottom: '10px',
-          }}
-        >
-          Meta Broadcast & Re-engagement
-        </div>
-        <p style={{ fontSize: '12px', color: 'var(--text-secondary)', marginBottom: '10px', lineHeight: 1.4 }}>
-          Send pre-approved WhatsApp marketing or utility templates with automatic variable interpolation.
-        </p>
-        <button
-          onClick={onOpenTemplatePicker}
-          className="btn btn-primary"
-          style={{ width: '100%', fontSize: '12px', padding: '8px' }}
-        >
-          <Sparkles size={14} /> Send Approved Template
-        </button>
-      </div>
-
-      {/* 6. Operational Audit */}
-      <div className="side-section" style={{ borderBottom: 'none' }}>
-        <div
-          style={{
-            fontSize: '11px',
-            fontWeight: '700',
-            color: 'var(--text-muted)',
-            textTransform: 'uppercase',
-            letterSpacing: '0.05em',
-            marginBottom: '10px',
-          }}
-        >
-          Operational Audit
-        </div>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', fontSize: '12px', color: 'var(--text-secondary)' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-            <ShieldCheck size={14} style={{ color: '#10b981' }} />
-            <span>End-to-End Encrypted Handshake</span>
-          </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-            <Clock size={14} style={{ color: '#38bdf8' }} />
-            <span>Response SLA tracked from live message events</span>
-          </div>
         </div>
       </div>
     </aside>

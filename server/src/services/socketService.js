@@ -13,6 +13,17 @@ let io = null;
 let redisClients = [];
 // Track online socket count per agent: agentId -> Set of socketIds
 const onlineAgents = new Map();
+const agentTenantMap = new Map();
+
+function getOnlineAgentIds(tenantId) {
+  const ids = [];
+  for (const [agentId, tId] of agentTenantMap.entries()) {
+    if (tId === tenantId && onlineAgents.has(agentId)) {
+      ids.push(agentId);
+    }
+  }
+  return ids;
+}
 
 /**
  * Initialize Socket.io with HTTP server and configure security middleware
@@ -128,6 +139,7 @@ function initSocket(server) {
     // Track active connection count
     if (!onlineAgents.has(agentId)) {
       onlineAgents.set(agentId, new Set());
+      agentTenantMap.set(agentId, tenantId);
       // First connection marks the agent ONLINE — but only from OFFLINE.
       // A manually chosen BUSY must survive reconnects and new tabs.
       const currentAgent = await tenantDb(tenantId, (db) =>
@@ -140,15 +152,19 @@ function initSocket(server) {
             data: { status: 'ONLINE' },
           })
         ).catch((e) => console.error('Agent presence update error:', e));
-
-        io.to(tenantRoom).emit('agent_presence_changed', {
-          agentId,
-          status: 'ONLINE',
-          timestamp: new Date().toISOString(),
-        });
       }
+
+      io.to(tenantRoom).emit('agent_presence_changed', {
+        agentId,
+        status: currentAgent?.status === 'BUSY' ? 'BUSY' : 'ONLINE',
+        onlineAgentIds: getOnlineAgentIds(tenantId),
+        timestamp: new Date().toISOString(),
+      });
     }
     onlineAgents.get(agentId).add(socket.id);
+    socket.emit('tenant_presence_snapshot', {
+      onlineAgentIds: getOnlineAgentIds(tenantId),
+    });
 
     // -----------------------------------------------------------------------
     // EVENT: join_chat (Strict RBAC Guarded Room Access)
@@ -250,6 +266,7 @@ function initSocket(server) {
         agentSockets.delete(socket.id);
         if (agentSockets.size === 0) {
           onlineAgents.delete(agentId);
+          agentTenantMap.delete(agentId);
           // Mark agent OFFLINE in database
           await tenantDb(tenantId, (db) =>
             db.agent.update({
@@ -261,6 +278,7 @@ function initSocket(server) {
           io.to(tenantRoom).emit('agent_presence_changed', {
             agentId,
             status: 'OFFLINE',
+            onlineAgentIds: getOnlineAgentIds(tenantId),
             timestamp: new Date().toISOString(),
           });
         }
@@ -444,6 +462,7 @@ module.exports = {
   configureRedisAdapter,
   closeSocketResources,
   getIO,
+  getOnlineAgentIds,
   broadcastNewMessage,
   broadcastMessageStatus,
   broadcastChatAssignment,

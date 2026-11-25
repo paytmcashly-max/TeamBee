@@ -81,26 +81,27 @@ function sessionSameSite() {
   return sameSite === 'strict' ? 'Strict' : sameSite === 'lax' ? 'Lax' : 'None';
 }
 
-function setSessionCookie(res, token) {
+function buildCookieHeader(value, maxAgeSeconds) {
   const secure = process.env.NODE_ENV === 'production' || process.env.COOKIE_SECURE === 'true';
   const sameSite = sessionSameSite();
   const attributes = [
-    `chatflow_session=${encodeURIComponent(token)}`,
-    'Max-Age=604800',
+    `chatflow_session=${value}`,
+    `Max-Age=${maxAgeSeconds}`,
     'Path=/',
     'HttpOnly',
     `SameSite=${sameSite}`,
   ];
   // SameSite=None is only honoured by browsers together with Secure.
   if (secure || sameSite === 'None') attributes.push('Secure');
-  res.setHeader('Set-Cookie', attributes.join('; '));
+  return attributes.join('; ');
+}
+
+function setSessionCookie(res, token) {
+  res.setHeader('Set-Cookie', buildCookieHeader(encodeURIComponent(token), 604800));
 }
 
 function clearSessionCookie(res) {
-  res.setHeader(
-    'Set-Cookie',
-    `chatflow_session=; Max-Age=0; Path=/; HttpOnly; SameSite=${sessionSameSite()}`
-  );
+  res.setHeader('Set-Cookie', buildCookieHeader('', 0));
 }
 
 class AuthController {

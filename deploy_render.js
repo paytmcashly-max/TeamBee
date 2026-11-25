@@ -4,65 +4,62 @@
  */
 const https = require('https');
 
-const API_KEY = process.env.RENDER_API_KEY || 'rnd_VOzazcTOYntLPUb9D5hcGVer0q4g';
-const GITHUB_REPO = 'https://github.com/paytmcashly-max/TeamBee';
-const BRANCH = 'main';
+require('dotenv').config({ path: require('path').resolve(__dirname, 'server/.env') });
+
+const API_KEY = process.env.RENDER_API_KEY;
+const GITHUB_REPO = process.env.GITHUB_REPO || 'https://github.com/paytmcashly-max/TeamBee';
+const BRANCH = process.env.RENDER_BRANCH || 'main';
 
 const BACKEND_ENV_VARS = [
-  { key: 'PORT', value: '5000' },
+  { key: 'PORT', value: process.env.PORT || '5000' },
   { key: 'NODE_ENV', value: 'production' },
-  { key: 'DATABASE_URL', value: 'postgresql://neondb_owner:npg_rXNdsvW4hH2g@ep-weathered-meadow-akt3lhh6.c-3.us-west-2.aws.neon.tech/neondb?sslmode=require' },
-  { key: 'JWT_SECRET', value: 'chatflow_super_secret_jwt_key_2026_indian_smb' },
-  { key: 'CREDENTIAL_ENCRYPTION_KEY', value: 'teambee_credential_encryption_key_secure_2026_prod' },
-  { key: 'META_API_VERSION', value: 'v20.0' },
-  { key: 'META_ACCESS_TOKEN', value: 'EAAUzCgD1Xc0BSoz5wHEPaIHhQqNB1ABsHmZAPrTvRZAkVgzTvOyqCAbIZBUPVU9rFfbTy9yKrqoAOCLmhC0fAFuZCANDg83hVTqi5BjBZAMZBEpZCaS03j5rkx2IgxWQsAUnqUp7hYzSqDZB7qyMJqqf81aXTDBlKIEzSFzPtfW4nrPuHpe9GnB6ZBLi5YLOS3hwQvQZDZD' },
-  { key: 'META_APP_SECRET', value: 'e67f26c4721cb2e3292c6118f73ddaf2' },
-  { key: 'META_WEBHOOK_VERIFY_TOKEN', value: 'chatflow_whatsapp_webhook_secret_2026' },
-  { key: 'CORS_ORIGINS', value: '*' },
-  { key: 'CLIENT_URL', value: '*' }
+  { key: 'TRUST_PROXY', value: 'true' },
+  { key: 'COOKIE_SAME_SITE', value: 'none' },
+  { key: 'COOKIE_SECURE', value: 'true' },
+  { key: 'META_ALLOW_MOCK', value: process.env.META_ALLOW_MOCK || 'false' },
+  ...(process.env.DATABASE_URL ? [{ key: 'DATABASE_URL', value: process.env.DATABASE_URL }] : []),
+  ...(process.env.JWT_SECRET ? [{ key: 'JWT_SECRET', value: process.env.JWT_SECRET }] : []),
+  ...(process.env.CREDENTIAL_ENCRYPTION_KEY ? [{ key: 'CREDENTIAL_ENCRYPTION_KEY', value: process.env.CREDENTIAL_ENCRYPTION_KEY }] : []),
+  ...(process.env.META_API_VERSION ? [{ key: 'META_API_VERSION', value: process.env.META_API_VERSION }] : [{ key: 'META_API_VERSION', value: 'v20.0' }]),
+  ...(process.env.META_ACCESS_TOKEN ? [{ key: 'META_ACCESS_TOKEN', value: process.env.META_ACCESS_TOKEN }] : []),
+  ...(process.env.META_APP_SECRET ? [{ key: 'META_APP_SECRET', value: process.env.META_APP_SECRET }] : []),
+  ...(process.env.META_WEBHOOK_VERIFY_TOKEN ? [{ key: 'META_WEBHOOK_VERIFY_TOKEN', value: process.env.META_WEBHOOK_VERIFY_TOKEN }] : []),
+  { key: 'CORS_ORIGINS', value: process.env.CORS_ORIGINS || 'https://teambee-frontend.onrender.com' },
+  { key: 'CLIENT_URL', value: process.env.CLIENT_URL || 'https://teambee-frontend.onrender.com' },
+  ...(process.env.R2_ACCOUNT_ID ? [{ key: 'R2_ACCOUNT_ID', value: process.env.R2_ACCOUNT_ID }] : []),
+  ...(process.env.R2_ACCESS_KEY_ID ? [{ key: 'R2_ACCESS_KEY_ID', value: process.env.R2_ACCESS_KEY_ID }] : []),
+  ...(process.env.R2_SECRET_ACCESS_KEY ? [{ key: 'R2_SECRET_ACCESS_KEY', value: process.env.R2_SECRET_ACCESS_KEY }] : []),
+  ...(process.env.R2_BUCKET_NAME ? [{ key: 'R2_BUCKET_NAME', value: process.env.R2_BUCKET_NAME }] : []),
+  ...(process.env.R2_PUBLIC_DOMAIN ? [{ key: 'R2_PUBLIC_DOMAIN', value: process.env.R2_PUBLIC_DOMAIN }] : []),
 ];
 
-function apiRequest(path, method = 'GET', data = null) {
-  return new Promise((resolve, reject) => {
-    const options = {
-      hostname: 'api.render.com',
-      port: 443,
-      path: '/v1' + path,
-      method: method,
-      headers: {
-        'Authorization': `Bearer ${API_KEY}`,
-        'Accept': 'application/json',
-        'Content-Type': 'application/json'
-      }
-    };
-
-    const req = https.request(options, (res) => {
-      let body = '';
-      res.on('data', (chunk) => (body += chunk));
-      res.on('end', () => {
-        try {
-          const parsed = JSON.parse(body);
-          if (res.statusCode >= 200 && res.statusCode < 300) {
-            resolve(parsed);
-          } else {
-            reject({ status: res.statusCode, error: parsed });
-          }
-        } catch (e) {
-          if (res.statusCode >= 200 && res.statusCode < 300) {
-            resolve({ raw: body });
-          } else {
-            reject({ status: res.statusCode, raw: body });
-          }
-        }
-      });
-    });
-
-    req.on('error', reject);
-    if (data) {
-      req.write(JSON.stringify(data));
+async function apiRequest(path, method = 'GET', data = null) {
+  const options = {
+    method: method,
+    headers: {
+      'Authorization': `Bearer ${API_KEY}`,
+      'Accept': 'application/json',
+      'Content-Type': 'application/json'
     }
-    req.end();
-  });
+  };
+  if (data) {
+    options.body = JSON.stringify(data);
+  }
+
+  const res = await fetch(`https://api.render.com/v1${path}`, options);
+  const text = await res.text();
+  let parsed;
+  try {
+    parsed = text ? JSON.parse(text) : {};
+  } catch (e) {
+    parsed = { raw: text };
+  }
+
+  if (res.ok) {
+    return parsed;
+  } else {
+    throw { status: res.status, error: parsed };
+  }
 }
 
 async function main() {
@@ -113,9 +110,11 @@ async function main() {
           env: 'node',
           plan: 'free',
           region: 'oregon',
-          buildCommand: 'npm install && npx prisma generate',
-          startCommand: 'npm start',
-          healthCheckPath: '/health'
+          healthCheckPath: '/health',
+          envSpecificDetails: {
+            buildCommand: 'npm ci --include=dev && npx prisma generate',
+            startCommand: 'npm start'
+          }
         },
         envVars: BACKEND_ENV_VARS
       });
@@ -129,7 +128,8 @@ async function main() {
         console.error('2) OR Grant Render App access: https://github.com/apps/render/installations/new');
         throw err;
       }
-      console.error('❌ Failed to create backend with plan "free", trying "starter"...', err);
+      console.error('⚠️ Note: plan "free" gave:', err.error?.message || err.message || err);
+      console.log('🔄 Trying with plan "starter"...');
       backendService = await apiRequest('/services', 'POST', {
         type: 'web_service',
         name: 'teambee-backend',
@@ -142,9 +142,11 @@ async function main() {
           env: 'node',
           plan: 'starter',
           region: 'oregon',
-          buildCommand: 'npm install && npx prisma generate',
-          startCommand: 'npm start',
-          healthCheckPath: '/health'
+          healthCheckPath: '/health',
+          envSpecificDetails: {
+            buildCommand: 'npm ci --include=dev && npx prisma generate',
+            startCommand: 'npm start'
+          }
         },
         envVars: BACKEND_ENV_VARS
       });
@@ -152,7 +154,16 @@ async function main() {
     }
   } else {
     console.log(`ℹ️ Backend service exists: ${backendService.name} (${backendService.id})`);
-    console.log('⚙️ Updating Backend environment variables in Render...');
+    console.log('⚙️ Synchronizing Backend build command & environment variables in Render...');
+    await apiRequest(`/services/${backendService.id}`, 'PATCH', {
+      branch: BRANCH,
+      serviceDetails: {
+        envSpecificDetails: {
+          buildCommand: 'npm ci --include=dev && npx prisma generate',
+          startCommand: 'npm start',
+        },
+      },
+    }).catch(() => {});
     await apiRequest(`/services/${backendService.id}/env-vars`, 'PUT', BACKEND_ENV_VARS);
     console.log('✅ Backend environment variables synchronized!');
   }
@@ -195,11 +206,11 @@ async function main() {
     `https://${frontendService.slug || frontendService.name}.onrender.com`;
   console.log(`🌐 Frontend URL: ${frontendUrl}\n`);
 
-  // 5. Update Backend CORS to include the exact Frontend URL
-  console.log('🔒 Locking Backend CORS to Frontend URL & Wildcard...');
+  // 5. Update Backend CORS to exact Frontend origin (no wildcard)
+  console.log('🔒 Locking Backend CORS to exact Frontend origin...');
   const updatedBackendEnvs = BACKEND_ENV_VARS.map((v) => {
     if (v.key === 'CORS_ORIGINS' || v.key === 'CLIENT_URL') {
-      return { key: v.key, value: `${frontendUrl},*` };
+      return { key: v.key, value: frontendUrl };
     }
     return v;
   });

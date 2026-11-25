@@ -1,88 +1,126 @@
 import React, { useState } from 'react';
-import { KeyRound, ArrowLeft, Eye, EyeOff, CheckCircle2 } from 'lucide-react';
-import { useToast } from '../../context/ToastContext';
+import { MessageSquare, Eye, EyeOff, CheckCircle2 } from 'lucide-react';
+import { apiFetch } from '../../services/apiClient';
 
-// Landing spot for password-reset email links (/?reset=<token>).
-// Submits to POST /api/auth/reset-password; the server consumes the
-// single-use token and signs out every other session.
-// Styling: design system only (styles/components.css auth patterns).
 export default function ResetPasswordView({ token, onDone }) {
-  const toast = useToast();
   const [password, setPassword] = useState('');
   const [confirm, setConfirm] = useState('');
   const [show, setShow] = useState(false);
-  const [error, setError] = useState('');
+  const [error, setError] = useState(null);
   const [submitting, setSubmitting] = useState(false);
   const [done, setDone] = useState(false);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    setError('');
+    setError(null);
+    if (password.length < 10) {
+      setError('Password must be at least 10 characters.');
+      return;
+    }
     if (password !== confirm) {
       setError('The two passwords do not match.');
       return;
     }
     setSubmitting(true);
     try {
-      const res = await fetch('/api/auth/reset-password', {
+      await apiFetch('/api/auth/reset-password', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ token, password }),
       });
-      const data = await res.json();
-      if (!data.success) throw new Error(data.error || 'Reset failed');
       setDone(true);
-      toast.success('Password updated — please sign in with your new password.');
     } catch (err) {
-      setError(err.message);
+      setError(err.message || 'Reset link is invalid or expired.');
     } finally {
       setSubmitting(false);
     }
   };
 
   return (
-    <div className="auth-shell">
-      <div className="auth-card" style={{ maxWidth: '400px' }}>
-        <span className="card-icon"><KeyRound size={19} /></span>
-        <h1 className="auth-title" style={{ marginBottom: 'var(--space-2)' }}>Set a new password</h1>
-        {done ? (
-          <>
-            <p className="t-body" style={{ display: 'flex', gap: 'var(--space-2)', alignItems: 'flex-start' }}>
-              <CheckCircle2 size={17} style={{ color: 'var(--wa-primary)', flexShrink: 0, marginTop: '3px' }} />
-              Your password has been updated and all other sessions were signed out. Sign in with your new password to continue.
-            </p>
-            <button onClick={onDone} className="btn btn-primary btn-block btn-lg" style={{ marginTop: 'var(--space-4)' }}>
-              Go to sign in
-            </button>
-          </>
-        ) : (
-          <>
-            <p className="auth-sub">Choose a new password for your TeamBee account. This link can be used once.</p>
-            <form onSubmit={handleSubmit} className="form-stack">
-              <div className="field">
-                <label className="label" htmlFor="rp-password">New password</label>
-                <div className="input-wrap">
-                  <input id="rp-password" className="input" type={show ? 'text' : 'password'} value={password} onChange={(e) => setPassword(e.target.value)} placeholder="At least 10 characters" minLength={10} required />
-                  <button type="button" className="input-eye" onClick={() => setShow((v) => !v)} aria-label={show ? 'Hide password' : 'Show password'}>
-                    {show ? <EyeOff size={16} /> : <Eye size={16} />}
+    <div className="auth-split-wrapper">
+      <section className="auth-hero-section">
+        <div className="auth-brand-header">
+          <div className="auth-brand-logo-row">
+            <div className="auth-brand-icon">
+              <MessageSquare size={18} />
+            </div>
+            <span className="auth-brand-name">TeamBee</span>
+          </div>
+        </div>
+        <div className="auth-hero-copy">
+          <span className="auth-hero-tagline">ACCOUNT SECURITY</span>
+          <h1 className="auth-hero-headline">
+            <span>Set a fresh</span>
+            <span>workspace password.</span>
+          </h1>
+          <p className="auth-hero-subtext">
+            Updating your password revokes all prior active sessions so your inbox remains protected.
+          </p>
+        </div>
+        <div className="auth-hero-footer">
+          <span className="auth-footer-highlight">Built for people. Connected by official WhatsApp.</span>
+        </div>
+      </section>
+
+      <section className="auth-form-section">
+        <div className="auth-form-container">
+          <span className="auth-eyebrow">PASSWORD RESET</span>
+          <h2 className="auth-form-title">Choose a new password</h2>
+
+          {done ? (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', marginTop: '14px' }}>
+              <div className="tb-alert success">
+                <CheckCircle2 size={17} />
+                <span>Your password was updated and older sessions were signed out.</span>
+              </div>
+              <button type="button" onClick={onDone} className="auth-submit-btn">
+                Sign in with new password →
+              </button>
+            </div>
+          ) : (
+            <form onSubmit={handleSubmit} className="auth-form" style={{ marginTop: '14px' }}>
+              {error && <div className="tb-alert error">{error}</div>}
+
+              <div className="auth-field-group">
+                <label className="auth-field-label">New Password (min 10 chars)</label>
+                <div className="auth-password-wrapper">
+                  <input
+                    type={show ? 'text' : 'password'}
+                    required
+                    minLength={10}
+                    className="auth-input-password"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    placeholder="••••••••••••"
+                  />
+                  <button type="button" className="auth-show-btn" onClick={() => setShow((v) => !v)}>
+                    {show ? <EyeOff size={15} /> : <Eye size={15} />}
                   </button>
                 </div>
               </div>
-              <div className="field">
-                <label className="label" htmlFor="rp-confirm">Confirm new password</label>
-                <input id="rp-confirm" className="input" type={show ? 'text' : 'password'} value={confirm} onChange={(e) => setConfirm(e.target.value)} placeholder="Type it again" minLength={10} required />
+
+              <div className="auth-field-group">
+                <label className="auth-field-label">Confirm Password</label>
+                <input
+                  type={show ? 'text' : 'password'}
+                  required
+                  minLength={10}
+                  className="auth-input"
+                  value={confirm}
+                  onChange={(e) => setConfirm(e.target.value)}
+                  placeholder="••••••••••••"
+                />
               </div>
-              {error && <div role="alert" className="form-error">{error}</div>}
-              <button type="submit" disabled={submitting} className="btn btn-primary btn-block btn-lg">
-                {submitting ? 'Updating…' : 'Update password'}
+
+              <button type="submit" className="auth-submit-btn" disabled={submitting}>
+                {submitting ? 'Updating...' : 'Update password →'}
+              </button>
+              <button type="button" className="switch-action-btn" onClick={onDone} style={{ alignSelf: 'flex-start' }}>
+                ← Back to sign in
               </button>
             </form>
-            <button onClick={onDone} className="btn btn-ghost btn-sm" style={{ marginTop: 'var(--space-3)' }}>
-              <ArrowLeft size={14} /> Back to sign in
-            </button>
-          </>
-        )}
-      </div>
+          )}
+        </div>
+      </section>
     </div>
   );
 }
