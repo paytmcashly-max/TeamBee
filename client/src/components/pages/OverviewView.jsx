@@ -13,7 +13,7 @@ function formatDelta(today, yesterday) {
 
 export default function OverviewView({ onNavigateView }) {
   const { tenant } = useAuth();
-  const [overview, setOverview] = useState(null);
+  const [analytics, setAnalytics] = useState(null);
   const [billing, setBilling] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -26,7 +26,7 @@ export default function OverviewView({ onNavigateView }) {
     ])
       .then(([analyticsData, billingData]) => {
         if (!active) return;
-        setOverview(analyticsData.stats || analyticsData);
+        setAnalytics(analyticsData);
         setBilling(billingData);
       })
       .catch((err) => {
@@ -40,29 +40,34 @@ export default function OverviewView({ onNavigateView }) {
     };
   }, []);
 
-  const stats = overview || {};
+  const stats = analytics?.stats || {};
+  const yesterday = stats.yesterday || {};
+  const apiChecklist = analytics?.checklist || {};
+  const subscription = analytics?.subscription || {};
+  const templatesApprovedCount = apiChecklist.templatesApproved ?? stats.templatesApproved ?? 0;
+
   const checklist = [
     {
       label: 'Connect WhatsApp Business API channel',
-      done: Boolean(tenant?.hasMetaConfigured),
+      done: Boolean(apiChecklist.hasWhatsApp ?? tenant?.hasMetaConfigured),
       actionLabel: 'Configure channel',
       view: 'settings',
     },
     {
       label: 'Sync or create approved Meta templates',
-      done: (stats.templatesApproved || 0) > 0,
+      done: Boolean(apiChecklist.hasCustomTemplate || templatesApprovedCount > 0),
       actionLabel: 'Open templates',
       view: 'templates',
     },
     {
       label: 'Add team members & assign roles',
-      done: (stats.agentsTotal || 0) > 1,
+      done: Boolean(apiChecklist.teamInvited ?? (stats.agentsTotal || 0) > 1),
       actionLabel: 'Manage team',
       view: 'team',
     },
     {
       label: 'Launch your first broadcast campaign',
-      done: (stats.broadcastsTotal || 0) > 0,
+      done: Boolean(apiChecklist.hasBroadcast ?? (stats.broadcastsTotal || 0) > 0),
       actionLabel: 'Go to broadcasts',
       view: 'broadcasts',
     },
@@ -94,7 +99,7 @@ export default function OverviewView({ onNavigateView }) {
             <div className="kpi-card">
               <div className="kpi-label">New chats today</div>
               <div className="kpi-value">{stats.chatsToday ?? 0}</div>
-              <div className="kpi-subtext">{formatDelta(stats.chatsToday, stats.chatsYesterday)}</div>
+              <div className="kpi-subtext">{formatDelta(stats.chatsToday ?? 0, yesterday.chats ?? 0)}</div>
             </div>
             <div className="kpi-card">
               <div className="kpi-label">Open queue</div>
@@ -104,7 +109,7 @@ export default function OverviewView({ onNavigateView }) {
             <div className="kpi-card">
               <div className="kpi-label">Resolved today</div>
               <div className="kpi-value">{stats.resolvedToday ?? 0}</div>
-              <div className="kpi-subtext">{formatDelta(stats.resolvedToday, stats.resolvedYesterday)}</div>
+              <div className="kpi-subtext">{formatDelta(stats.resolvedToday ?? 0, yesterday.resolved ?? 0)}</div>
             </div>
             <div className="kpi-card">
               <div className="kpi-label">Messages today</div>
@@ -163,7 +168,7 @@ export default function OverviewView({ onNavigateView }) {
             <div className="page-card">
               <h2 className="page-card-title" style={{ marginBottom: '6px' }}>Subscription &amp; throughput</h2>
               <p className="page-card-subtitle" style={{ marginBottom: '14px' }}>
-                Plan: {billing?.plan || tenant?.plan || 'PRO'} · Status: {billing?.subscriptionStatus || 'ACTIVE'}
+                Plan: {billing?.plan || subscription.plan || tenant?.plan || 'PRO'} · Status: {billing?.subscriptionStatus || subscription.status || 'ACTIVE'}
               </p>
               <div className="details-kv-table">
                 <div className="details-kv-row">
@@ -172,7 +177,7 @@ export default function OverviewView({ onNavigateView }) {
                 </div>
                 <div className="details-kv-row">
                   <span className="details-k">Approved templates</span>
-                  <span className="details-v">{stats.templatesApproved ?? 0}</span>
+                  <span className="details-v">{templatesApprovedCount}</span>
                 </div>
                 <div className="details-kv-row">
                   <span className="details-k">Total outbound messages</span>

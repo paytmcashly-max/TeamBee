@@ -1,8 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { Plus, Trash2 } from 'lucide-react';
+import { useAuth } from '../../context/AuthContext';
 import { apiFetch } from '../../services/apiClient';
+import QuickRepliesSection from './QuickRepliesSection';
 
 export default function AutomationView() {
+  const { isAdmin } = useAuth();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [feedback, setFeedback] = useState(null);
@@ -64,7 +67,7 @@ export default function AutomationView() {
     setSaving(true);
     setFeedback(null);
     try {
-      await Promise.all([
+      const updates = [
         apiFetch('/api/automation/config', {
           method: 'PUT',
           body: JSON.stringify({
@@ -76,17 +79,25 @@ export default function AutomationView() {
             customRules,
           }),
         }),
-        apiFetch('/api/tenant/settings', {
-          method: 'PUT',
-          body: JSON.stringify({
-            autoAssignEnabled,
-            officeHoursStart: officeHoursStart.trim() || null,
-            officeHoursEnd: officeHoursEnd.trim() || null,
-            officeHoursTimezone: officeHoursTimezone.trim() || 'Asia/Kolkata',
-          }),
-        }),
-      ]);
-      setFeedback({ type: 'success', text: 'Automation rules and routing settings saved.' });
+      ];
+      if (isAdmin) {
+        updates.push(
+          apiFetch('/api/tenant/settings', {
+            method: 'PUT',
+            body: JSON.stringify({
+              autoAssignEnabled,
+              officeHoursStart: officeHoursStart.trim() || null,
+              officeHoursEnd: officeHoursEnd.trim() || null,
+              officeHoursTimezone: officeHoursTimezone.trim() || 'Asia/Kolkata',
+            }),
+          })
+        );
+      }
+      await Promise.all(updates);
+      setFeedback({
+        type: 'success',
+        text: isAdmin ? 'Automation rules and routing settings saved.' : 'Keyword auto-responder settings saved.',
+      });
     } catch (err) {
       setFeedback({ type: 'error', text: err.message });
     } finally {
@@ -222,12 +233,16 @@ export default function AutomationView() {
           </div>
 
           <div className="page-card page-stack" style={{ gap: '14px' }}>
-            <h3 className="page-card-title">Queue routing &amp; office hours</h3>
+            <div>
+              <h3 className="page-card-title">Queue routing &amp; office hours</h3>
+              {!isAdmin && <p className="tb-hint">View only — Workspace Admin required to edit routing.</p>}
+            </div>
 
-            <label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px', fontWeight: 500, cursor: 'pointer' }}>
+            <label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px', fontWeight: 500, cursor: isAdmin ? 'pointer' : 'default' }}>
               <input
                 type="checkbox"
                 checked={autoAssignEnabled}
+                disabled={!isAdmin}
                 onChange={(e) => setAutoAssignEnabled(e.target.checked)}
               />
               <span>Auto-assign new unassigned chats round-robin</span>
@@ -239,6 +254,7 @@ export default function AutomationView() {
                 <input
                   type="text"
                   className="tb-input"
+                  disabled={!isAdmin}
                   placeholder="09:00"
                   value={officeHoursStart}
                   onChange={(e) => setOfficeHoursStart(e.target.value)}
@@ -249,6 +265,7 @@ export default function AutomationView() {
                 <input
                   type="text"
                   className="tb-input"
+                  disabled={!isAdmin}
                   placeholder="19:00"
                   value={officeHoursEnd}
                   onChange={(e) => setOfficeHoursEnd(e.target.value)}
@@ -261,6 +278,7 @@ export default function AutomationView() {
               <input
                 type="text"
                 className="tb-input"
+                disabled={!isAdmin}
                 value={officeHoursTimezone}
                 onChange={(e) => setOfficeHoursTimezone(e.target.value)}
               />
@@ -272,6 +290,8 @@ export default function AutomationView() {
           </div>
         </form>
       )}
+
+      {!loading && <QuickRepliesSection />}
     </div>
   );
 }

@@ -7,11 +7,12 @@
     "start": "node src/server.js",
     "dev": "node --watch src/server.js",
     "prisma:generate": "prisma generate",
+    "prisma:validate": "prisma validate",
     "prisma:migrate": "prisma migrate dev",
     "prisma:migrate:deploy": "prisma migrate deploy",
     "prisma:push": "prisma db push",
     "seed": "node src/db/seed.js",
-    "test": "node tests/test-automation-units.js && node tests/test-feature-controllers.js && node tests/test-migrations.pg-mem.js && node tests/test-commerce-automation.js && node tests/test-webhook-parser.js && node tests/test-rbac-and-services.js",
+    "test": "node tests/test-automation-units.js && node tests/test-feature-controllers.js && node tests/test-migrations.pg-mem.js && node tests/test-commerce-automation.js && node tests/test-webhook-parser.js && node tests/test-rbac-and-services.js && node tests/test-security-contracts.js",
     "postinstall": "prisma generate"
   },
   "dependencies": {
@@ -20,22 +21,21 @@
     "@socket.io/redis-adapter": "^8.3.0",
     "axios": "^1.7.9",
     "bcryptjs": "^2.4.3",
+    "bullmq": "^5.0.0",
     "compression": "^1.8.1",
     "cors": "^2.8.5",
     "dotenv": "^16.4.7",
     "express": "^4.21.2",
     "express-rate-limit": "^8.7.1",
     "helmet": "^8.3.0",
+    "ioredis": "^5.0.0",
     "jsonwebtoken": "^9.0.2",
     "prisma": "^6.3.1",
     "redis": "^6.3.0",
     "socket.io": "^4.8.1",
-    "uuid": "^11.0.5",
-    "bullmq": "^5.0.0",
-    "ioredis": "^5.0.0"
+    "uuid": "^11.0.5"
   },
   "devDependencies": {
-    "localtunnel": "^2.0.2",
     "pg-mem": "^3.0.5"
   }
 }

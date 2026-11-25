@@ -112,7 +112,7 @@ async function main() {
           region: 'oregon',
           healthCheckPath: '/health',
           envSpecificDetails: {
-            buildCommand: 'npm ci --include=dev && npx prisma generate',
+            buildCommand: 'npm ci --include=dev && npx prisma generate && npx prisma migrate deploy',
             startCommand: 'npm start'
           }
         },
@@ -144,7 +144,7 @@ async function main() {
           region: 'oregon',
           healthCheckPath: '/health',
           envSpecificDetails: {
-            buildCommand: 'npm ci --include=dev && npx prisma generate',
+            buildCommand: 'npm ci --include=dev && npx prisma generate && npx prisma migrate deploy',
             startCommand: 'npm start'
           }
         },
@@ -159,7 +159,7 @@ async function main() {
       branch: BRANCH,
       serviceDetails: {
         envSpecificDetails: {
-          buildCommand: 'npm ci --include=dev && npx prisma generate',
+          buildCommand: 'npm ci --include=dev && npx prisma generate && npx prisma migrate deploy',
           startCommand: 'npm start',
         },
       },

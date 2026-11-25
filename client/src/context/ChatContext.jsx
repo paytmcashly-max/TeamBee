@@ -301,11 +301,21 @@ export function ChatProvider({ children }) {
       }
     };
 
+    const handleChatSnoozeChanged = ({ chatId, snoozedUntil }) => {
+      setChats((prev) =>
+        prev.map((c) => (c.id === chatId ? { ...c, snoozedUntil: snoozedUntil || null } : c))
+      );
+      if (activeChatIdRef.current === chatId) {
+        setActiveChat((prev) => (prev ? { ...prev, snoozedUntil: snoozedUntil || null } : null));
+      }
+    };
+
     socket.on('new_message', handleNewMessage);
     socket.on('chat_preview_updated', handleChatPreviewUpdated);
     socket.on('message_status_updated', handleStatusUpdate);
     socket.on('chat_assigned', handleChatAssigned);
     socket.on('chat_status_changed', handleChatStatusChanged);
+    socket.on('chat_snooze_changed', handleChatSnoozeChanged);
     socket.on('agent_typing', handleAgentTyping);
 
     return () => {
@@ -314,6 +324,7 @@ export function ChatProvider({ children }) {
       socket.off('message_status_updated', handleStatusUpdate);
       socket.off('chat_assigned', handleChatAssigned);
       socket.off('chat_status_changed', handleChatStatusChanged);
+      socket.off('chat_snooze_changed', handleChatSnoozeChanged);
       socket.off('agent_typing', handleAgentTyping);
       Object.values(typingTimersRef.current).forEach(clearTimeout);
       typingTimersRef.current = {};

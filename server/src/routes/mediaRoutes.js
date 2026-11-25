@@ -7,7 +7,7 @@ const { authenticateToken } = require('../middleware/authMiddleware');
 router.get('/file/:filename', MediaController.getFile);
 
 // Protected routes requiring staff authentication
-router.post('/upload', express.json({ limit: '15mb' }), authenticateToken, MediaController.uploadFile);
+router.post('/upload', express.json({ limit: '28mb' }), authenticateToken, MediaController.uploadFile);
 router.get('/whatsapp/:mediaId', authenticateToken, MediaController.getWhatsAppMedia);
 
 module.exports = router;

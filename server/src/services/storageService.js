@@ -27,6 +27,31 @@ const MIME_EXTENSION_MAP = {
   'text/plain': 'txt',
 };
 
+const EXTENSION_MIME_MAP = Object.entries(MIME_EXTENSION_MAP).reduce((acc, [mime, ext]) => {
+  if (!acc[`.${ext}`]) acc[`.${ext}`] = mime;
+  return acc;
+}, { '.jpeg': 'image/jpeg' });
+
+function isAllowedMetaMediaUrl(rawUrl) {
+  try {
+    const parsed = new URL(String(rawUrl || ''));
+    if (parsed.protocol !== 'https:') return false;
+    const host = parsed.hostname.toLowerCase();
+    return (
+      host === 'fbcdn.net' ||
+      host.endsWith('.fbcdn.net') ||
+      host === 'fbsbx.com' ||
+      host.endsWith('.fbsbx.com') ||
+      host === 'facebook.com' ||
+      host.endsWith('.facebook.com') ||
+      host === 'whatsapp.net' ||
+      host.endsWith('.whatsapp.net')
+    );
+  } catch {
+    return false;
+  }
+}
+
 class StorageService {
   constructor() {
     this.client = null;
@@ -162,8 +187,8 @@ class StorageService {
 
     const downloadUrl = metaRes.data?.url;
     const resolvedMime = metaRes.data?.mime_type || mimeType || 'application/octet-stream';
-    if (!downloadUrl) {
-      throw new Error(`[StorageService]: Meta did not return a valid download URL for media ${mediaId}`);
+    if (!downloadUrl || !isAllowedMetaMediaUrl(downloadUrl)) {
+      throw new Error(`[StorageService]: Meta returned a missing or invalid media URL for ${mediaId}`);
     }
 
     // 2. Stream the binary directly from Meta CDN
@@ -172,6 +197,7 @@ class StorageService {
         Authorization: `Bearer ${accessToken}`,
       },
       responseType: 'arraybuffer',
+      maxRedirects: 2,
       timeout: 30000,
     });
 
@@ -190,4 +216,7 @@ class StorageService {
 }
 
 const storageService = new StorageService();
+storageService.MIME_EXTENSION_MAP = MIME_EXTENSION_MAP;
+storageService.EXTENSION_MIME_MAP = EXTENSION_MIME_MAP;
+storageService.isAllowedMetaMediaUrl = isAllowedMetaMediaUrl;
 module.exports = storageService;

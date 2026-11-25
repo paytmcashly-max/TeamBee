@@ -22,7 +22,7 @@ export default function WorkspaceSidebar({
   onOpenSimulator,
   onCloseMobile,
 }) {
-  const { agent, tenant, isAdmin, logout } = useAuth();
+  const { agent, tenant, isAdmin, isManager, logout } = useAuth();
   const { chatCounts, chats } = useChat();
 
   const totalChatCount = chatCounts?.all ?? chats?.length ?? 0;
@@ -35,13 +35,13 @@ export default function WorkspaceSidebar({
 
   const navItems = [
     { id: 'inbox', label: 'Inbox', icon: MessageSquare, badge: totalChatCount, visible: true },
-    { id: 'overview', label: 'Overview', icon: LayoutDashboard, visible: isAdmin },
+    { id: 'overview', label: 'Overview', icon: LayoutDashboard, visible: isManager },
     { id: 'contacts', label: 'Contacts', icon: Users, visible: true },
     { id: 'templates', label: 'Templates', icon: FileText, visible: true },
-    { id: 'broadcasts', label: 'Broadcasts', icon: Radio, visible: isAdmin },
-    { id: 'automation', label: 'Automation', icon: Bot, visible: isAdmin },
-    { id: 'commerce', label: 'Catalog', icon: ShoppingBag, visible: isAdmin },
-    { id: 'team', label: 'Team', icon: Shield, visible: isAdmin },
+    { id: 'broadcasts', label: 'Broadcasts', icon: Radio, visible: isManager },
+    { id: 'automation', label: 'Automation', icon: Bot, visible: isManager },
+    { id: 'commerce', label: 'Catalog', icon: ShoppingBag, visible: isManager },
+    { id: 'team', label: 'Team', icon: Shield, visible: isManager },
     { id: 'settings', label: 'Settings', icon: Settings, visible: isAdmin },
   ];
 

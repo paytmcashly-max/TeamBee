@@ -13,6 +13,7 @@ const MIGRATIONS = [
   '202610240001_quick_replies',
   '202610240002_chat_snooze',
   '202610240005_automation',
+  '202611250001_commerce_and_automation',
 ];
 const BASE = path.join(__dirname, '..', 'prisma', 'migrations');
 
@@ -100,6 +101,49 @@ async function main() {
   await client.query(`UPDATE tenants SET assignment_counter = assignment_counter + 1 WHERE id = 't1'`);
   const counter = await client.query(`SELECT assignment_counter FROM tenants WHERE id = 't1'`);
   check('assignment counter increments atomically', counter.rows[0].assignment_counter === 1);
+
+  // 202611250001_commerce_and_automation: automation_configs, commerce_settings, commerce_products.
+  await client.query(`INSERT INTO tenants (id, name) VALUES ('t3', 'Three')`);
+  await client.query(
+    `INSERT INTO automation_configs (id, tenant_id, welcome_message, updated_at) VALUES ('ac1', 't3', 'Hi!', now())`
+  );
+  let dupAutoConfigFailed = false;
+  try {
+    await client.query(
+      `INSERT INTO automation_configs (id, tenant_id, welcome_message, updated_at) VALUES ('ac2', 't3', 'Dup', now())`
+    );
+  } catch (err) {
+    dupAutoConfigFailed = true;
+  }
+  check('automation_configs enforces unique tenant_id', dupAutoConfigFailed);
+
+  await client.query(
+    `INSERT INTO commerce_settings (id, tenant_id, updated_at) VALUES ('cs1', 't3', now())`
+  );
+  const csRow = await client.query(`SELECT upi_id, currency FROM commerce_settings WHERE id = 'cs1'`);
+  check('commerce_settings defaults (teambee@upi / INR)', csRow.rows[0].upi_id === 'teambee@upi' && csRow.rows[0].currency === 'INR');
+
+  let dupCommerceSettingsFailed = false;
+  try {
+    await client.query(
+      `INSERT INTO commerce_settings (id, tenant_id, updated_at) VALUES ('cs2', 't3', now())`
+    );
+  } catch (err) {
+    dupCommerceSettingsFailed = true;
+  }
+  check('commerce_settings enforces unique tenant_id', dupCommerceSettingsFailed);
+
+  await client.query(
+    `INSERT INTO commerce_products (id, tenant_id, title, price, updated_at) VALUES ('cp1', 't3', 'Plan', 999, now())`
+  );
+  await client.query(`DELETE FROM tenants WHERE id = 't3'`);
+  const remAuto = await client.query(`SELECT COUNT(*)::int AS n FROM automation_configs WHERE tenant_id = 't3'`);
+  const remCs = await client.query(`SELECT COUNT(*)::int AS n FROM commerce_settings WHERE tenant_id = 't3'`);
+  const remProd = await client.query(`SELECT COUNT(*)::int AS n FROM commerce_products WHERE tenant_id = 't3'`);
+  check(
+    'tenant delete cascades automation_configs, commerce_settings, commerce_products',
+    remAuto.rows[0].n === 0 && remCs.rows[0].n === 0 && remProd.rows[0].n === 0
+  );
 
   await client.end();
   console.log(`\nmigration DDL: ${passed} passed, ${failed} failed`);

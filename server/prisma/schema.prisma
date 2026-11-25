@@ -46,6 +46,9 @@ model Tenant {
   broadcasts    Broadcast[]
   webhookEvents WebhookEvent[]
   quickReplies  QuickReply[]
+  automationConfig AutomationConfig?
+  commerceSettings CommerceSettings?
+  commerceProducts CommerceProduct[]
 
   @@map("tenants")
 }
@@ -301,4 +304,62 @@ model AuditLog {
   @@index([tenantId, createdAt])
   @@index([event])
   @@map("audit_logs")
+}
+
+// -------------------------------------------------------------
+// AUTOMATION BOT CONFIG (per-tenant Postgres persistence)
+// -------------------------------------------------------------
+model AutomationConfig {
+  id                   String   @id @default(uuid())
+  tenantId             String   @unique @map("tenant_id")
+  botEnabled           Boolean  @default(true) @map("bot_enabled")
+  autoAssignEnabled    Boolean  @default(true) @map("auto_assign_enabled")
+  welcomeMessage       String   @map("welcome_message")
+  agentHandoffKeywords String   @default("[]") @map("agent_handoff_keywords")
+  catalogKeywords      String   @default("[]") @map("catalog_keywords")
+  paymentKeywords      String   @default("[]") @map("payment_keywords")
+  customRules          String   @default("[]") @map("custom_rules")
+  createdAt            DateTime @default(now()) @map("created_at")
+  updatedAt            DateTime @updatedAt @map("updated_at")
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@map("automation_configs")
+}
+
+// -------------------------------------------------------------
+// COMMERCE SETTINGS & PRODUCT CATALOG (per-tenant Postgres)
+// -------------------------------------------------------------
+model CommerceSettings {
+  id           String   @id @default(uuid())
+  tenantId     String   @unique @map("tenant_id")
+  upiId        String   @default("teambee@upi") @map("upi_id")
+  merchantName String   @default("TeamBee WhatsApp Store") @map("merchant_name")
+  currency     String   @default("INR")
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@map("commerce_settings")
+}
+
+model CommerceProduct {
+  id          String   @id @default(uuid())
+  tenantId    String   @map("tenant_id")
+  title       String
+  description String?
+  price       Float
+  currency    String   @default("INR")
+  category    String   @default("General")
+  sku         String?
+  imageUrl    String?  @map("image_url")
+  inStock     Boolean  @default(true) @map("in_stock")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@map("commerce_products")
 }

@@ -241,7 +241,22 @@ function scheduleBackgroundRecovery(label, task) {
 }
 
 async function verifyDatabaseSchema() {
-  const requiredTables = ['tenants', 'agents', 'contacts', 'chats', 'messages', 'templates', 'broadcasts', 'broadcast_recipients', 'webhook_events'];
+  const requiredTables = [
+    'tenants',
+    'agents',
+    'contacts',
+    'chats',
+    'messages',
+    'templates',
+    'broadcasts',
+    'broadcast_recipients',
+    'webhook_events',
+    'quick_replies',
+    'audit_logs',
+    'automation_configs',
+    'commerce_settings',
+    'commerce_products',
+  ];
   const rows = await prisma.$queryRaw`
     SELECT table_name
     FROM information_schema.tables
@@ -258,15 +273,21 @@ async function verifyDatabaseSchema() {
     FROM information_schema.columns
     WHERE table_schema = 'public'
       AND ((table_name = 'messages' AND column_name = 'client_message_id')
+        OR (table_name = 'chats' AND column_name = 'snoozed_until')
+        OR (table_name = 'agents' AND column_name = 'password_reset_token_hash')
         OR (table_name = 'broadcast_recipients' AND column_name IN ('updated_at', 'last_error'))
-        OR (table_name = 'tenants' AND column_name = 'webhook_verify_token_hash'))
+        OR (table_name = 'tenants' AND column_name IN ('webhook_verify_token_hash', 'subscription_status', 'auto_assign_enabled')))
   `;
   const foundColumns = new Set(columnRows.map((row) => `${row.table_name}.${row.column_name}`));
   const requiredColumns = [
     'messages.client_message_id',
+    'chats.snoozed_until',
+    'agents.password_reset_token_hash',
     'broadcast_recipients.updated_at',
     'broadcast_recipients.last_error',
     'tenants.webhook_verify_token_hash',
+    'tenants.subscription_status',
+    'tenants.auto_assign_enabled',
   ];
   const missingColumns = requiredColumns.filter((column) => !foundColumns.has(column));
   if (missingColumns.length > 0) {

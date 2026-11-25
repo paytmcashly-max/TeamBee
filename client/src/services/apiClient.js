@@ -1,4 +1,19 @@
 let activeAuthToken = null;
+let unauthorizedHandler = null;
+
+export function setUnauthorizedHandler(fn) {
+  unauthorizedHandler = typeof fn === 'function' ? fn : null;
+}
+
+const SKIP_401_LOGOUT_PREFIXES = [
+  '/api/auth/login',
+  '/api/auth/register-tenant',
+  '/api/auth/me',
+  '/api/auth/logout',
+  '/api/auth/change-password',
+  '/api/auth/forgot-password',
+  '/api/auth/reset-password',
+];
 
 /**
  * Normalizes VITE_API_URL, prepending https:// when Render blueprints provide
@@ -58,6 +73,13 @@ export async function apiFetch(path, options = {}) {
   }
 
   if (!response.ok || data?.success === false) {
+    if (
+      response.status === 401 &&
+      unauthorizedHandler &&
+      !SKIP_401_LOGOUT_PREFIXES.some((prefix) => String(path).startsWith(prefix))
+    ) {
+      unauthorizedHandler();
+    }
     const error = new Error(data?.error || `Request failed (${response.status})`);
     error.status = response.status;
     error.code = data?.code;

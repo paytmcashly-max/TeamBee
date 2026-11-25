@@ -10,7 +10,10 @@
     "seed": "npm --prefix server run seed",
     "test:server": "npm --prefix server test",
     "build:client": "npm --prefix client run build",
-    "build": "npm run build:client"
+    "build": "npm run build:client",
+    "lint:syntax": "node scripts/check-syntax.cjs",
+    "lint:css": "node scripts/check-css-contract.cjs",
+    "ci": "node scripts/check-syntax.cjs && node scripts/check-css-contract.cjs && npm --prefix server test && npm --prefix client run build"
   },
   "keywords": [
     "whatsapp",

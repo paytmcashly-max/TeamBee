@@ -1,9 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import { Copy, Check, RefreshCw } from 'lucide-react';
+import { Copy, Check } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { useChat } from '../../context/ChatContext';
 import { apiFetch } from '../../services/apiClient';
 import SandboxSimulatorCard from './SandboxSimulatorCard';
+import SettingsChannelTab from './SettingsChannelTab';
+import SettingsBillingTab from './SettingsBillingTab';
 
 export default function SettingsView({ onNavigateView }) {
   const { agent, tenant, updateTenantInfo } = useAuth();
@@ -251,260 +253,23 @@ export default function SettingsView({ onNavigateView }) {
             )}
 
             {activeTab === 'channel' && (
-              <>
-                <div className="page-card">
-                  <div className="page-card-header">
-                    <div>
-                      <h2 className="page-card-title">Your WhatsApp channel</h2>
-                      <p className="page-card-subtitle">{formState.name || tenant?.name}</p>
-                    </div>
-                    <span className={`page-pill-badge ${formState.isConfigured ? '' : 'warning'}`}>
-                      ● {formState.isConfigured ? 'Connected' : 'Setup required'}
-                    </span>
-                  </div>
-
-                  <div style={{ fontSize: '22px', fontWeight: 700, color: 'var(--tb-text-primary)' }}>
-                    {formState.displayPhoneNumber || 'Channel display number not set'}
-                  </div>
-                  <div className="tb-hint" style={{ marginTop: '4px' }}>
-                    Official WhatsApp Business Platform · Meta Cloud API
-                  </div>
-
-                  <div className="channel-meta-grid">
-                    <div>
-                      <div className="tb-hint">Webhook endpoint</div>
-                      <button
-                        type="button"
-                        onClick={handleCopyWebhook}
-                        style={{
-                          background: 'none',
-                          border: 'none',
-                          color: 'var(--tb-primary-green)',
-                          fontWeight: 600,
-                          fontSize: '12.5px',
-                          cursor: 'pointer',
-                          padding: 0,
-                          marginTop: '3px',
-                        }}
-                      >
-                        {copiedWebhook ? '✓ Copied URL' : 'Copy callback URL'}
-                      </button>
-                    </div>
-                    <div>
-                      <div className="tb-hint">Channel status</div>
-                      <div style={{ fontSize: '13px', fontWeight: 600, marginTop: '3px' }}>
-                        {formState.isConfigured ? '✓ Verified' : 'Needs credentials'}
-                      </div>
-                    </div>
-                    <div>
-                      <div className="tb-hint">Approved templates</div>
-                      <button
-                        type="button"
-                        onClick={() => onNavigateView?.('templates')}
-                        style={{
-                          background: 'none',
-                          border: 'none',
-                          color: 'var(--tb-primary-green)',
-                          fontWeight: 600,
-                          fontSize: '13px',
-                          cursor: 'pointer',
-                          padding: 0,
-                          marginTop: '3px',
-                        }}
-                      >
-                        {templateCount} template{templateCount === 1 ? '' : 's'} ↗
-                      </button>
-                    </div>
-                  </div>
-                </div>
-
-                <form onSubmit={handleSave} className="page-card page-stack" style={{ gap: '14px' }}>
-                  <div>
-                    <h3 className="page-card-title">Connection credentials</h3>
-                    <p className="page-card-subtitle">
-                      Existing tokens and secrets remain encrypted on the server and are never exposed back to the browser.
-                    </p>
-                  </div>
-
-                  <div className="tb-form-grid-2">
-                    <div className="tb-field">
-                      <label className="tb-label">Phone number ID</label>
-                      <input
-                        type="text"
-                        className="tb-input"
-                        disabled={!isTenantAdmin}
-                        value={formState.phoneNumberId}
-                        onChange={(e) => setFormState((prev) => ({ ...prev, phoneNumberId: e.target.value }))}
-                        placeholder="1092837465001"
-                      />
-                    </div>
-                    <div className="tb-field">
-                      <label className="tb-label">WhatsApp Business Account ID</label>
-                      <input
-                        type="text"
-                        className="tb-input"
-                        disabled={!isTenantAdmin}
-                        value={formState.wabaId}
-                        onChange={(e) => setFormState((prev) => ({ ...prev, wabaId: e.target.value }))}
-                        placeholder="WABA ID"
-                      />
-                    </div>
-                  </div>
-
-                  <div className="tb-field">
-                    <label className="tb-label">Display WhatsApp number</label>
-                    <input
-                      type="text"
-                      className="tb-input"
-                      disabled={!isTenantAdmin}
-                      value={formState.displayPhoneNumber}
-                      onChange={(e) => setFormState((prev) => ({ ...prev, displayPhoneNumber: e.target.value }))}
-                      placeholder="+91 98765 00001"
-                    />
-                  </div>
-
-                  <div className="tb-field">
-                    <label className="tb-label">System user access token</label>
-                    <input
-                      type="password"
-                      className="tb-input"
-                      disabled={!isTenantAdmin}
-                      value={formState.accessToken}
-                      onChange={(e) => setFormState((prev) => ({ ...prev, accessToken: e.target.value }))}
-                      placeholder={formState.isConfigured ? 'Token saved securely — enter new token only to rotate' : 'Paste permanent system user access token'}
-                    />
-                  </div>
-
-                  <div className="tb-form-grid-2">
-                    <div className="tb-field">
-                      <label className="tb-label">Rotate Meta App Secret (optional)</label>
-                      <input
-                        type="password"
-                        className="tb-input"
-                        disabled={!isTenantAdmin}
-                        value={formState.appSecret}
-                        onChange={(e) => setFormState((prev) => ({ ...prev, appSecret: e.target.value }))}
-                        placeholder="Leave blank to keep existing secret"
-                      />
-                    </div>
-                    <div className="tb-field">
-                      <label className="tb-label">Rotate Webhook Verify Token (optional)</label>
-                      <input
-                        type="password"
-                        className="tb-input"
-                        disabled={!isTenantAdmin}
-                        value={formState.webhookVerifyToken}
-                        onChange={(e) => setFormState((prev) => ({ ...prev, webhookVerifyToken: e.target.value }))}
-                        placeholder="Leave blank to keep current verify token"
-                      />
-                    </div>
-                  </div>
-
-                  {isTenantAdmin && (
-                    <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', paddingTop: '6px' }}>
-                      <button type="submit" className="btn btn-primary" disabled={saving}>
-                        {saving ? 'Updating...' : 'Update credentials'}
-                      </button>
-                      <button
-                        type="button"
-                        className="btn btn-secondary"
-                        disabled={testingConn}
-                        onClick={handleTestConnection}
-                      >
-                        <RefreshCw size={13} className={testingConn ? 'animate-spin' : ''} />
-                        <span>{testingConn ? 'Testing...' : 'Test connection'}</span>
-                      </button>
-                    </div>
-                  )}
-                </form>
-              </>
+              <SettingsChannelTab
+                formState={formState}
+                setFormState={setFormState}
+                tenantName={tenant?.name}
+                isTenantAdmin={isTenantAdmin}
+                saving={saving}
+                testingConn={testingConn}
+                copiedWebhook={copiedWebhook}
+                templateCount={templateCount}
+                onCopyWebhook={handleCopyWebhook}
+                onTestConnection={handleTestConnection}
+                onSave={handleSave}
+                onNavigateView={onNavigateView}
+              />
             )}
 
-            {activeTab === 'billing' && (
-              <div className="page-card page-stack" style={{ gap: '16px' }}>
-                <div className="page-card-header" style={{ marginBottom: 0 }}>
-                  <div>
-                    <h2 className="page-card-title">{billing?.planName || 'Workspace Plan'}</h2>
-                    <p className="page-card-subtitle">
-                      ₹{Number(billing?.priceMonthlyInr || 0).toLocaleString('en-IN')}/month ·{' '}
-                      {billing?.subscriptionStatus === 'TRIAL' && billing?.trialEndsAt
-                        ? `Trial ends ${new Date(billing.trialEndsAt).toLocaleDateString('en-IN')}`
-                        : `Subscription ${billing?.subscriptionStatus || 'ACTIVE'}`}
-                    </p>
-                  </div>
-                  <span className="page-pill-badge">
-                    {billing?.subscriptionStatus || billing?.badge || billing?.plan || 'ACTIVE'}
-                  </span>
-                </div>
-
-                <div className="audience-metrics-row" style={{ margin: 0 }}>
-                  <div>
-                    <div className="audience-metric-num">
-                      {billing?.agentsUsed || 0} / {billing?.maxAgents || '—'}
-                    </div>
-                    <div className="audience-metric-label">Active staff seats</div>
-                  </div>
-                  <div>
-                    <div className="audience-metric-num">
-                      {Number(billing?.messagesUsed || 0).toLocaleString('en-IN')}
-                    </div>
-                    <div className="audience-metric-label">Messages this month</div>
-                  </div>
-                  <div>
-                    <div className="audience-metric-num">{billing?.broadcastsCount || 0}</div>
-                    <div className="audience-metric-label">Broadcast campaigns run</div>
-                  </div>
-                </div>
-
-                {billing?.availablePlans && (
-                  <div className="tb-table-wrap">
-                    <table className="tb-table">
-                      <thead>
-                        <tr>
-                          <th>Plan tier</th>
-                          <th>Staff seats</th>
-                          <th>Monthly price</th>
-                          <th>Status</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {Object.entries(billing.availablePlans).map(([key, plan]) => {
-                          const seats = plan.agents ?? plan.maxAgents ?? '—';
-                          const priceInr =
-                            plan.priceMonthlyInr ?? Math.round((plan.amountPaise || 0) / 100);
-                          const isCurrent = billing.plan === key;
-                          return (
-                            <tr
-                              key={key}
-                              style={{
-                                background: isCurrent ? 'var(--tb-green-pill-bg)' : undefined,
-                              }}
-                            >
-                              <td style={{ fontWeight: 600 }}>{plan.name || key}</td>
-                              <td>{seats}</td>
-                              <td>₹{Number(priceInr || 0).toLocaleString('en-IN')}/mo</td>
-                              <td>
-                                {isCurrent
-                                  ? billing.subscriptionStatus === 'TRIAL'
-                                    ? 'Current · Trial'
-                                    : 'Current'
-                                  : 'Available'}
-                              </td>
-                            </tr>
-                          );
-                        })}
-                      </tbody>
-                    </table>
-                  </div>
-                )}
-
-                {billing && !billing.billingConfigured && (
-                  <p className="tb-hint" style={{ margin: 0 }}>
-                    Self-serve Razorpay checkout is standing by until Razorpay keys are configured on the server.
-                  </p>
-                )}
-              </div>
-            )}
+            {activeTab === 'billing' && <SettingsBillingTab billing={billing} />}
           </div>
 
           <SandboxSimulatorCard onViewUnassigned={handleJumpToUnassigned} />

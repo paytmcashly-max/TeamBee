@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Paperclip, Sparkles, Lock, Send, X } from 'lucide-react';
+import { Paperclip, Sparkles, Lock, Send, X, ShoppingBag } from 'lucide-react';
 import { apiFetch, fileToBase64 } from '../../services/apiClient';
 
 const DEFAULT_QUICK_REPLIES = [
@@ -22,6 +22,7 @@ export default function MessageComposer({
   onClearReply,
   onSendMessage,
   onOpenTemplatePicker,
+  onOpenCommercePicker,
   onTypingChange,
 }) {
   const [composeMode, setComposeMode] = useState('WHATSAPP');
@@ -104,14 +105,20 @@ export default function MessageComposer({
     const file = e.target.files?.[0];
     if (!file) return;
 
+    if (file.size === 0 || file.size > 20 * 1024 * 1024) {
+      setComposerError('Attachment must be between 1 byte and 20MB.');
+      if (fileInputRef.current) fileInputRef.current.value = '';
+      return;
+    }
+
     setComposerError(null);
     setUploadingMedia(true);
     try {
-      const fileBase64 = await fileToBase64(file);
+      const dataBase64 = await fileToBase64(file);
       const uploaded = await apiFetch('/api/media/upload', {
         method: 'POST',
         body: JSON.stringify({
-          fileBase64,
+          dataBase64,
           filename: file.name,
           mimeType: file.type || 'application/octet-stream',
         }),
@@ -289,7 +296,7 @@ export default function MessageComposer({
                       ref={fileInputRef}
                       type="file"
                       style={{ display: 'none' }}
-                      accept="image/*,video/*,audio/*,.pdf,.doc,.docx,.csv"
+                      accept="image/*,video/*,audio/*,.pdf,.doc,.docx,.xls,.xlsx,.csv,.txt"
                       onChange={handleFileUpload}
                     />
                     <button
@@ -309,6 +316,16 @@ export default function MessageComposer({
                     >
                       <Sparkles size={15} />
                     </button>
+                    {onOpenCommercePicker && (
+                      <button
+                        type="button"
+                        className="composer-tool-btn"
+                        onClick={onOpenCommercePicker}
+                        title="Send catalog product or UPI payment link"
+                      >
+                        <ShoppingBag size={15} />
+                      </button>
+                    )}
                     <button
                       type="button"
                       className="composer-tool-btn"

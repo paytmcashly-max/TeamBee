@@ -11,11 +11,12 @@ import MessageComposer from './MessageComposer';
 
 export default function ChatCanvas({
   onOpenTemplatePicker,
+  onOpenCommercePicker,
   onToggleSidebar,
   isSidebarOpen,
   onBack,
 }) {
-  const { agent, isAdmin } = useAuth();
+  const { agent, isManager } = useAuth();
   const { emitTyping } = useSocket();
   const {
     activeChat,
@@ -99,7 +100,7 @@ export default function ChatCanvas({
       <ChatHeader
         chat={activeChat}
         currentAgent={agent}
-        isAdmin={isAdmin}
+        isAdmin={isManager}
         agentsList={agentsList}
         isSidebarOpen={isSidebarOpen}
         onBack={onBack}
@@ -136,6 +137,7 @@ export default function ChatCanvas({
         onClearReply={() => setReplyToMessage(null)}
         onSendMessage={sendMessage}
         onOpenTemplatePicker={onOpenTemplatePicker}
+        onOpenCommercePicker={onOpenCommercePicker}
         onTypingChange={emitTyping}
       />
     </div>

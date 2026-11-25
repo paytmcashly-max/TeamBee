@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
-import { apiFetch, setApiAuthToken } from '../services/apiClient';
+import { apiFetch, setApiAuthToken, setUnauthorizedHandler } from '../services/apiClient';
 
 const AuthContext = createContext(null);
 
@@ -21,18 +21,18 @@ export function AuthProvider({ children }) {
 
   useEffect(() => {
     let active = true;
+    setUnauthorizedHandler(() => {
+      if (active) applySession(null, null, null);
+    });
+
     async function verifySession() {
       try {
         const data = await apiFetch('/api/auth/me');
         if (!active) return;
-        setAgent(data.agent);
-        setTenant(data.tenant);
+        applySession(data.token || null, data.agent, data.tenant);
       } catch {
         if (!active) return;
-        setApiAuthToken(null);
-        setTokenState(null);
-        setAgent(null);
-        setTenant(null);
+        applySession(null, null, null);
       } finally {
         if (active) setLoading(false);
       }
@@ -40,8 +40,9 @@ export function AuthProvider({ children }) {
     verifySession();
     return () => {
       active = false;
+      setUnauthorizedHandler(null);
     };
-  }, []);
+  }, [applySession]);
 
   const login = async (email, password, tenantSlug = '') => {
     const slug = tenantSlug || localStorage.getItem('teambee_workspace_slug') || '';
@@ -76,6 +77,8 @@ export function AuthProvider({ children }) {
     setTenant((prev) => (prev ? { ...prev, ...updated } : prev));
   };
 
+  const role = String(agent?.role || '').toUpperCase();
+
   return (
     <AuthContext.Provider
       value={{
@@ -87,7 +90,8 @@ export function AuthProvider({ children }) {
         registerTenant,
         logout,
         updateTenantInfo,
-        isAdmin: agent?.role === 'ADMIN' || agent?.role === 'SUPERVISOR',
+        isAdmin: role === 'ADMIN',
+        isManager: role === 'ADMIN' || role === 'SUPERVISOR',
       }}
     >
       {children}

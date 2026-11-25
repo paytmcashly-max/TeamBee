@@ -1,0 +1,47 @@
+# Reference GitHub Actions workflow (copy to .github/workflows/ci.yml via a token with `workflow` scope)
+name: TeamBee CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install dependencies
+        run: |
+          npm --prefix server ci --include=dev
+          npm --prefix client ci --include=dev
+
+      - name: Validate Prisma schema
+        run: |
+          npm --prefix server run prisma:generate
+          npm --prefix server run prisma:validate
+
+      - name: Check backend & script syntax
+        run: node scripts/check-syntax.cjs
+
+      - name: Check CSS class contract
+        run: node scripts/check-css-contract.cjs
+
+      - name: Run server test suite
+        run: npm --prefix server test
+        env:
+          NODE_ENV: test
+
+      - name: Build frontend bundle
+        run: npm --prefix client run build
+        env:
+          VITE_API_URL: https://example.com

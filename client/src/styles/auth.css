@@ -234,7 +234,7 @@
   letter-spacing: 0.08em;
 }
 
-.auth-title {
+.auth-form-title {
   font-size: 34px;
   font-weight: 600;
   color: var(--tb-text-primary);
@@ -242,33 +242,11 @@
   margin-top: 4px;
 }
 
-.auth-subtitle {
+.auth-form-subtitle {
   font-size: 14px;
   color: var(--tb-text-secondary);
   margin-top: 4px;
   margin-bottom: 24px;
-}
-
-.auth-alert {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 10px 14px;
-  border-radius: 7px;
-  font-size: 12.5px;
-  margin-bottom: 18px;
-}
-
-.auth-alert.error {
-  background-color: #fef2f2;
-  border: 1px solid #fee2e2;
-  color: #b91c1c;
-}
-
-.auth-alert.success {
-  background-color: #f0fdf4;
-  border: 1px solid #dcfce7;
-  color: #15803d;
 }
 
 .auth-form {
@@ -464,6 +442,14 @@
   justify-content: space-between;
   font-size: 10px;
   color: var(--tb-text-secondary);
+}
+
+.legal-links {
+  font-weight: 500;
+}
+
+.legal-copy {
+  color: var(--tb-text-muted);
 }
 
 /* Auth Responsive Breakpoints */

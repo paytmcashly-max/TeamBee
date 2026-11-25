@@ -14,7 +14,7 @@ function generateTemporaryPassword() {
 }
 
 export default function TeamView() {
-  const { agent: currentAgent, tenant, isAdmin } = useAuth();
+  const { agent: currentAgent, tenant, isManager } = useAuth();
   const { onlineAgentIds } = useSocket();
 
   const [agents, setAgents] = useState([]);
@@ -263,7 +263,7 @@ export default function TeamView() {
                           </td>
                           <td style={{ fontWeight: 600 }}>{member.activeChatCount || 0}</td>
                           <td>
-                            {member.id !== currentAgent?.id && isAdmin ? (
+                            {member.id !== currentAgent?.id && isManager && !(currentAgent?.role === 'SUPERVISOR' && member.role === 'ADMIN') ? (
                               <button
                                 type="button"
                                 className="btn btn-secondary"

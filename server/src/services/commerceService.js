@@ -1,185 +1,172 @@
 'use strict';
 
-const fs = require('fs');
-const path = require('path');
 const { v4: uuidv4 } = require('uuid');
-const MetaApiService = require('./metaApiService');
+const prisma = require('../db/prisma');
+const { withTenantDb, rlsContextEnabled } = require('../db/withTenant');
 
-const COMMERCE_DATA_DIR = path.join(__dirname, '..', 'data', 'commerce');
+const VPA_PATTERN = /^[a-zA-Z0-9._-]{2,}@[a-zA-Z0-9.-]{2,}$/;
 
-function ensureDir() {
-  if (!fs.existsSync(COMMERCE_DATA_DIR)) {
-    fs.mkdirSync(COMMERCE_DATA_DIR, { recursive: true });
-  }
+function validationError(message, statusCode = 400) {
+  const err = new Error(message);
+  err.statusCode = statusCode;
+  return err;
 }
 
-function getStorePath(tenantId) {
-  ensureDir();
-  const safeId = String(tenantId).replace(/[^a-zA-Z0-9_-]/g, '_');
-  return path.join(COMMERCE_DATA_DIR, `${safeId}.json`);
+function runScoped(tenantId, dbAccessor, fn) {
+  if (typeof dbAccessor === 'function') return dbAccessor(fn);
+  return rlsContextEnabled() ? withTenantDb(tenantId, fn) : fn(prisma);
 }
 
-function getStarterProducts() {
-  return [
-    {
-      id: 'prod_starter_suite',
-      title: 'WhatsApp Growth Starter Kit',
-      description: 'Automated broadcast campaigns, 500 template credits, interactive quick buttons & fast WABA setup.',
-      price: 999,
-      currency: 'INR',
-      category: 'Software & SaaS',
-      sku: 'TB-START-01',
-      imageUrl: 'https://images.unsplash.com/photo-1551288049-bebda4e38f71?w=600&auto=format&fit=crop&q=80',
-      inStock: true,
-      createdAt: new Date().toISOString(),
-    },
-    {
-      id: 'prod_vip_concierge',
-      title: 'Omnichannel VIP Concierge',
-      description: 'Dedicated account manager, customized keyword bot flows, multi-agent round robin & 24/7 SLA.',
-      price: 2499,
-      currency: 'INR',
-      category: 'Services',
-      sku: 'TB-VIP-02',
-      imageUrl: 'https://images.unsplash.com/photo-1556742049-0a67e5572263?w=600&auto=format&fit=crop&q=80',
-      inStock: true,
-      createdAt: new Date().toISOString(),
-    },
-    {
-      id: 'prod_broadcast_pack',
-      title: 'High-Speed Broadcast Credits (5,000)',
-      description: 'Ultra-low latency delivery queue with real-time delivery, read-rate and button click analytics.',
-      price: 1899,
-      currency: 'INR',
-      category: 'Add-ons',
-      sku: 'TB-BC-5000',
-      imageUrl: 'https://images.unsplash.com/photo-1526374965328-7f61d4dc18c5?w=600&auto=format&fit=crop&q=80',
-      inStock: true,
-      createdAt: new Date().toISOString(),
-    },
-  ];
+function defaultSettings() {
+  return {
+    upiId: 'teambee@upi',
+    merchantName: 'TeamBee WhatsApp Store',
+    currency: 'INR',
+  };
 }
 
 class CommerceService {
-  static getTenantStore(tenantId) {
-    try {
-      const filePath = getStorePath(tenantId);
-      if (fs.existsSync(filePath)) {
-        const raw = fs.readFileSync(filePath, 'utf8');
-        return JSON.parse(raw);
+  static async getProducts(tenantId, dbAccessor = null) {
+    return runScoped(tenantId, dbAccessor, (db) =>
+      db.commerceProduct.findMany({
+        where: { tenantId },
+        orderBy: [{ createdAt: 'desc' }, { id: 'asc' }],
+        take: 200,
+      })
+    );
+  }
+
+  static async saveProduct(tenantId, productData = {}, dbAccessor = null) {
+    if (!productData || typeof productData !== 'object' || Array.isArray(productData)) {
+      throw validationError('Invalid product payload');
+    }
+
+    const title = typeof productData.title === 'string' ? productData.title.trim().slice(0, 160) : '';
+    const price = Number(productData.price);
+    if (!title) throw validationError('Product title is required');
+    if (!Number.isFinite(price) || price <= 0 || price > 10_000_000) {
+      throw validationError('Product price must be a positive number up to 10,000,000');
+    }
+
+    const description =
+      typeof productData.description === 'string' ? productData.description.trim().slice(0, 500) : '';
+    const category =
+      typeof productData.category === 'string' && productData.category.trim()
+        ? productData.category.trim().slice(0, 80)
+        : 'General';
+    const currency =
+      typeof productData.currency === 'string' && /^[A-Z]{3}$/.test(productData.currency.trim())
+        ? productData.currency.trim()
+        : 'INR';
+    const sku =
+      typeof productData.sku === 'string' && productData.sku.trim()
+        ? productData.sku.trim().slice(0, 40)
+        : `SKU-${Math.floor(1000 + Math.random() * 9000)}`;
+    const imageUrl =
+      typeof productData.imageUrl === 'string' && /^https:\/\//i.test(productData.imageUrl.trim())
+        ? productData.imageUrl.trim().slice(0, 500)
+        : null;
+    const inStock = productData.inStock !== false;
+
+    if (productData.id !== undefined) {
+      if (typeof productData.id !== 'string' || !productData.id.trim()) {
+        throw validationError('Invalid product ID');
       }
-    } catch (err) {
-      console.error('[CommerceService]: Error reading store:', err.message);
+      return runScoped(tenantId, dbAccessor, async (db) => {
+        const existing = await db.commerceProduct.findFirst({
+          where: { id: productData.id.trim(), tenantId },
+        });
+        if (!existing) throw validationError('Product not found', 404);
+        return db.commerceProduct.update({
+          where: { id: existing.id },
+          data: { title, description, price, currency, category, sku, imageUrl, inStock },
+        });
+      });
     }
 
-    // Default store initialized with sample products
-    const defaultStore = {
-      tenantId,
-      settings: {
-        upiId: 'teambee@upi',
-        merchantName: 'TeamBee WhatsApp Store',
-        currency: 'INR',
-        razorpayKeyId: '',
-      },
-      products: getStarterProducts(),
-      orders: [],
-      updatedAt: new Date().toISOString(),
+    return runScoped(tenantId, dbAccessor, (db) =>
+      db.commerceProduct.create({
+        data: {
+          id: `prod_${uuidv4().replace(/-/g, '').slice(0, 12)}`,
+          tenantId,
+          title,
+          description,
+          price,
+          currency,
+          category,
+          sku,
+          imageUrl,
+          inStock,
+        },
+      })
+    );
+  }
+
+  static async deleteProduct(tenantId, productId, dbAccessor = null) {
+    if (typeof productId !== 'string' || !productId.trim()) {
+      throw validationError('Invalid product ID');
+    }
+    const res = await runScoped(tenantId, dbAccessor, (db) =>
+      db.commerceProduct.deleteMany({
+        where: { id: productId.trim(), tenantId },
+      })
+    );
+    return (res?.count || 0) > 0;
+  }
+
+  static async getSettings(tenantId, dbAccessor = null) {
+    const row = await runScoped(tenantId, dbAccessor, (db) =>
+      db.commerceSettings.findUnique({ where: { tenantId } })
+    );
+    if (!row) return defaultSettings();
+    return {
+      upiId: row.upiId,
+      merchantName: row.merchantName,
+      currency: row.currency,
+      updatedAt: row.updatedAt,
     };
+  }
 
-    try {
-      fs.writeFileSync(getStorePath(tenantId), JSON.stringify(defaultStore, null, 2), 'utf8');
-    } catch (saveErr) {
-      console.error('[CommerceService]: Error writing initial store:', saveErr.message);
+  static async updateSettings(tenantId, newSettings = {}, dbAccessor = null) {
+    if (!newSettings || typeof newSettings !== 'object' || Array.isArray(newSettings)) {
+      throw validationError('Invalid commerce settings payload');
     }
+    const current = await this.getSettings(tenantId, dbAccessor);
 
-    return defaultStore;
-  }
-
-  static saveTenantStore(tenantId, store) {
-    ensureDir();
-    store.updatedAt = new Date().toISOString();
-    fs.writeFileSync(getStorePath(tenantId), JSON.stringify(store, null, 2), 'utf8');
-    return store;
-  }
-
-  static getProducts(tenantId) {
-    const store = this.getTenantStore(tenantId);
-    return store.products || [];
-  }
-
-  static saveProduct(tenantId, productData) {
-    const store = this.getTenantStore(tenantId);
-    store.products = store.products || [];
-
-    const now = new Date().toISOString();
-    let product;
-
-    if (productData.id) {
-      const idx = store.products.findIndex((p) => p.id === productData.id);
-      if (idx !== -1) {
-        product = {
-          ...store.products[idx],
-          ...productData,
-          price: Number(productData.price) || 0,
-          updatedAt: now,
-        };
-        store.products[idx] = product;
-      } else {
-        product = {
-          id: productData.id,
-          ...productData,
-          price: Number(productData.price) || 0,
-          createdAt: now,
-          updatedAt: now,
-        };
-        store.products.push(product);
+    let upiId = current.upiId;
+    if (newSettings.upiId !== undefined) {
+      if (typeof newSettings.upiId !== 'string') throw validationError('upiId must be a string');
+      const trimmed = newSettings.upiId.trim().slice(0, 120);
+      if (trimmed && !VPA_PATTERN.test(trimmed)) {
+        throw validationError('Please enter a valid UPI VPA (e.g. brand@okaxis)');
       }
-    } else {
-      product = {
-        id: `prod_${uuidv4().replace(/-/g, '').slice(0, 12)}`,
-        title: productData.title || 'Untitled Product',
-        description: productData.description || '',
-        price: Number(productData.price) || 0,
-        currency: productData.currency || 'INR',
-        category: productData.category || 'General',
-        sku: productData.sku || `SKU-${Math.floor(1000 + Math.random() * 9000)}`,
-        imageUrl: productData.imageUrl || '',
-        inStock: productData.inStock !== false,
-        createdAt: now,
-        updatedAt: now,
-      };
-      store.products.push(product);
+      upiId = trimmed;
     }
 
-    this.saveTenantStore(tenantId, store);
-    return product;
-  }
+    let merchantName = current.merchantName;
+    if (newSettings.merchantName !== undefined) {
+      if (typeof newSettings.merchantName !== 'string') throw validationError('merchantName must be a string');
+      merchantName = newSettings.merchantName.trim().slice(0, 120) || 'TeamBee WhatsApp Store';
+    }
 
-  static deleteProduct(tenantId, productId) {
-    const store = this.getTenantStore(tenantId);
-    store.products = (store.products || []).filter((p) => p.id !== productId);
-    this.saveTenantStore(tenantId, store);
-    return true;
-  }
+    const currency =
+      typeof newSettings.currency === 'string' && /^[A-Z]{3}$/.test(newSettings.currency.trim())
+        ? newSettings.currency.trim()
+        : current.currency || 'INR';
 
-  static getSettings(tenantId) {
-    const store = this.getTenantStore(tenantId);
-    return store.settings || {
-      upiId: 'teambee@upi',
-      merchantName: 'TeamBee WhatsApp Store',
-      currency: 'INR',
-      razorpayKeyId: '',
+    const saved = await runScoped(tenantId, dbAccessor, (db) =>
+      db.commerceSettings.upsert({
+        where: { tenantId },
+        update: { upiId, merchantName, currency },
+        create: { id: uuidv4(), tenantId, upiId, merchantName, currency },
+      })
+    );
+    return {
+      upiId: saved.upiId,
+      merchantName: saved.merchantName,
+      currency: saved.currency,
+      updatedAt: saved.updatedAt,
     };
-  }
-
-  static updateSettings(tenantId, newSettings) {
-    const store = this.getTenantStore(tenantId);
-    store.settings = {
-      ...(store.settings || {}),
-      ...newSettings,
-    };
-    this.saveTenantStore(tenantId, store);
-    return store.settings;
   }
 
   /**
@@ -187,7 +174,7 @@ class CommerceService {
    * upi://pay?pa=...&pn=...&am=...&tn=...&cu=INR
    */
   static generateUpiLink({ vpa, merchantName, amount, orderId, note }) {
-    const cleanVpa = String(vpa || 'merchant@upi').trim();
+    const cleanVpa = encodeURIComponent(String(vpa || 'merchant@upi').trim());
     const cleanPn = encodeURIComponent(String(merchantName || 'Store').trim());
     const cleanAm = Number(amount || 0).toFixed(2);
     const cleanTn = encodeURIComponent(String(note || orderId || 'Payment').trim());

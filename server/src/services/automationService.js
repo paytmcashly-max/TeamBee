@@ -211,7 +211,7 @@ async function applyInboundAutomation({ tenant, chatId, incomingMessage = null, 
     if (incomingMessage && current.contact?.waId) {
       const AutomationRulesService = require('./automationRulesService');
       const CommerceService = require('./commerceService');
-      const config = AutomationRulesService.getConfig(tenant.id);
+      const config = await AutomationRulesService.getConfig(tenant.id, run);
 
       if (config.botEnabled !== false) {
         const text = String(incomingMessage.content || '').toLowerCase().trim();
@@ -243,13 +243,24 @@ async function applyInboundAutomation({ tenant, chatId, incomingMessage = null, 
           /\b(paid|done payment|transferred|sent money)\b/i.test(text);
 
         const isGreeting = /^(hi|hello|hey|start|menu|namaste)$/i.test(text);
+        const matchedCustomRule = Array.isArray(config.customRules)
+          ? config.customRules.find((rule) => {
+              const trigger = String(rule?.trigger || '').toLowerCase().trim();
+              if (!trigger || !text) return false;
+              return rule.matchType === 'exact' ? text === trigger : text.includes(trigger);
+            })
+          : null;
 
         if (isHandoff) {
           // Escalate to live agent
           let chatTags = [];
           try {
             chatTags = current.tags ? JSON.parse(current.tags) : [];
-          } catch (e) {}
+          } catch (parseErr) {
+            console.warn('[Automation]: invalid chat tags JSON ignored:', parseErr.message);
+            chatTags = [];
+          }
+          if (!Array.isArray(chatTags)) chatTags = [];
           if (!chatTags.includes('Agent Requested')) chatTags.push('Agent Requested');
           if (!chatTags.includes('High Priority')) chatTags.push('High Priority');
 
@@ -285,13 +296,18 @@ async function applyInboundAutomation({ tenant, chatId, incomingMessage = null, 
             broadcastNewMessage(tenant.id, current.id, botMsg, current.assignedAgentId);
           }
         } else if (isCatalog) {
-          const products = CommerceService.getProducts(tenant.id);
+          const products = await CommerceService.getProducts(tenant.id, run);
           const topProducts = products.slice(0, 3);
           let catalogText = '🛍️ *Featured Catalog & Pricing*\n\n';
-          topProducts.forEach((p, idx) => {
-            catalogText += `${idx + 1}. *${p.title}* — ₹${p.price.toLocaleString('en-IN')}\n_${p.description.slice(0, 80)}_\n\n`;
-          });
-          catalogText += 'Tap an action below to proceed:';
+          if (topProducts.length === 0) {
+            catalogText = '🛍️ Our team is updating the product catalog right now. Tap below to chat with our team!';
+          } else {
+            topProducts.forEach((p, idx) => {
+              const desc = String(p.description || '').slice(0, 80);
+              catalogText += `${idx + 1}. *${p.title}* — ₹${Number(p.price || 0).toLocaleString('en-IN')}\n${desc ? `_${desc}_\n\n` : '\n'}`;
+            });
+            catalogText += 'Tap an action below to proceed:';
+          }
 
           const buttons = [
             { id: 'btn_pay_featured', title: '💳 Pay Online (UPI)' },
@@ -325,7 +341,7 @@ async function applyInboundAutomation({ tenant, chatId, incomingMessage = null, 
             broadcastNewMessage(tenant.id, current.id, botMsg, current.assignedAgentId);
           }
         } else if (isPayment) {
-          const settings = CommerceService.getSettings(tenant.id);
+          const settings = await CommerceService.getSettings(tenant.id, run);
           const upiLink = CommerceService.generateUpiLink({
             vpa: settings.upiId || 'merchant@upi',
             merchantName: settings.merchantName || 'WhatsApp Store',
@@ -422,6 +438,33 @@ async function applyInboundAutomation({ tenant, chatId, incomingMessage = null, 
                   messageType: 'INTERACTIVE',
                   content: welcomeText,
                   rawPayload: JSON.stringify({ buttons }),
+                  direction: 'OUTBOUND',
+                  status: 'SENT',
+                  waMessageId: sentResult.wamid || null,
+                  createdAt: sentAt,
+                },
+              })
+            );
+            broadcastNewMessage(tenant.id, current.id, botMsg, current.assignedAgentId);
+          }
+        } else if (matchedCustomRule) {
+          const ruleButtons = Array.isArray(matchedCustomRule.buttons)
+            ? matchedCustomRule.buttons.slice(0, 3).map((title, idx) => ({ id: `btn_rule_${idx + 1}`, title: String(title).slice(0, 20) }))
+            : [];
+          const sentResult = ruleButtons.length > 0
+            ? await MetaApiService.sendInteractiveButtons(tenant, current.contact.waId, matchedCustomRule.response, ruleButtons)
+            : await MetaApiService.sendTextMessage(tenant, current.contact.waId, matchedCustomRule.response);
+          if (sentResult.success) {
+            const sentAt = new Date();
+            const botMsg = await run((db) =>
+              db.message.create({
+                data: {
+                  chatId: current.id,
+                  tenantId: tenant.id,
+                  senderType: 'BOT',
+                  messageType: ruleButtons.length > 0 ? 'INTERACTIVE' : 'TEXT',
+                  content: matchedCustomRule.response,
+                  rawPayload: ruleButtons.length > 0 ? JSON.stringify({ buttons: ruleButtons }) : null,
                   direction: 'OUTBOUND',
                   status: 'SENT',
                   waMessageId: sentResult.wamid || null,

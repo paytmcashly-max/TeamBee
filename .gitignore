@@ -1,6 +1,16 @@
 node_modules/
 dist/
+client/dist/
 .env
+.env.*
+!.env.example
 dev.db
 dev.db-journal
+uploads/
+server/uploads/
+server/src/data/automation/
+server/src/data/commerce/
+*.tldr
 *.log
+npm-debug.log*
+.DS_Store

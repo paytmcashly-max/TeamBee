@@ -20,6 +20,7 @@ import TemplatesView from './components/pages/TemplatesView';
 import ContactsView from './components/pages/ContactsView';
 import TemplateModal from './components/modals/TemplateModal';
 import NewChatModal from './components/modals/NewChatModal';
+import CommerceSendModal from './components/modals/CommerceSendModal';
 
 const VIEW_LABELS = {
   inbox: 'Inbox',
@@ -34,7 +35,7 @@ const VIEW_LABELS = {
 };
 
 export default function App() {
-  const { agent, loading, isAdmin } = useAuth();
+  const { agent, loading, isAdmin, isManager } = useAuth();
   const { activeChat, activeChatId, selectChat, searchQuery, setSearchQuery } = useChat();
   const { onlineAgentIds } = useSocket();
 
@@ -45,6 +46,7 @@ export default function App() {
       : ''
   );
   const [isTemplateModalOpen, setIsTemplateModalOpen] = useState(false);
+  const [isCommerceModalOpen, setIsCommerceModalOpen] = useState(false);
   const [isSidebarOpen, setIsSidebarOpen] = useState(() =>
     typeof window !== 'undefined' ? window.innerWidth > 1080 : true
   );
@@ -209,6 +211,7 @@ export default function App() {
 
               <ChatCanvas
                 onOpenTemplatePicker={() => setIsTemplateModalOpen(true)}
+                onOpenCommercePicker={() => setIsCommerceModalOpen(true)}
                 onToggleSidebar={() => setIsSidebarOpen((prev) => !prev)}
                 isSidebarOpen={isSidebarOpen}
                 onBack={() => selectChat(null)}
@@ -229,7 +232,7 @@ export default function App() {
               )}
             </div>
           </>
-        ) : currentView === 'overview' ? (
+        ) : currentView === 'overview' && isManager ? (
           <OverviewView onNavigateView={setCurrentView} />
         ) : currentView === 'contacts' ? (
           <ContactsView
@@ -240,21 +243,27 @@ export default function App() {
           <TemplatesView
             onNavigateToBroadcasts={() => setCurrentView('broadcasts')}
           />
-        ) : currentView === 'broadcasts' ? (
+        ) : currentView === 'broadcasts' && isManager ? (
           <BroadcastsView />
-        ) : currentView === 'automation' ? (
+        ) : currentView === 'automation' && isManager ? (
           <AutomationView />
-        ) : currentView === 'commerce' ? (
+        ) : currentView === 'commerce' && isManager ? (
           <CommerceView />
-        ) : currentView === 'team' ? (
+        ) : currentView === 'team' && isManager ? (
           <TeamView />
-        ) : (
+        ) : isAdmin ? (
           <SettingsView onNavigateView={setCurrentView} />
+        ) : (
+          <ContactsView
+            onOpenChatInInbox={() => setCurrentView('inbox')}
+            onOpenNewChat={() => setIsNewChatOpen(true)}
+          />
         )}
       </main>
 
       <TemplateModal isOpen={isTemplateModalOpen} onClose={() => setIsTemplateModalOpen(false)} />
       <NewChatModal isOpen={isNewChatOpen} onClose={() => setIsNewChatOpen(false)} />
+      <CommerceSendModal isOpen={isCommerceModalOpen} onClose={() => setIsCommerceModalOpen(false)} />
     </div>
   );
 }

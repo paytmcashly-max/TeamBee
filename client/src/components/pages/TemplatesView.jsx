@@ -5,7 +5,7 @@ import { apiFetch } from '../../services/apiClient';
 import { getVariableIndexes, renderTemplateBody, buildDefaultVariables } from '../../utils/templateHelpers';
 
 export default function TemplatesView({ onNavigateToBroadcasts }) {
-  const { isAdmin, tenant } = useAuth();
+  const { isAdmin, isManager, tenant } = useAuth();
   const [templates, setTemplates] = useState([]);
   const [selected, setSelected] = useState(null);
   const [variables, setVariables] = useState({});
@@ -337,7 +337,7 @@ export default function TemplatesView({ onNavigateToBroadcasts }) {
         <div className="page-card">
           <div className="page-card-header">
             <span className="details-section-label">TEMPLATE PREVIEW</span>
-            {isAdmin && onNavigateToBroadcasts && (
+            {isManager && onNavigateToBroadcasts && (
               <button
                 type="button"
                 className="btn btn-secondary"

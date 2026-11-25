@@ -68,8 +68,8 @@ class AnalyticsController {
         db.chat.count({ where: { tenantId, status: 'RESOLVED', updatedAt: { gte: todayStart } } }),
         db.message.count({ where: { tenantId, direction: 'INBOUND', createdAt: { gte: todayStart } } }),
         db.message.count({ where: { tenantId, direction: 'OUTBOUND', createdAt: { gte: todayStart } } }),
-        db.agent.count({ where: { tenantId } }),
-        db.agent.count({ where: { tenantId, status: 'ONLINE' } }),
+        db.agent.count({ where: { tenantId, isActive: true } }),
+        db.agent.count({ where: { tenantId, isActive: true, status: 'ONLINE' } }),
         db.template.count({ where: { tenantId, status: 'APPROVED' } }),
         db.template.count({
           where: { tenantId, status: 'APPROVED', name: { notIn: ['hello_world', '3p_direct_integration_test_template'] } },
@@ -95,6 +95,8 @@ class AnalyticsController {
           agentsTotal,
           agentsOnline,
           broadcastsTotal,
+          outboundTotal,
+          templatesApproved,
           yesterday: {
             chats: chatsYesterday,
             resolved: resolvedYesterday,

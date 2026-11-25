@@ -87,17 +87,22 @@ class BillingController {
   static async webhook(req, res) {
     try {
       const secret = process.env.RAZORPAY_WEBHOOK_SECRET;
-      if (secret) {
-        const signature = req.headers['x-razorpay-signature'];
-        const raw = req.rawBody || JSON.stringify(req.body || {});
-        const expected = crypto.createHmac('sha256', secret).update(raw).digest('hex');
-        const valid =
-          signature &&
-          signature.length === expected.length &&
-          crypto.timingSafeEqual(Buffer.from(signature), Buffer.from(expected));
-        if (!valid) {
-          return res.status(400).json({ success: false, error: 'Invalid signature' });
-        }
+      if (!secret) {
+        return res.status(503).json({
+          success: false,
+          error: 'Billing webhook signature verification is not configured',
+          code: 'BILLING_WEBHOOK_NOT_CONFIGURED',
+        });
+      }
+      const signature = req.headers['x-razorpay-signature'];
+      const raw = Buffer.isBuffer(req.rawBody) ? req.rawBody : JSON.stringify(req.body || {});
+      const expected = crypto.createHmac('sha256', secret).update(raw).digest('hex');
+      const valid =
+        typeof signature === 'string' &&
+        signature.length === expected.length &&
+        crypto.timingSafeEqual(Buffer.from(signature), Buffer.from(expected));
+      if (!valid) {
+        return res.status(400).json({ success: false, error: 'Invalid signature' });
       }
 
       const event = req.body?.event;

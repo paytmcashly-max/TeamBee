@@ -8,7 +8,7 @@ services:
     region: oregon
     plan: free
     rootDir: server
-    buildCommand: npm ci --include=dev && npx prisma generate
+    buildCommand: npm ci --include=dev && npx prisma generate && npx prisma migrate deploy
     startCommand: npm start
     healthCheckPath: /health
     autoDeploy: true
