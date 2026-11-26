@@ -277,7 +277,7 @@ export default function TemplatesView({ onNavigateToBroadcasts }) {
         <div className="page-card">
           <div className="page-card-header">
             <h2 className="page-card-title">Template library ({templates.length})</h2>
-            <div style={{ position: 'relative', width: '220px' }}>
+            <div style={{ position: 'relative', width: '100%', maxWidth: '220px', flex: '1 1 180px' }}>
               <Search size={14} style={{ position: 'absolute', left: '10px', top: '10px', color: 'var(--tb-text-secondary)' }} />
               <input
                 type="text"

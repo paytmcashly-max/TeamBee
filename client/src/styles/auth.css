@@ -305,6 +305,7 @@
   font-size: 13.5px;
   color: var(--tb-text-primary);
   flex: 1;
+  min-width: 0;
 }
 
 .auth-slug-suffix {
@@ -334,6 +335,7 @@
   font-size: 13.5px;
   color: var(--tb-text-primary);
   flex: 1;
+  min-width: 0;
 }
 
 .auth-show-btn {
@@ -485,6 +487,29 @@
 
   .auth-form-container {
     padding: 8px 0;
+  }
+}
+
+@media (max-width: 600px) {
+  .auth-hero-section {
+    padding: 24px 18px 20px 18px;
+  }
+
+  .auth-hero-headline {
+    font-size: 24px;
+  }
+
+  .auth-form-section {
+    padding: 20px 16px 32px 16px;
+  }
+
+  .auth-form-title {
+    font-size: 26px;
+  }
+
+  .auth-legal-row {
+    flex-direction: column;
+    gap: 6px;
   }
 }
 

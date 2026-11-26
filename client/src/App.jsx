@@ -185,7 +185,7 @@ export default function App() {
 
         {currentView === 'inbox' ? (
           <>
-            <div className="workspace-page-header">
+            <div className="workspace-page-header inbox-page-header">
               <div className="page-header-text">
                 <h1 className="page-header-title">Team inbox</h1>
                 <p className="page-header-subtitle">

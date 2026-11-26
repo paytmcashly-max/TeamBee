@@ -199,7 +199,7 @@ export default function TeamView() {
                 <input
                   type="text"
                   className="tb-input"
-                  style={{ width: '185px', padding: '6px 10px', fontSize: '12px' }}
+                  style={{ width: '100%', maxWidth: '185px', flex: '1 1 150px', padding: '6px 10px', fontSize: '12px' }}
                   placeholder="Search teammates..."
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}

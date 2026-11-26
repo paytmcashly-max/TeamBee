@@ -27,7 +27,7 @@
   box-shadow: var(--tb-popover-shadow);
   width: 100%;
   max-width: 580px;
-  max-height: 90vh;
+  max-height: 92dvh;
   overflow-y: auto;
   position: relative;
   color: var(--tb-text-primary);
@@ -43,6 +43,7 @@
   font-size: 12.5px;
   font-weight: 600;
   cursor: pointer;
+  white-space: nowrap;
   transition: all 0.15s;
   border: 1px solid transparent;
 }
@@ -84,6 +85,7 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
+  flex-wrap: wrap;
   gap: 12px;
 }
 
@@ -110,6 +112,7 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
+  flex-wrap: wrap;
   gap: 12px;
 }
 
@@ -159,10 +162,17 @@
 @media (max-width: 768px) {
   .template-modal-grid {
     grid-template-columns: 1fr;
+    min-height: 0;
   }
   .template-modal-list {
     border-right: none;
     border-bottom: 1px solid var(--tb-border-color);
-    max-height: 220px;
+    max-height: 190px;
+  }
+  .modal-header-bar,
+  .modal-body-pad,
+  .modal-footer-bar,
+  .template-modal-detail {
+    padding: 14px 16px;
   }
 }

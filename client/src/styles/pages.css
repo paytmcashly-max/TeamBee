@@ -4,8 +4,10 @@
 
 .page-scroll-container {
   flex: 1;
+  min-width: 0;
   min-height: 0;
   overflow-y: auto;
+  overflow-x: hidden;
   padding: 0 28px 32px 28px;
 }
 
@@ -33,12 +35,15 @@
   border-radius: 12px;
   box-shadow: var(--tb-card-shadow);
   padding: 20px 22px;
+  min-width: 0;
+  max-width: 100%;
 }
 
 .page-card-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  flex-wrap: wrap;
   gap: 12px;
   margin-bottom: 16px;
 }
@@ -130,6 +135,8 @@
   display: flex;
   flex-direction: column;
   gap: 16px;
+  min-width: 0;
+  max-width: 100%;
 }
 
 /* 4-up KPI Grid (Team 2:11) */
@@ -368,13 +375,19 @@
 /* Directory & Team Tables (Figma 2:11) */
 .tb-table-wrap {
   width: 100%;
+  max-width: 100%;
   overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
 }
 
 .tb-table {
   width: 100%;
   border-collapse: collapse;
   font-size: 12.5px;
+}
+
+.tb-table td .btn {
+  white-space: nowrap;
 }
 
 .tb-table th {
@@ -472,7 +485,7 @@
     padding: 0 20px 28px 20px;
   }
   .page-two-col {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
   }
   .page-kpi-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -481,13 +494,31 @@
 
 @media (max-width: 768px) {
   .page-scroll-container {
-    padding: 14px 14px 24px 14px;
+    padding: 4px 14px 24px 14px;
+  }
+  .page-scroll-container .workspace-page-header {
+    padding: 14px 0 12px 0;
+    flex-wrap: wrap;
+    align-items: flex-start;
+    gap: 10px;
+  }
+  .page-scroll-container .page-header-title {
+    font-size: 21px;
+  }
+  .page-card {
+    padding: 16px 14px;
+  }
+  .tb-table th,
+  .tb-table td {
+    padding: 9px 10px;
+    font-size: 12px;
   }
   .broadcast-stepper,
   .tb-form-grid-2,
   .audience-metrics-row,
   .channel-meta-grid,
+  .role-selector-cards,
   .page-kpi-grid {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
   }
 }

@@ -116,7 +116,7 @@ export default function TemplateModal({ isOpen, onClose }) {
     <div className="modal-overlay" onClick={onClose}>
       <div
         className="modal-content"
-        style={{ maxWidth: '860px', overflow: 'hidden' }}
+        style={{ maxWidth: '860px' }}
         onClick={(e) => e.stopPropagation()}
       >
         <div className="modal-header-bar">
