@@ -501,26 +501,6 @@
   color: var(--tb-text-secondary);
 }
 
-.page-header-status-pill {
-  background-color: var(--tb-green-pill-bg);
-  color: var(--tb-green-pill-text);
-  padding: 4px 10px;
-  border-radius: 5px;
-  font-size: 11px;
-  font-weight: 500;
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-
-.status-pill-dot {
-  font-size: 10px;
-}
-
-.status-pill-text {
-  font-weight: 500;
-}
-
 @keyframes spin {
   from {
     transform: rotate(0deg);

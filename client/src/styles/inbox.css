@@ -3,7 +3,7 @@
    ========================================================================== */
 
 .shared-inbox-card {
-  margin: 0 28px 24px 28px;
+  margin: 16px 24px 20px 24px;
   background-color: var(--tb-card-bg);
   border: 1px solid var(--tb-border-color);
   border-radius: 12px;
@@ -1647,7 +1647,7 @@
   }
 
   .shared-inbox-card {
-    margin: 0 20px 16px 20px;
+    margin: 12px 18px 16px 18px;
   }
 
   /* Make Customer Details an overlay drawer on tablet */
@@ -1741,10 +1741,6 @@
 
   .top-bar-search-box {
     display: none; /* Hide search input in top bar on phone */
-  }
-
-  .workspace-page-header.inbox-page-header {
-    display: none; /* Reclaim vertical space in mobile Inbox view */
   }
 
   .shared-inbox-card {

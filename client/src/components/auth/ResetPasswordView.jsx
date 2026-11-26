@@ -62,6 +62,13 @@ export default function ResetPasswordView({ token, onDone }) {
       </section>
 
       <section className="auth-form-section">
+        <div className="auth-mobile-brand" style={{ marginBottom: '20px' }}>
+          <div className="auth-mobile-brand-icon">
+            <MessageSquare size={15} />
+          </div>
+          <span className="auth-mobile-brand-name">TeamBee</span>
+        </div>
+
         <div className="auth-form-container">
           <span className="auth-eyebrow">PASSWORD RESET</span>
           <h2 className="auth-form-title">Choose a new password</h2>

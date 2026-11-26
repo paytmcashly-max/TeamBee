@@ -2,8 +2,6 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Search, HelpCircle, Menu } from 'lucide-react';
 import { useAuth } from './context/AuthContext';
 import { useChat } from './context/ChatContext';
-import { useSocket } from './context/SocketContext';
-import { apiFetch } from './services/apiClient';
 import LoginView from './components/auth/LoginView';
 import ResetPasswordView from './components/auth/ResetPasswordView';
 import WorkspaceSidebar from './components/inbox/WorkspaceSidebar';
@@ -37,7 +35,6 @@ const VIEW_LABELS = {
 export default function App() {
   const { agent, loading, isAdmin, isManager } = useAuth();
   const { activeChat, activeChatId, selectChat, searchQuery, setSearchQuery } = useChat();
-  const { onlineAgentIds } = useSocket();
 
   const [currentView, setCurrentView] = useState('inbox');
   const [resetToken, setResetToken] = useState(() =>
@@ -52,7 +49,6 @@ export default function App() {
   );
   const [isNewChatOpen, setIsNewChatOpen] = useState(false);
   const [isMobileNavOpen, setIsMobileNavOpen] = useState(false);
-  const [fallbackOnlineCount, setFallbackOnlineCount] = useState(1);
 
   const searchInputRef = useRef(null);
 
@@ -67,19 +63,6 @@ export default function App() {
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, []);
-
-  // Load initial online count when agent logs in
-  useEffect(() => {
-    if (!agent) return;
-    apiFetch('/api/agents')
-      .then((data) => {
-        const liveCount = Array.isArray(data.onlineAgentIds) && data.onlineAgentIds.length > 0
-          ? data.onlineAgentIds.length
-          : (data.agents || []).filter((a) => a.isLiveOnline || a.status === 'ONLINE').length;
-        setFallbackOnlineCount(Math.max(1, liveCount));
-      })
-      .catch(() => {});
-  }, [agent]);
 
   if (loading) {
     return (
@@ -107,8 +90,6 @@ export default function App() {
     }
     return <LoginView />;
   }
-
-  const onlineTeammatesCount = onlineAgentIds?.length > 0 ? onlineAgentIds.length : fallbackOnlineCount;
 
   const handleGlobalSearchChange = (e) => {
     const value = e.target.value;
@@ -184,23 +165,6 @@ export default function App() {
         </header>
 
         {currentView === 'inbox' ? (
-          <>
-            <div className="workspace-page-header inbox-page-header">
-              <div className="page-header-text">
-                <h1 className="page-header-title">Team inbox</h1>
-                <p className="page-header-subtitle">
-                  A little teamwork. A better customer experience.
-                </p>
-              </div>
-
-              <div className="page-header-status-pill">
-                <span className="status-pill-dot">●</span>
-                <span className="status-pill-text">
-                  {onlineTeammatesCount} {onlineTeammatesCount === 1 ? 'teammate' : 'teammates'} online
-                </span>
-              </div>
-            </div>
-
             <div
               className={`shared-inbox-card ${(activeChat || activeChatId) ? 'has-active-chat' : 'no-active-chat'}`}
               data-name="Shared inbox"
@@ -231,7 +195,6 @@ export default function App() {
                 />
               )}
             </div>
-          </>
         ) : currentView === 'overview' && isManager ? (
           <OverviewView onNavigateView={setCurrentView} />
         ) : currentView === 'contacts' ? (

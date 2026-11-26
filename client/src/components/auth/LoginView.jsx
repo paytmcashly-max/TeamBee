@@ -153,6 +153,13 @@ export default function LoginView() {
 
       <section className="auth-form-section" data-name="Workspace sign-in form">
         <div className="auth-top-support-bar">
+          <div className="auth-mobile-brand">
+            <div className="auth-mobile-brand-icon">
+              <MessageSquare size={15} />
+            </div>
+            <span className="auth-mobile-brand-name">TeamBee</span>
+          </div>
+
           <a
             href="mailto:support@teambee.app"
             className="auth-support-link"
